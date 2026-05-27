@@ -1,0 +1,141 @@
+New Loka Project Scope and Requirements
+
+1. Purpose
+
+New Loka is an open source health data management system for patient care, clinical operations, and later research. It must work across a wide range of deployments without changing the core system design.
+
+2. Scope
+
+In scope:
+- A single clinician using a phone offline
+- A small clinic operating as a local mesh
+- A rural hospital with intermittent connectivity
+- A multi-department hospital with strict internal silos
+- A research federation with privacy-preserving exchange
+- Local document ingestion from photos, PDFs, voice notes, and dictation
+- Local encryption, local storage, and local identity management
+- Secure sharing and transfer of patient records between authorized nodes
+
+Out of scope for the initial core:
+- Dependence on cloud services for basic operation
+- Separate codebases for different deployment tiers
+- Automatic commit of AI output without human review
+- Patient data sent to external APIs by default
+- UI-only access control that is not enforced by the core
+
+3. System Philosophy
+
+The system must follow these principles:
+- Platform-agnostic core
+- Platform-specific user interfaces
+- Local-first operation
+- CRDT-based data model
+- Extensible by modules, not forks
+- Polymorphic behavior driven by deployment context
+- Security enforced at the data layer
+- FHIR as the internal clinical data model
+
+4. Functional Requirements
+
+4.1 Core clinical data
+- Store all clinical records as FHIR R4 resources.
+- Support patients, encounters, observations, conditions, medications, procedures, requests, reports, compositions, detected issues, audit events, and related resources.
+- Preserve provenance for every record, including creator, timestamps, origin node, and sync metadata.
+- Support soft delete semantics only.
+
+4.2 Storage and encryption
+- Use local encrypted storage on every platform.
+- Encrypt data at rest with strong symmetric encryption.
+- Keep keys in device-local hardware-backed stores where available.
+- Support a hierarchical key model for device, patient record, sync session, and audit signing.
+
+4.3 Identity and access control
+- Require authenticated users for all record access.
+- Enforce ABAC at the core, not only in the UI.
+- Support department and team based silos.
+- Support emergency override with explicit reason entry and audit logging.
+- Support offline-capable authentication.
+
+4.4 Sync and mesh
+- Support peer discovery on local networks.
+- Support delta sync between authorized nodes.
+- Support conflict detection and deterministic merge behavior.
+- Never auto-resolve clinically dangerous conflicts such as medication changes.
+- Preserve full provenance during sync, merge, transfer, and correction.
+
+4.5 AI and document processing
+- Run OCR, speech-to-text, and extraction locally or on trusted institutional infrastructure.
+- Support handwriting extraction from photos.
+- Support PDF ingestion.
+- Support in-app dictation and voice note processing.
+- Require human review before committing AI-extracted data.
+- Store confidence and warning metadata with extracted resources.
+
+4.6 Audit and safety
+- Maintain an append-only audit trail.
+- Sign audit entries cryptographically.
+- Make the audit trail tamper-evident.
+- Record access, edits, sync events, overrides, and corrections.
+- Support retrospective review and escalation workflows.
+
+4.7 User experience
+- Make essential information reachable in three taps or fewer.
+- Keep offline status visible.
+- Surface critical alerts immediately.
+- Provide patient lookup, chart review, quick entry, document ingestion, handoff, and admin workflows.
+
+5. Non-Functional Requirements
+
+- Must operate fully offline for the single-clinician tier.
+- Must degrade gracefully when network or hardware capacity is limited.
+- Must keep the same core logic across all tiers.
+- Must be reliable enough for clinical use.
+- Must be secure enough for regulated health data.
+- Must be extensible without redesigning the core.
+- Must be testable in isolated modules and in end-to-end tiered deployments.
+
+6. Deployment Requirements
+
+6.1 T0 - Single clinician
+- Runs on a phone.
+- Uses local encrypted storage.
+- Does not require a server.
+- Supports offline workflow end to end.
+
+6.2 T1 - Small clinic
+- Supports LAN discovery and mesh sync.
+- Can use a local hub or peer-to-peer exchange.
+- Supports shared administration and local policy control.
+
+6.3 T2 - Rural hospital
+- Supports a local server with intermittent cloud sync.
+- Preserves operation during network outages.
+- Supports department-aware access controls.
+
+6.4 T3 - Multi-department hospital
+- Supports institutional access control and silo enforcement.
+- Supports integration with hospital systems and internal FHIR services.
+- Supports secure handoff between departments and teams.
+
+6.5 T4 - Research federation
+- Supports privacy-preserving data sharing.
+- Supports consent-driven access.
+- Supports federated or aggregate research workflows without exposing raw patient data by default.
+
+7. Standards and Compliance
+
+- FHIR R4 is the internal data standard.
+- SNOMED CT, LOINC, and ICD codes are used where relevant.
+- HIPAA applies where required.
+- DISHA and the IT Act apply in India-facing contexts.
+- GDPR applies in research federation contexts where relevant.
+- Jurisdictional retention and export requirements must be respected.
+
+8. Acceptance Criteria
+
+- A clinician can create, find, edit, and review a patient record offline.
+- A clinic can share records securely over a local mesh.
+- A hospital can enforce department-level access controls at the data layer.
+- AI-assisted ingestion requires review before commit.
+- All access and changes are auditable.
+- The same core system can be deployed across all tiers without forking.
