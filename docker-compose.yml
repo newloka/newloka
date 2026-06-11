@@ -1,0 +1,37 @@
+version: "3.8"
+
+services:
+  newloka:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - newloka-data:/data
+    environment:
+      - NEWLOKA_DB_PATH=/data/newloka.db
+      - NEWLOKA_NODE_ID=hospital-node-1
+      - NEWLOKA_TIER=t3
+      - NEWLOKA_BIND_ADDR=0.0.0.0:8080
+      - NEWLOKA_LOG_LEVEL=info
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  newloka-backup:
+    image: busybox
+    volumes:
+      - newloka-data:/data
+      - ./backups:/backups
+    command: |
+      sh -c "while true; do
+        sleep 86400;
+        cp /data/newloka.db /backups/newloka-$$(date +%Y%m%d).db;
+      done"
+    restart: unless-stopped
+
+volumes:
+  newloka-data:

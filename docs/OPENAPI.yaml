@@ -1,0 +1,172 @@
+openapi: 3.0.3
+info:
+  title: New Loka API
+  description: Local-first health data management FHIR R4 API
+  version: 0.1.0
+  contact:
+    name: New Loka Contributors
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+
+paths:
+  /:
+    get:
+      summary: Service root
+      responses:
+        '200':
+          description: Service information
+
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: Health status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  version:
+                    type: string
+                  node_id:
+                    type: string
+                  tier:
+                    type: string
+
+  /metadata:
+    get:
+      summary: FHIR CapabilityStatement
+      responses:
+        '200':
+          description: Capability statement
+
+  /Patient:
+    get:
+      summary: Search patients
+      parameters:
+        - name: patient
+          in: query
+          schema:
+            type: string
+        - name: _count
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Bundle of patients
+    post:
+      summary: Create patient
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Patient created
+
+  /Patient/{id}:
+    get:
+      summary: Read patient
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Patient resource
+        '404':
+          description: Not found
+    put:
+      summary: Update patient
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Patient updated
+    delete:
+      summary: Soft delete patient
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted
+
+  /Encounter:
+    get:
+      summary: Search encounters
+      responses:
+        '200':
+          description: Bundle of encounters
+    post:
+      summary: Create encounter
+      responses:
+        '201':
+          description: Encounter created
+
+  /Observation:
+    get:
+      summary: Search observations
+      responses:
+        '200':
+          description: Bundle of observations
+    post:
+      summary: Create observation
+      responses:
+        '201':
+          description: Observation created
+
+  /AuditEvent:
+    get:
+      summary: Query audit log
+      responses:
+        '200':
+          description: Bundle of audit events
+    post:
+      summary: Record audit event
+      responses:
+        '201':
+          description: Audit event recorded
+
+  /sync/manifest:
+    get:
+      summary: Get node sync manifest
+      responses:
+        '200':
+          description: Node manifest
+
+  /sync/delta:
+    post:
+      summary: Perform delta sync
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                from_node:
+                  type: string
+                to_node:
+                  type: string
+                since_timestamp:
+                  type: integer
+      responses:
+        '200':
+          description: Sync response with records and conflicts
