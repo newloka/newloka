@@ -123,14 +123,13 @@ impl PolicyEngine {
                     };
                 }
             }
-            Action::ResearchQuery => {
+            Action::ResearchQuery
                 if !has_role(crate::identity::Role::Researcher)
-                    && !has_role(crate::identity::Role::Administrator)
-                {
-                    return PolicyDecision::Deny {
-                        reason: "Research role required".into(),
-                    };
-                }
+                    && !has_role(crate::identity::Role::Administrator) =>
+            {
+                return PolicyDecision::Deny {
+                    reason: "Research role required".into(),
+                };
             }
             _ => {}
         }
@@ -168,14 +167,13 @@ impl PolicyEngine {
                     };
                 }
             }
-            SensitivityLevel::ResearchOnly => {
+            SensitivityLevel::ResearchOnly
                 if !has_role(crate::identity::Role::Researcher)
-                    && !has_role(crate::identity::Role::Administrator)
-                {
-                    return PolicyDecision::Deny {
-                        reason: "Research-only data access restricted".into(),
-                    };
-                }
+                    && !has_role(crate::identity::Role::Administrator) =>
+            {
+                return PolicyDecision::Deny {
+                    reason: "Research-only data access restricted".into(),
+                };
             }
             _ => {}
         }
