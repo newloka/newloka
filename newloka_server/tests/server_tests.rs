@@ -7,11 +7,11 @@ use tokio::sync::RwLock;
 use tower::util::ServiceExt;
 
 fn db_path() -> String {
-    format!(
-        "file:/{}/newloka_test_{}.db?mode=rwc",
-        std::env::temp_dir().to_string_lossy().replace("\\\\", "/"),
-        uuid::Uuid::new_v4()
-    )
+    let path = std::env::temp_dir()
+        .join(format!("newloka_test_{}.db", uuid::Uuid::new_v4()))
+        .to_string_lossy()
+        .replace("\\", "/");
+    format!("sqlite:///{}?mode=rwc", path)
 }
 
 async fn test_app() -> (axum::Router, Arc<RwLock<newloka_server::AppState>>) {
