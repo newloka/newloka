@@ -9,11 +9,16 @@ license.workspace = true
 name = "newloka-server"
 path = "src/main.rs"
 
+[features]
+demo = []
+
 [dependencies]
+clap = { workspace = true }
+rand = { workspace = true }
 newloka_core = { path = "../newloka_core" }
 axum = { workspace = true }
 tokio = { workspace = true }
-tower = { workspace = true }
+tower = { workspace = true, features = ["util"] }
 tower-http = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
@@ -22,3 +27,6 @@ serde_json = { workspace = true }
 anyhow = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
+rust-embed = { workspace = true }
+
+

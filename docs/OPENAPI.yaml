@@ -28,14 +28,10 @@ paths:
               schema:
                 type: object
                 properties:
-                  status:
-                    type: string
-                  version:
-                    type: string
-                  node_id:
-                    type: string
-                  tier:
-                    type: string
+                  status: { type: string }
+                  version: { type: string }
+                  node_id: { type: string }
+                  tier: { type: string }
 
   /metadata:
     get:
@@ -44,18 +40,27 @@ paths:
         '200':
           description: Capability statement
 
+  /seed:
+    post:
+      summary: Seed mock data
+      parameters:
+        - name: count
+          in: query
+          schema: { type: integer, default: 20 }
+      responses:
+        '200':
+          description: Seed status
+
   /Patient:
     get:
       summary: Search patients
       parameters:
         - name: patient
           in: query
-          schema:
-            type: string
+          schema: { type: string }
         - name: _count
           in: query
-          schema:
-            type: integer
+          schema: { type: integer }
       responses:
         '200':
           description: Bundle of patients
@@ -65,8 +70,7 @@ paths:
         required: true
         content:
           application/json:
-            schema:
-              type: object
+            schema: { type: object }
       responses:
         '201':
           description: Patient created
@@ -78,11 +82,10 @@ paths:
         - name: id
           in: path
           required: true
-          schema:
-            type: string
+          schema: { type: string }
       responses:
         '200':
-          description: Patient resource
+          description: Patient
         '404':
           description: Not found
     put:
@@ -91,8 +94,12 @@ paths:
         - name: id
           in: path
           required: true
-          schema:
-            type: string
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
       responses:
         '200':
           description: Patient updated
@@ -102,8 +109,7 @@ paths:
         - name: id
           in: path
           required: true
-          schema:
-            type: string
+          schema: { type: string }
       responses:
         '204':
           description: Deleted
@@ -111,62 +117,354 @@ paths:
   /Encounter:
     get:
       summary: Search encounters
+      parameters:
+        - name: patient
+          in: query
+          schema: { type: string }
+        - name: _count
+          in: query
+          schema: { type: integer }
       responses:
         '200':
           description: Bundle of encounters
     post:
       summary: Create encounter
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
       responses:
         '201':
           description: Encounter created
 
+  /Encounter/{id}:
+    get:
+      summary: Read encounter
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Encounter
+        '404':
+          description: Not found
+    put:
+      summary: Update encounter
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '200':
+          description: Encounter updated
+    delete:
+      summary: Delete encounter
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204':
+          description: Deleted
+
   /Observation:
     get:
       summary: Search observations
+      parameters:
+        - name: patient
+          in: query
+          schema: { type: string }
+        - name: _count
+          in: query
+          schema: { type: integer }
       responses:
         '200':
           description: Bundle of observations
     post:
       summary: Create observation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
       responses:
         '201':
           description: Observation created
 
+  /Observation/{id}:
+    get:
+      summary: Read observation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Observation
+        '404':
+          description: Not found
+    put:
+      summary: Update observation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '200':
+          description: Observation updated
+    delete:
+      summary: Delete observation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204':
+          description: Deleted
+
+  /Condition:
+    get:
+      summary: Search conditions
+      parameters:
+        - name: patient
+          in: query
+          schema: { type: string }
+        - name: _count
+          in: query
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Bundle of conditions
+    post:
+      summary: Create condition
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '201':
+          description: Condition created
+
+  /Condition/{id}:
+    get:
+      summary: Read condition
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Condition
+        '404':
+          description: Not found
+    put:
+      summary: Update condition
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '200':
+          description: Condition updated
+    delete:
+      summary: Delete condition
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204':
+          description: Deleted
+
+  /MedicationRequest:
+    get:
+      summary: Search medication requests
+      parameters:
+        - name: patient
+          in: query
+          schema: { type: string }
+        - name: _count
+          in: query
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Bundle of medication requests
+    post:
+      summary: Create medication request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '201':
+          description: Medication request created
+
+  /MedicationRequest/{id}:
+    get:
+      summary: Read medication request
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Medication request
+        '404':
+          description: Not found
+    put:
+      summary: Update medication request
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '200':
+          description: Medication request updated
+    delete:
+      summary: Delete medication request
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204':
+          description: Deleted
+
+  /Procedure:
+    get:
+      summary: Search procedures
+      parameters:
+        - name: patient
+          in: query
+          schema: { type: string }
+        - name: _count
+          in: query
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Bundle of procedures
+    post:
+      summary: Create procedure
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '201':
+          description: Procedure created
+
+  /Procedure/{id}:
+    get:
+      summary: Read procedure
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Procedure
+        '404':
+          description: Not found
+    put:
+      summary: Update procedure
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '200':
+          description: Procedure updated
+    delete:
+      summary: Delete procedure
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204':
+          description: Deleted
+
   /AuditEvent:
     get:
       summary: Query audit log
+      parameters:
+        - name: _count
+          in: query
+          schema: { type: integer }
       responses:
         '200':
           description: Bundle of audit events
     post:
       summary: Record audit event
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
       responses:
         '201':
           description: Audit event recorded
 
   /sync/manifest:
     get:
-      summary: Get node sync manifest
+      summary: Node sync manifest
       responses:
         '200':
-          description: Node manifest
+          description: Manifest
 
   /sync/delta:
     post:
-      summary: Perform delta sync
+      summary: Delta sync
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              type: object
-              properties:
-                from_node:
-                  type: string
-                to_node:
-                  type: string
-                since_timestamp:
-                  type: integer
+            schema: { type: object }
       responses:
         '200':
-          description: Sync response with records and conflicts
+          description: Delta sync response

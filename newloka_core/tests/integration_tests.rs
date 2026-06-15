@@ -9,8 +9,13 @@ mod integration {
     async fn setup_storage() -> (storage::StorageEngine, String) {
         let node_id = "test-node".to_string();
         let dmk = crypto::DeviceMasterKey::generate();
-        let db_path = format!("file:test_{}?mode=memory&cache=shared", uuid::Uuid::new_v4());
-        let storage = storage::StorageEngine::open(&db_path, node_id.clone(), dmk).await.unwrap();
+        let db_path = format!(
+            "file:test_{}?mode=memory&cache=shared",
+            uuid::Uuid::new_v4()
+        );
+        let storage = storage::StorageEngine::open(&db_path, node_id.clone(), dmk)
+            .await
+            .unwrap();
         (storage, node_id)
     }
 
@@ -62,11 +67,7 @@ mod integration {
         }
     }
 
-    fn create_test_encounter(
-        node_id: &str,
-        user_id: &str,
-        patient_id: &str,
-    ) -> fhir::Encounter {
+    fn create_test_encounter(node_id: &str, user_id: &str, patient_id: &str) -> fhir::Encounter {
         let meta = fhir::Meta::new(node_id.to_string(), user_id.to_string());
         fhir::Encounter {
             id: uuid::Uuid::new_v4().to_string(),
@@ -125,10 +126,14 @@ mod integration {
         let patient_id = patient.id.clone();
         let resource = fhir::FhirResource::Patient(patient);
 
-        let id = storage.store(&resource,
-            Some(patient_id.clone()),
-            Some("dept-general".to_string()),
-        ).await.unwrap();
+        let id = storage
+            .store(
+                &resource,
+                Some(patient_id.clone()),
+                Some("dept-general".to_string()),
+            )
+            .await
+            .unwrap();
         assert!(!id.is_empty());
 
         let retrieved = storage.get(&id).await.unwrap();
@@ -144,20 +149,31 @@ mod integration {
         let patient = create_test_patient(&node_id, "user-1");
         let patient_id = patient.id.clone();
         let resource = fhir::FhirResource::Patient(patient);
-        storage.store(&resource,
-            Some(patient_id.clone()),
-            Some("dept-general".to_string()),
-        ).await.unwrap();
+        storage
+            .store(
+                &resource,
+                Some(patient_id.clone()),
+                Some("dept-general".to_string()),
+            )
+            .await
+            .unwrap();
 
         let encounter = create_test_encounter(&node_id, "user-1", &patient_id);
         let enc_id = encounter.id.clone();
         let enc_resource = fhir::FhirResource::Encounter(encounter);
-        storage.store(&enc_resource,
-            Some(patient_id.clone()),
-            Some("dept-general".to_string()),
-        ).await.unwrap();
+        storage
+            .store(
+                &enc_resource,
+                Some(patient_id.clone()),
+                Some("dept-general".to_string()),
+            )
+            .await
+            .unwrap();
 
-        let results = storage.search("Encounter", Some(&patient_id)).await.unwrap();
+        let results = storage
+            .search("Encounter", Some(&patient_id))
+            .await
+            .unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].id(), enc_id);
     }
@@ -168,13 +184,12 @@ mod integration {
         let patient = create_test_patient(&node_id, "user-1");
         let patient_id = patient.id.clone();
         let resource = fhir::FhirResource::Patient(patient);
-        storage.store(&resource,
-            Some(patient_id.clone()),
-            None,
-        ).await.unwrap();
+        storage
+            .store(&resource, Some(patient_id.clone()), None)
+            .await
+            .unwrap();
 
-        let deleted = storage.soft_delete(&patient_id, "user-1"
-        ).await.unwrap();
+        let deleted = storage.soft_delete(&patient_id).await.unwrap();
         assert!(deleted);
 
         let retrieved = storage.get(&patient_id).await.unwrap();
@@ -187,16 +202,18 @@ mod integration {
         let signer = crypto::AuditSigner::generate();
         let mut engine = audit::AuditEngine::new(node_id.clone(), signer);
 
-        let entry = engine.log(
-            audit::AuditEventType::Create,
-            "user-1".to_string(),
-            Some("pat-001".to_string()),
-            Some("enc-001".to_string()),
-            Some("Encounter".to_string()),
-            "create encounter during integration test".to_string(),
-            audit::AuditOutcome::Success,
-            None,
-        ).unwrap();
+        let entry = engine
+            .log(
+                audit::AuditEventType::Create,
+                "user-1".to_string(),
+                Some("pat-001".to_string()),
+                Some("enc-001".to_string()),
+                Some("Encounter".to_string()),
+                "create encounter during integration test".to_string(),
+                audit::AuditOutcome::Success,
+                None,
+            )
+            .unwrap();
 
         assert_eq!(entry.node_id, node_id);
         assert_eq!(entry.event_type, audit::AuditEventType::Create);
@@ -209,15 +226,14 @@ mod integration {
         let patient = create_test_patient(&node_id, "user-1");
         let patient_id = patient.id.clone();
         let resource = fhir::FhirResource::Patient(patient);
-        storage.store(&resource,
-            Some(patient_id.clone()),
-            None,
-        ).await.unwrap();
+        storage
+            .store(&resource, Some(patient_id.clone()), None)
+            .await
+            .unwrap();
 
         let engine = sync::SyncEngine::new(node_id.clone());
         let since = 0i64;
-        let delta = engine.build_manifest(&storage, since
-        ).await.unwrap();
+        let delta = engine.build_manifest(&storage, since).await.unwrap();
         assert_eq!(delta.from_node, node_id);
         assert_eq!(delta.records.len(), 1);
         assert_eq!(delta.records[0].resource_type, "Patient");
@@ -290,41 +306,53 @@ mod integration {
         let patient = create_test_patient(&node_id, "dr-sharma");
         let patient_id = patient.id.clone();
         let resource = fhir::FhirResource::Patient(patient);
-        storage.store(&resource,
-            Some(patient_id.clone()),
-            Some("dept-general".to_string()),
-        ).await.unwrap();
+        storage
+            .store(
+                &resource,
+                Some(patient_id.clone()),
+                Some("dept-general".to_string()),
+            )
+            .await
+            .unwrap();
 
-        audit.log(
-            audit::AuditEventType::Create,
-            "dr-sharma".to_string(),
-            Some(patient_id.clone()),
-            Some(patient_id.clone()),
-            Some("Patient".to_string()),
-            "Register new patient".to_string(),
-            audit::AuditOutcome::Success,
-            None,
-        ).unwrap();
+        audit
+            .log(
+                audit::AuditEventType::Create,
+                "dr-sharma".to_string(),
+                Some(patient_id.clone()),
+                Some(patient_id.clone()),
+                Some("Patient".to_string()),
+                "Register new patient".to_string(),
+                audit::AuditOutcome::Success,
+                None,
+            )
+            .unwrap();
 
         // 2. Create encounter
         let encounter = create_test_encounter(&node_id, "dr-sharma", &patient_id);
         let enc_id = encounter.id.clone();
         let enc_resource = fhir::FhirResource::Encounter(encounter);
-        storage.store(&enc_resource,
-            Some(patient_id.clone()),
-            Some("dept-general".to_string()),
-        ).await.unwrap();
+        storage
+            .store(
+                &enc_resource,
+                Some(patient_id.clone()),
+                Some("dept-general".to_string()),
+            )
+            .await
+            .unwrap();
 
-        audit.log(
-            audit::AuditEventType::Create,
-            "dr-sharma".to_string(),
-            Some(patient_id.clone()),
-            Some(enc_id.clone()),
-            Some("Encounter".to_string()),
-            "Start consultation".to_string(),
-            audit::AuditOutcome::Success,
-            None,
-        ).unwrap();
+        audit
+            .log(
+                audit::AuditEventType::Create,
+                "dr-sharma".to_string(),
+                Some(patient_id.clone()),
+                Some(enc_id.clone()),
+                Some("Encounter".to_string()),
+                "Start consultation".to_string(),
+                audit::AuditOutcome::Success,
+                None,
+            )
+            .unwrap();
 
         // 3. Add observation
         let meta = fhir::Meta::new(node_id.clone(), "dr-sharma".to_string());
@@ -335,7 +363,8 @@ mod integration {
             category: vec![fhir::CodeableConcept {
                 text: Some("Vital Signs".to_string()),
                 coding: vec![fhir::Coding {
-                    system: "http://terminology.hl7.org/CodeSystem/observation-category".to_string(),
+                    system: "http://terminology.hl7.org/CodeSystem/observation-category"
+                        .to_string(),
                     code: "vital-signs".to_string(),
                     display: Some("Vital Signs".to_string()),
                 }],
@@ -391,16 +420,26 @@ mod integration {
             component: vec![],
         };
         let obs_resource = fhir::FhirResource::Observation(observation);
-        storage.store(&obs_resource,
-            Some(patient_id.clone()),
-            Some("dept-general".to_string()),
-        ).await.unwrap();
+        storage
+            .store(
+                &obs_resource,
+                Some(patient_id.clone()),
+                Some("dept-general".to_string()),
+            )
+            .await
+            .unwrap();
 
         // 4. Verify patient chart
-        let encounters = storage.search("Encounter", Some(&patient_id)).await.unwrap();
+        let encounters = storage
+            .search("Encounter", Some(&patient_id))
+            .await
+            .unwrap();
         assert_eq!(encounters.len(), 1);
 
-        let observations = storage.search("Observation", Some(&patient_id)).await.unwrap();
+        let observations = storage
+            .search("Observation", Some(&patient_id))
+            .await
+            .unwrap();
         assert_eq!(observations.len(), 1);
 
         // 5. Verify audit trail

@@ -81,14 +81,15 @@ impl PolicyEngine {
         }
 
         // Emergency override
-        if req.subject.emergency_override {
-            if req.action == Action::Override || req.action == Action::Read || req.action == Action::Update {
-                return PolicyDecision::AllowWithAudit {
-                    reason: "Emergency override active".into(),
-                };
-            }
+        if req.subject.emergency_override
+            && (req.action == Action::Override
+                || req.action == Action::Read
+                || req.action == Action::Update)
+        {
+            return PolicyDecision::AllowWithAudit {
+                reason: "Emergency override active".into(),
+            };
         }
-
         // Role-based action checks
         let has_role = |r: crate::identity::Role| req.subject.roles.contains(&r);
         match req.action {

@@ -92,8 +92,7 @@ mod tests {
         let message = b"audit entry content";
         let signature = signer.sign(message);
         let verifying_key = signer.verifying_key();
-        let valid = crypto::verify_audit_signature(&verifying_key, message, &signature,
-        ).unwrap();
+        let valid = crypto::verify_audit_signature(&verifying_key, message, &signature).unwrap();
         assert!(valid);
     }
 
@@ -103,27 +102,31 @@ mod tests {
         let signer = crypto::AuditSigner::generate();
         let mut engine = audit::AuditEngine::new(node_id.clone(), signer.clone());
 
-        let entry1 = engine.log(
-            audit::AuditEventType::Create,
-            "user-1".to_string(),
-            Some("pat-001".to_string()),
-            Some("enc-001".to_string()),
-            Some("Encounter".to_string()),
-            "create encounter".to_string(),
-            audit::AuditOutcome::Success,
-            None,
-        ).unwrap();
+        let entry1 = engine
+            .log(
+                audit::AuditEventType::Create,
+                "user-1".to_string(),
+                Some("pat-001".to_string()),
+                Some("enc-001".to_string()),
+                Some("Encounter".to_string()),
+                "create encounter".to_string(),
+                audit::AuditOutcome::Success,
+                None,
+            )
+            .unwrap();
 
-        let entry2 = engine.log(
-            audit::AuditEventType::Access,
-            "user-1".to_string(),
-            Some("pat-001".to_string()),
-            Some("enc-001".to_string()),
-            Some("Encounter".to_string()),
-            "read encounter".to_string(),
-            audit::AuditOutcome::Success,
-            None,
-        ).unwrap();
+        let entry2 = engine
+            .log(
+                audit::AuditEventType::Access,
+                "user-1".to_string(),
+                Some("pat-001".to_string()),
+                Some("enc-001".to_string()),
+                Some("Encounter".to_string()),
+                "read encounter".to_string(),
+                audit::AuditOutcome::Success,
+                None,
+            )
+            .unwrap();
 
         assert_eq!(engine.entries().len(), 2);
         assert_ne!(entry1.entry_hash, entry2.entry_hash);

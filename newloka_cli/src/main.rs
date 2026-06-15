@@ -102,9 +102,7 @@ enum PatientAction {
         phone: Option<String>,
     },
     /// Get patient by ID
-    Get {
-        id: String,
-    },
+    Get { id: String },
     /// List all patients
     List,
 }
@@ -118,8 +116,8 @@ async fn main() -> Result<()> {
         Commands::Init { password } => {
             println!("Initializing New Loka node: {}", cli.node);
             let salt = newloka_core::crypto::generate_salt();
-            let _dmk = newloka_core::crypto::DeviceMasterKey::derive_from_password(&password, &salt
-            );
+            let _dmk =
+                newloka_core::crypto::DeviceMasterKey::derive_from_password(&password, &salt);
             let (identity, _signer) = newloka_core::identity::NodeIdentity::generate(
                 cli.node.clone(),
                 parse_tier(&cli.tier),
@@ -141,76 +139,84 @@ async fn main() -> Result<()> {
             std::fs::write(&config_path, serde_json::to_string_pretty(&config)?)?;
             println!("Configuration saved to: {}", config_path.display());
         }
-        Commands::Patient { action } => {
-            match action {
-                PatientAction::Create { family, given, gender, birth_date, phone } => {
-                    println!("Creating patient: {}, {}", family, given);
-                    let node_id = "local-node".to_string();
-                    let user_id = "cli-user".to_string();
-                    let meta = newloka_core::fhir::Meta::new(node_id, user_id);
-                    let patient = newloka_core::fhir::Patient {
-                        id: uuid::Uuid::new_v4().to_string(),
-                        meta,
-                        identifier: vec![newloka_core::fhir::Identifier {
-                            system: "newloka".to_string(),
-                            value: uuid::Uuid::new_v4().to_string(),
-                            use_field: Some("official".to_string()),
-                        }],
-                        active: true,
-                        name: vec![newloka_core::fhir::HumanName {
-                            use_field: Some("official".to_string()),
-                            family,
-                            given: vec![given],
-                            prefix: vec![],
-                        }],
-                        telecom: if let Some(phone) = phone {
-                            vec![newloka_core::fhir::ContactPoint {
-                                system: "phone".to_string(),
-                                value: phone,
-                                use_field: Some("mobile".to_string()),
-                            }]
-                        } else {
-                            vec![]
-                        },
-                        gender,
-                        birth_date,
-                        address: vec![],
-                        marital_status: None,
-                        general_practitioner: vec![],
-                        managing_organization: None,
-                        deceased_boolean: None,
-                        deceased_date_time: None,
-                    };
-                    println!("Patient ID: {}", patient.id);
-                    let resource = newloka_core::fhir::FhirResource::Patient(patient);
-                    let json = serde_json::to_string_pretty(&resource)?;
-                    println!("{}", json);
-                }
-                PatientAction::Get { id } => {
-                    println!("Fetching patient: {}", id);
-                }
-                PatientAction::List => {
-                    println!("Listing patients...");
-                }
+        Commands::Patient { action } => match action {
+            PatientAction::Create {
+                family,
+                given,
+                gender,
+                birth_date,
+                phone,
+            } => {
+                println!("Creating patient: {}, {}", family, given);
+                let node_id = "local-node".to_string();
+                let user_id = "cli-user".to_string();
+                let meta = newloka_core::fhir::Meta::new(node_id, user_id);
+                let patient = newloka_core::fhir::Patient {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    meta,
+                    identifier: vec![newloka_core::fhir::Identifier {
+                        system: "newloka".to_string(),
+                        value: uuid::Uuid::new_v4().to_string(),
+                        use_field: Some("official".to_string()),
+                    }],
+                    active: true,
+                    name: vec![newloka_core::fhir::HumanName {
+                        use_field: Some("official".to_string()),
+                        family,
+                        given: vec![given],
+                        prefix: vec![],
+                    }],
+                    telecom: if let Some(phone) = phone {
+                        vec![newloka_core::fhir::ContactPoint {
+                            system: "phone".to_string(),
+                            value: phone,
+                            use_field: Some("mobile".to_string()),
+                        }]
+                    } else {
+                        vec![]
+                    },
+                    gender,
+                    birth_date,
+                    address: vec![],
+                    marital_status: None,
+                    general_practitioner: vec![],
+                    managing_organization: None,
+                    deceased_boolean: None,
+                    deceased_date_time: None,
+                };
+                println!("Patient ID: {}", patient.id);
+                let resource = newloka_core::fhir::FhirResource::Patient(patient);
+                let json = serde_json::to_string_pretty(&resource)?;
+                println!("{}", json);
             }
-        }
+            PatientAction::Get { id } => {
+                println!("Fetching patient: {}", id);
+            }
+            PatientAction::List => {
+                println!("Listing patients...");
+            }
+        },
         Commands::Encounter { patient_id, status } => {
             println!(
                 "Creating encounter for patient {} with status {:?}",
                 patient_id, status
             );
         }
-        Commands::Observe { patient_id, code, value } => {
+        Commands::Observe {
+            patient_id,
+            code,
+            value,
+        } => {
             println!(
                 "Recording observation for {}: {} = {}",
                 patient_id, code, value
             );
         }
-        Commands::Search { resource_type, patient_id } => {
-            println!(
-                "Searching {} for patient {:?}",
-                resource_type, patient_id
-            );
+        Commands::Search {
+            resource_type,
+            patient_id,
+        } => {
+            println!("Searching {} for patient {:?}", resource_type, patient_id);
         }
         Commands::Sync { peer } => {
             println!("Syncing with peer: {}", peer);

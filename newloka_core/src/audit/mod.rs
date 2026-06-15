@@ -71,6 +71,7 @@ impl AuditEngine {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn log(
         &mut self,
         event_type: AuditEventType,

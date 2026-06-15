@@ -44,7 +44,10 @@ impl Role {
     }
 
     pub fn can_prescribe(&self) -> bool {
-        matches!(self, Role::Clinician | Role::Pharmacist | Role::EmergencyOverride)
+        matches!(
+            self,
+            Role::Clinician | Role::Pharmacist | Role::EmergencyOverride
+        )
     }
 
     pub fn can_override(&self) -> bool {
@@ -107,24 +110,16 @@ impl Session {
 pub struct Authenticator;
 
 impl Authenticator {
-    pub fn verify_password(
-        password: &str,
-        salt: &[u8],
-        stored_hash: &str,
-    ) -> crate::Result<bool> {
+    pub fn verify_password(password: &str, salt: &[u8], stored_hash: &str) -> crate::Result<bool> {
         let dmk = crate::crypto::DeviceMasterKey::derive_from_password(password, salt);
-        let computed_hash = crate::crypto::hash_resource(
-        &[dmk.key.as_slice(), salt].concat()
-        );
+        let computed_hash = crate::crypto::hash_resource(&[dmk.key.as_slice(), salt].concat());
         Ok(computed_hash == stored_hash)
     }
 
     pub fn hash_password(password: &str) -> crate::Result<(Vec<u8>, String)> {
         let salt = crate::crypto::generate_salt();
         let dmk = crate::crypto::DeviceMasterKey::derive_from_password(password, &salt);
-        let hash = crate::crypto::hash_resource(
-        &[dmk.key.as_slice(), &salt].concat()
-        );
+        let hash = crate::crypto::hash_resource(&[dmk.key.as_slice(), &salt].concat());
         Ok((salt.to_vec(), hash))
     }
 }
@@ -141,7 +136,10 @@ pub struct NodeIdentity {
 }
 
 impl NodeIdentity {
-    pub fn generate(display_name: String, tier: crate::DeploymentTier) -> (Self, crate::crypto::AuditSigner) {
+    pub fn generate(
+        display_name: String,
+        tier: crate::DeploymentTier,
+    ) -> (Self, crate::crypto::AuditSigner) {
         let node_id = Uuid::new_v4().to_string();
         let signer = crate::crypto::AuditSigner::generate();
         let public_key = signer.verifying_key();

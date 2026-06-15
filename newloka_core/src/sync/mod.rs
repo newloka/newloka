@@ -24,7 +24,7 @@ pub struct DeltaSyncRequest {
     pub from_node: String,
     pub to_node: String,
     pub since_timestamp: i64,
-    pub known_vector_clocks: Vec<( String, Vec<(u32, u64)> ) >,
+    pub known_vector_clocks: Vec<(String, Vec<(u32, u64)>)>,
 }
 
 /// Delta sync response containing encrypted records.
@@ -112,16 +112,16 @@ impl SyncEngine {
     }
 
     /// Merge two vector clocks, returning the merged result.
-    pub fn merge_clocks(
-        a: &[(u32, u64)],
-        b: &[(u32, u64)],
-    ) -> Vec<(u32, u64)> {
+    pub fn merge_clocks(a: &[(u32, u64)], b: &[(u32, u64)]) -> Vec<(u32, u64)> {
         let mut merged: std::collections::HashMap<u32, u64> = std::collections::HashMap::new();
         for (id, count) in a {
             merged.insert(*id, *count);
         }
         for (id, count) in b {
-            merged.entry(*id).and_modify(|v| *v = (*v).max(*count)).or_insert(*count);
+            merged
+                .entry(*id)
+                .and_modify(|v| *v = (*v).max(*count))
+                .or_insert(*count);
         }
         let mut result: Vec<(u32, u64)> = merged.into_iter().collect();
         result.sort_by_key(|(id, _)| *id);
@@ -129,19 +129,13 @@ impl SyncEngine {
     }
 
     /// Determine if one clock dominates another (happens-before).
-    pub fn dominates(
-        a: &[(u32, u64)],
-        b: &[(u32, u64)],
-    ) -> bool {
+    pub fn dominates(a: &[(u32, u64)], b: &[(u32, u64)]) -> bool {
         let merged = Self::merge_clocks(a, b);
         a == merged.as_slice() && a != b
     }
 
     /// Detect conflict between two clocks (concurrent edits).
-    pub fn is_concurrent(
-        a: &[(u32, u64)],
-        b: &[(u32, u64)],
-    ) -> bool {
+    pub fn is_concurrent(a: &[(u32, u64)], b: &[(u32, u64)]) -> bool {
         !Self::dominates(a, b) && !Self::dominates(b, a) && a != b
     }
 
@@ -189,7 +183,8 @@ impl SyncEngine {
 
         for rec in incoming {
             if let Some(local) = local_map.get(&rec.id) {
-                let local_vc: Vec<(u32, u64)> = serde_json::from_str(&local.vector_clock).unwrap_or_default();
+                let local_vc: Vec<(u32, u64)> =
+                    serde_json::from_str(&local.vector_clock).unwrap_or_default();
                 if Self::is_concurrent(&rec.vector_clock, &local_vc) {
                     let conflict_type = if rec.resource_type == "MedicationRequest" {
                         ConflictType::MedicationChange

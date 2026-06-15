@@ -24,6 +24,15 @@ newloka/
     src/main.rs
   newloka_server/      - HTTP server (T1+)
     src/main.rs
+    src/lib.rs         - Axum REST API with in-memory stores and mock data seeding
+  newloka_web/         - Static web UI (T0?T4)
+    index.html
+    css/styles.css
+    js/
+      config.js        - Tier/feature config and localStorage persistence
+      api.js           - FHIR R4 API client with IndexedDB offline cache
+      mock-data.js     - Local-first mock patient database generator
+      app.js           - Single-page application with full CRUD for all tabs
   test/                - Unit and integration tests
     unit_tests.rs
     integration_tests.rs
@@ -56,6 +65,9 @@ newloka patient create --family Doe --given Jane --gender female --birth-date 19
 
 # Start server
 newloka serve --bind 127.0.0.1:8080
+
+# Seed mock data via API
+curl -X POST http://127.0.0.1:8080/seed?count=20
 
 ## Testing
 
@@ -114,3 +126,15 @@ Phase 5 - Federation and Research
   - Consent-driven sharing
   - Privacy-preserving queries
   - ABDM/ABHA integration
+
+## Mock Data
+
+The server (
+ewloka_server) seeds 20 mock patients on startup with realistic
+FHIR R4 encounters, observations, conditions, medications, and procedures.
+Use POST /seed?count=N to regenerate or adjust the count.
+
+The web UI (
+ewloka_web) includes a client-side mock data generator
+(mock-data.js) that seeds IndexedDB for offline-first testing. Click
+"?? Seed Local Data" on the Dashboard or in Settings.
