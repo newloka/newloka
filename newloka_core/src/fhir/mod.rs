@@ -52,8 +52,17 @@ pub enum FhirResource {
     MedicationRequest(MedicationRequest),
     Procedure(Procedure),
     DiagnosticReport(DiagnosticReport),
+    ServiceRequest(ServiceRequest),
+    ImagingStudy(ImagingStudy),
+    Specimen(Specimen),
     Composition(Composition),
     DetectedIssue(DetectedIssue),
+    AllergyIntolerance(AllergyIntolerance),
+    Flag(Flag),
+    CarePlan(CarePlan),
+    FamilyMemberHistory(FamilyMemberHistory),
+    Immunization(Immunization),
+    DocumentReference(DocumentReference),
     AuditEvent(AuditEvent),
     Provenance(Provenance),
     Bundle(Bundle),
@@ -69,8 +78,17 @@ impl FhirResource {
             FhirResource::MedicationRequest(r) => &r.id,
             FhirResource::Procedure(r) => &r.id,
             FhirResource::DiagnosticReport(r) => &r.id,
+            FhirResource::ServiceRequest(r) => &r.id,
+            FhirResource::ImagingStudy(r) => &r.id,
+            FhirResource::Specimen(r) => &r.id,
             FhirResource::Composition(r) => &r.id,
             FhirResource::DetectedIssue(r) => &r.id,
+            FhirResource::AllergyIntolerance(r) => &r.id,
+            FhirResource::Flag(r) => &r.id,
+            FhirResource::CarePlan(r) => &r.id,
+            FhirResource::FamilyMemberHistory(r) => &r.id,
+            FhirResource::Immunization(r) => &r.id,
+            FhirResource::DocumentReference(r) => &r.id,
             FhirResource::AuditEvent(r) => &r.id,
             FhirResource::Provenance(r) => &r.id,
             FhirResource::Bundle(r) => &r.id,
@@ -86,8 +104,17 @@ impl FhirResource {
             FhirResource::MedicationRequest(r) => &r.meta,
             FhirResource::Procedure(r) => &r.meta,
             FhirResource::DiagnosticReport(r) => &r.meta,
+            FhirResource::ServiceRequest(r) => &r.meta,
+            FhirResource::ImagingStudy(r) => &r.meta,
+            FhirResource::Specimen(r) => &r.meta,
             FhirResource::Composition(r) => &r.meta,
             FhirResource::DetectedIssue(r) => &r.meta,
+            FhirResource::AllergyIntolerance(r) => &r.meta,
+            FhirResource::Flag(r) => &r.meta,
+            FhirResource::CarePlan(r) => &r.meta,
+            FhirResource::FamilyMemberHistory(r) => &r.meta,
+            FhirResource::Immunization(r) => &r.meta,
+            FhirResource::DocumentReference(r) => &r.meta,
             FhirResource::AuditEvent(r) => &r.meta,
             FhirResource::Provenance(r) => &r.meta,
             FhirResource::Bundle(r) => &r.meta,
@@ -103,8 +130,17 @@ impl FhirResource {
             FhirResource::MedicationRequest(_) => "MedicationRequest",
             FhirResource::Procedure(_) => "Procedure",
             FhirResource::DiagnosticReport(_) => "DiagnosticReport",
+            FhirResource::ServiceRequest(_) => "ServiceRequest",
+            FhirResource::ImagingStudy(_) => "ImagingStudy",
+            FhirResource::Specimen(_) => "Specimen",
             FhirResource::Composition(_) => "Composition",
             FhirResource::DetectedIssue(_) => "DetectedIssue",
+            FhirResource::AllergyIntolerance(_) => "AllergyIntolerance",
+            FhirResource::Flag(_) => "Flag",
+            FhirResource::CarePlan(_) => "CarePlan",
+            FhirResource::FamilyMemberHistory(_) => "FamilyMemberHistory",
+            FhirResource::Immunization(_) => "Immunization",
+            FhirResource::DocumentReference(_) => "DocumentReference",
             FhirResource::AuditEvent(_) => "AuditEvent",
             FhirResource::Provenance(_) => "Provenance",
             FhirResource::Bundle(_) => "Bundle",
@@ -569,6 +605,134 @@ pub struct AuditEventEntityDetail {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ServiceRequest {
+    pub id: String,
+    pub meta: Meta,
+    pub identifier: Vec<Identifier>,
+    pub status: String,
+    pub intent: String,
+    pub category: Vec<CodeableConcept>,
+    pub priority: Option<String>,
+    pub code: Option<CodeableConcept>,
+    pub order_detail: Vec<CodeableConcept>,
+    pub subject: Option<Reference>,
+    pub encounter: Option<Reference>,
+    pub authored_on: Option<DateTime<Utc>>,
+    pub requester: Option<Reference>,
+    pub performer: Vec<Reference>,
+    pub performer_type: Option<CodeableConcept>,
+    pub location_code: Vec<CodeableConcept>,
+    pub reason_code: Vec<CodeableConcept>,
+    pub insurance: Vec<Reference>,
+    pub supporting_info: Vec<Reference>,
+    pub specimen: Vec<Reference>,
+    pub body_site: Vec<CodeableConcept>,
+    pub note: Vec<Annotation>,
+    pub patient_instruction: Option<String>,
+    pub relevant_history: Vec<Reference>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ImagingStudy {
+    pub id: String,
+    pub meta: Meta,
+    pub identifier: Vec<Identifier>,
+    pub status: String,
+    pub modality: Vec<Coding>,
+    pub subject: Reference,
+    pub encounter: Option<Reference>,
+    pub started: Option<DateTime<Utc>>,
+    pub based_on: Vec<Reference>,
+    pub referrer: Option<Reference>,
+    pub interpreter: Vec<Reference>,
+    pub endpoint: Vec<Reference>,
+    pub number_of_series: Option<i64>,
+    pub number_of_instances: Option<i64>,
+    pub procedure_reference: Vec<Reference>,
+    pub procedure_code: Vec<CodeableConcept>,
+    pub location: Option<Reference>,
+    pub reason_code: Vec<CodeableConcept>,
+    pub note: Vec<Annotation>,
+    pub series: Vec<ImagingStudySeries>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ImagingStudySeries {
+    pub uid: String,
+    pub number: Option<i64>,
+    pub modality: Coding,
+    pub description: Option<String>,
+    pub number_of_instances: Option<i64>,
+    pub endpoint: Vec<Reference>,
+    pub body_site: Option<CodeableConcept>,
+    pub instance: Vec<ImagingStudyInstance>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ImagingStudyInstance {
+    pub uid: String,
+    pub sop_class: Coding,
+    pub number: Option<i64>,
+    pub title: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Specimen {
+    pub id: String,
+    pub meta: Meta,
+    pub identifier: Vec<Identifier>,
+    pub accession_identifier: Option<Identifier>,
+    pub status: Option<String>,
+    pub type_: Option<CodeableConcept>,
+    pub subject: Option<Reference>,
+    pub received_time: Option<DateTime<Utc>>,
+    pub parent: Vec<Reference>,
+    pub request: Vec<Reference>,
+    pub collection: Option<SpecimenCollection>,
+    pub processing: Vec<SpecimenProcessing>,
+    pub container: Vec<SpecimenContainer>,
+    pub note: Vec<Annotation>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SpecimenCollection {
+    pub collector: Option<Reference>,
+    pub collected_date_time: Option<DateTime<Utc>>,
+    pub collected_period: Option<Period>,
+    pub quantity: Option<Quantity>,
+    pub method: Option<CodeableConcept>,
+    pub body_site: Option<CodeableConcept>,
+    pub fasting_status: Option<CodeableConcept>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SpecimenProcessing {
+    pub description: Option<String>,
+    pub procedure: Option<CodeableConcept>,
+    pub additive: Vec<Reference>,
+    pub time_date_time: Option<DateTime<Utc>>,
+    pub time_period: Option<Period>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SpecimenContainer {
+    pub identifier: Vec<Identifier>,
+    pub description: Option<String>,
+    pub type_: Option<CodeableConcept>,
+    pub capacity: Option<Quantity>,
+    pub specimen_quantity: Option<Quantity>,
+    pub additive: Option<CodeableConcept>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Provenance {
     pub id: String,
     pub meta: Meta,
@@ -661,4 +825,141 @@ pub struct BundleEntryResponse {
     pub etag: Option<String>,
     pub last_modified: Option<DateTime<Utc>>,
     pub outcome: Option<Box<FhirResource>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AllergyIntolerance {
+    pub id: String,
+    pub meta: Meta,
+    pub identifier: Vec<Identifier>,
+    pub clinical_status: Option<CodeableConcept>,
+    pub verification_status: Option<CodeableConcept>,
+    pub type_: Option<CodeableConcept>,
+    pub category: Vec<String>,
+    pub criticality: Option<String>,
+    pub code: Option<CodeableConcept>,
+    pub patient: Option<Reference>,
+    pub onset_date_time: Option<DateTime<Utc>>,
+    pub recorded_date: Option<DateTime<Utc>>,
+    pub recorder: Option<Reference>,
+    pub asserter: Option<Reference>,
+    pub last_occurrence: Option<DateTime<Utc>>,
+    pub note: Vec<Annotation>,
+    pub reaction: Vec<AllergyIntoleranceReaction>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AllergyIntoleranceReaction {
+    pub substance: Option<CodeableConcept>,
+    pub manifestation: Vec<CodeableConcept>,
+    pub description: Option<String>,
+    pub onset: Option<DateTime<Utc>>,
+    pub severity: Option<String>,
+    pub exposure_route: Option<CodeableConcept>,
+    pub note: Vec<Annotation>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Flag {
+    pub id: String,
+    pub meta: Meta,
+    pub identifier: Vec<Identifier>,
+    pub status: String,
+    pub category: Vec<CodeableConcept>,
+    pub code: Option<CodeableConcept>,
+    pub subject: Option<Reference>,
+    pub period: Option<Period>,
+    pub encounter: Option<Reference>,
+    pub author: Option<Reference>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct CarePlan {
+    pub id: String,
+    pub meta: Meta,
+    pub identifier: Vec<Identifier>,
+    pub status: String,
+    pub intent: String,
+    pub category: Vec<CodeableConcept>,
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub subject: Option<Reference>,
+    pub encounter: Option<Reference>,
+    pub period: Option<Period>,
+    pub author: Option<Reference>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FamilyMemberHistory {
+    pub id: String,
+    pub meta: Meta,
+    pub identifier: Vec<Identifier>,
+    pub status: String,
+    pub patient: Option<Reference>,
+    pub date: Option<DateTime<Utc>>,
+    pub name: Option<String>,
+    pub relationship: Option<CodeableConcept>,
+    pub sex: Option<CodeableConcept>,
+    pub born_string: Option<String>,
+    pub age_string: Option<String>,
+    pub reason_code: Vec<CodeableConcept>,
+    pub condition: Vec<FamilyMemberHistoryCondition>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FamilyMemberHistoryCondition {
+    pub code: Option<CodeableConcept>,
+    pub outcome: Option<CodeableConcept>,
+    pub onset_string: Option<String>,
+    pub note: Vec<Annotation>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Immunization {
+    pub id: String,
+    pub meta: Meta,
+    pub identifier: Vec<Identifier>,
+    pub status: String,
+    pub status_reason: Option<CodeableConcept>,
+    pub vaccine_code: Option<CodeableConcept>,
+    pub patient: Option<Reference>,
+    pub encounter: Option<Reference>,
+    pub occurrence_date_time: Option<DateTime<Utc>>,
+    pub recorded: Option<DateTime<Utc>>,
+    pub primary_source: Option<bool>,
+    pub location: Option<Reference>,
+    pub manufacturer: Option<Reference>,
+    pub lot_number: Option<String>,
+    pub note: Vec<Annotation>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentReference {
+    pub id: String,
+    pub meta: Meta,
+    pub identifier: Vec<Identifier>,
+    pub status: String,
+    pub doc_status: Option<CodeableConcept>,
+    pub type_: Option<CodeableConcept>,
+    pub category: Vec<CodeableConcept>,
+    pub subject: Option<Reference>,
+    pub date: Option<DateTime<Utc>>,
+    pub author: Vec<Reference>,
+    pub description: Option<String>,
+    pub content: Vec<DocumentReferenceContent>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentReferenceContent {
+    pub attachment: Option<Attachment>,
+    pub format: Option<Coding>,
 }

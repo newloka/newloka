@@ -39,31 +39,52 @@ The system must follow these principles:
 
 4.1 Core clinical data
 - Store all clinical records as FHIR R4 resources.
-- Support patients, encounters, observations, conditions, medications, procedures, requests, reports, compositions, detected issues, audit events, and related resources.
+- Support patients, encounters, observations, conditions, medications, procedures, ServiceRequest orders, DiagnosticReport results, ImagingStudy records, Specimen tracking, compositions, detected issues, audit events, and related resources.
 - Preserve provenance for every record, including creator, timestamps, origin node, and sync metadata.
 - Support soft delete semantics only.
 
-4.2 Storage and encryption
+
+4.2 Computerized Physician Order Entry (CPOE)
+- Support ordering of laboratory tests, imaging studies, and other diagnostic procedures.
+- Maintain order lifecycle: draft, requested, active, completed, cancelled.
+- Support order priority levels: routine, urgent, stat.
+- Associate orders with encounters and responsible clinicians.
+- Store orders as FHIR ServiceRequest, DiagnosticReport, ImagingStudy, and Specimen resources.
+- Provide audit trail for every order action including creation, modification, cancellation, and result attachment.
+
+4.3 Lab and imaging configuration
+- Support configurable lab departments: Radiology, Biochemistry, Pathology, Microbiology.
+- Lab configuration is determined at login time based on the user's department and role.
+- Enforce lab-level access control at the ABAC layer, not just the UI.
+- A clinician in Biochemistry can only access biochemistry orders and results unless explicitly granted cross-lab permissions.
+- Lab technicians have Create/Update permissions for results within their assigned lab only.
+- Radiologists have Read/Create/Update for imaging studies and reports within Radiology.
+- Pathologists have restricted access to tissue and cytology specimens and reports.
+- Microbiologists access culture, sensitivity, and organism identification data.
+- Cross-lab emergency override follows the same emergency override workflow as other sensitive data.
+- Lab configurations are stored per-deployment and may be empty for T0 (solo clinician) deployments.
+
+4.4 Storage and encryption
 - Use local encrypted storage on every platform.
 - Encrypt data at rest with strong symmetric encryption.
 - Keep keys in device-local hardware-backed stores where available.
 - Support a hierarchical key model for device, patient record, sync session, and audit signing.
 
-4.3 Identity and access control
+4.5 Identity and access control
 - Require authenticated users for all record access.
 - Enforce ABAC at the core, not only in the UI.
 - Support department and team based silos.
 - Support emergency override with explicit reason entry and audit logging.
 - Support offline-capable authentication.
 
-4.4 Sync and mesh
+4.6 Sync and mesh
 - Support peer discovery on local networks.
 - Support delta sync between authorized nodes.
 - Support conflict detection and deterministic merge behavior.
 - Never auto-resolve clinically dangerous conflicts such as medication changes.
 - Preserve full provenance during sync, merge, transfer, and correction.
 
-4.5 AI and document processing
+4.7 AI and document processing
 - Run OCR, speech-to-text, and extraction locally or on trusted institutional infrastructure.
 - Support handwriting extraction from photos.
 - Support PDF ingestion.
@@ -71,14 +92,14 @@ The system must follow these principles:
 - Require human review before committing AI-extracted data.
 - Store confidence and warning metadata with extracted resources.
 
-4.6 Audit and safety
+4.8 Audit and safety
 - Maintain an append-only audit trail.
 - Sign audit entries cryptographically.
 - Make the audit trail tamper-evident.
 - Record access, edits, sync events, overrides, and corrections.
 - Support retrospective review and escalation workflows.
 
-4.7 User experience
+4.9 User experience
 - Make essential information reachable in three taps or fewer.
 - Keep offline status visible.
 - Surface critical alerts immediately.

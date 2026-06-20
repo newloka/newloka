@@ -6,6 +6,7 @@
 
 pub mod abac;
 pub mod audit;
+pub mod cpoe;
 pub mod crypto;
 pub mod fhir;
 pub mod identity;

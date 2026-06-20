@@ -32,3 +32,12 @@ backups/
 
 # Temporary
 /tmp
+
+# Node
+node_modules/
+
+# Local serve scripts/logs
+serve.ps1
+serve.bat
+serve.err
+*.err

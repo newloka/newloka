@@ -53,3 +53,10 @@ newloka/
 ## License
 
 GPL-3.0
+
+## Roadmap
+
+- **Mobile app** ? Offline-first React Native / Flutter companion for field clinicians, syncing with the mesh via Bluetooth and Wi-Fi Direct.
+- **Biometric auth** ? Fingerprint / face unlock integration for T0 deployments.
+- **Telemedicine module** ? Embedded video consults with audit logging.
+- **OpenHealth integration** ? UHI (India) and FHIRcast event subscriptions.

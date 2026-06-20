@@ -254,6 +254,7 @@ mod integration {
             salt: vec![],
             totp_secret: None,
             last_login: None,
+            lab_affiliations: vec![],
         };
 
         let session = identity::Session::new(
@@ -273,6 +274,7 @@ mod integration {
                 team_ids: user.team_ids,
                 session_valid: session.is_valid(),
                 emergency_override: session.emergency_override,
+                lab_affiliations: vec![],
             },
             resource: abac::Resource {
                 resource_type: "Patient".to_string(),
@@ -281,6 +283,7 @@ mod integration {
                 department_id: Some("dept-cardiology".to_string()),
                 owner_team_ids: vec!["team-cardio-1".to_string()],
                 sensitivity: abac::SensitivityLevel::Normal,
+                lab_department: None,
             },
             action: abac::Action::Create,
             context: abac::Context {
@@ -288,6 +291,8 @@ mod integration {
                 offline: false,
                 peer_node_id: None,
                 time_of_day: "10:30".to_string(),
+                lab_config: cpoe::LabConfiguration::default(),
+                patient_has_lab_order: false,
             },
         };
 

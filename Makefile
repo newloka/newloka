@@ -1,4 +1,4 @@
-PROJECT_NAME := newloka
+﻿PROJECT_NAME := newloka
 RUSTC := rustc
 CARGO := cargo
 
@@ -31,7 +31,7 @@ serve:
 	$(CARGO) run --bin newloka-server -- --bind 127.0.0.1:8080
 
 cli:
-	$(CARGO) run --bin newloka -- serve --bind 127.0.0.1:8080
+	$(CARGO) run --bin newloka-cli -- serve --bind 127.0.0.1:8080
 
 docs:
 	$(CARGO) doc --no-deps --open
@@ -39,3 +39,4 @@ docs:
 install:
 	$(CARGO) install --path newloka_cli
 	$(CARGO) install --path newloka_server
+

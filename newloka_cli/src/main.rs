@@ -8,7 +8,7 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 #[derive(Parser)]
-#[command(name = "newloka")]
+#[command(name = "newloka-cli")]
 #[command(about = "New Loka - Local-first health data management")]
 #[command(version = "0.1.0")]
 struct Cli {

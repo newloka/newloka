@@ -1,4 +1,4 @@
-﻿/**
+/**
  * New Loka API Client + Offline Cache
  *
  * Wraps the FHIR R4 endpoints with local IndexedDB caching and an
@@ -64,12 +64,12 @@ async function fetchWithRetry(resource, opts = {}, retries = 3, timeoutMs = 1500
 function openDB() {
     return new Promise((resolve, reject) => {
         if (_db) return resolve(_db);
-        const req = indexedDB.open('newloka_store', 2);
+        const req = indexedDB.open('newloka_store', 4);
         req.onerror = () => reject(req.error);
         req.onsuccess = () => { _db = req.result; resolve(_db); };
         req.onupgradeneeded = (e) => {
             const db = e.target.result;
-            const stores = ['patients','encounters','observations','conditions','medicationRequests','procedures','queue','audit'];
+            const stores = ['patients','encounters','observations','conditions','medicationRequests','procedures','queue','audit','allergyIntolerances','documentReferences','serviceRequests','carePlans','familyMemberHistories','immunizations','medicationAdministrations','medicationStatements'];
             stores.forEach(s => {
                 if (!db.objectStoreNames.contains(s)) db.createObjectStore(s, { keyPath: 'id' });
             });
@@ -100,6 +100,7 @@ async function dbGetAll(store) {
 }
 
 async function dbGet(store, id) {
+    if (!id) return null;
     const db = await openDB();
     return new Promise((resolve, reject) => {
         const tx = db.transaction([store], 'readonly');
@@ -208,6 +209,7 @@ function makeResourceApi(resourceType, storeName) {
     }
 
     async function get(id) {
+        if (!id) return null;
         const cached = await dbGet(storeName, id);
         if (!isOnline()) return cached || null;
         const res = await fetchWithRetry(url(`/${resourceType}/${id}`), { headers: headers() });
@@ -309,11 +311,28 @@ export async function seedServer(count = 20) {
 
 /* Audit */
 
-export async function searchAudit() {
+export async function searchAudit(params = {}) {
     if (!isOnline()) {
-        return { resourceType: 'Bundle', type: 'searchset', total: 0, entry: (await dbGetAll('audit')).map(a => ({ resource: a })) };
+        let all = await dbGetAll('audit');
+        const p = params;
+        all = all.filter(a => {
+            if (p.actor && !(a.agent?.[0]?.who?.reference || '').toLowerCase().includes(p.actor.toLowerCase())) return false;
+            if (p.event_type && !(a.type?.coding?.[0]?.code || '').toLowerCase().includes(p.event_type.toLowerCase())) return false;
+            if (p.outcome && !(a.outcome || '').toLowerCase().includes(p.outcome.toLowerCase())) return false;
+            if (p.patient && (a.patient?.reference || '').replace('Patient/','') !== p.patient) return false;
+            return true;
+        });
+        return { resourceType: 'Bundle', type: 'searchset', total: all.length, entry: all.map(a => ({ resource: a })) };
     }
-    const res = await fetchWithRetry(url('/AuditEvent?_count=200'), { headers: headers() });
+    const qs = new URLSearchParams();
+    qs.set('_count', String(params._count || 500));
+    if (params.actor) qs.set('actor', params.actor);
+    if (params.event_type) qs.set('event_type', params.event_type);
+    if (params.outcome) qs.set('outcome', params.outcome);
+    if (params.patient) qs.set('patient', params.patient);
+    if (params.since != null) qs.set('since', String(params.since));
+    if (params.until != null) qs.set('until', String(params.until));
+    const res = await fetchWithRetry(url('/AuditEvent?' + qs.toString()), { headers: headers() });
     const data = await res.json();
     if (data.entry) {
         for (const e of data.entry) {
@@ -340,3 +359,110 @@ export {
     openDB, dbGetAll, dbGet, dbPut, dbDelete, dbClear,
     isOnline, flushQueue, enqueue,
 };
+
+/* ------------------------------------------------------------------ */
+/* New Resource APIs for v0.2.0                                        */
+/* ------------------------------------------------------------------ */
+
+const allergyApi      = makeResourceApi('AllergyIntolerance', 'allergyIntolerances');
+const docRefApi       = makeResourceApi('DocumentReference', 'documentReferences');
+const serviceReqApi   = makeResourceApi('ServiceRequest', 'serviceRequests');
+const carePlanApi     = makeResourceApi('CarePlan', 'carePlans');
+const famHistApi      = makeResourceApi('FamilyMemberHistory', 'familyMemberHistories');
+const immunizationApi = makeResourceApi('Immunization', 'immunizations');
+const medAdminApi     = makeResourceApi('MedicationAdministration', 'medicationAdministrations');
+const medStmtApi      = makeResourceApi('MedicationStatement', 'medicationStatements');
+
+export const searchAllergyIntolerances = allergyApi.search;
+export const createAllergyIntolerance  = allergyApi.create;
+export const getAllergyIntolerance     = allergyApi.get;
+export const updateAllergyIntolerance  = allergyApi.update;
+export const deleteAllergyIntolerance  = allergyApi.remove;
+
+export const searchDocumentReferences  = docRefApi.search;
+export const createDocumentReference   = docRefApi.create;
+export const getDocumentReference      = docRefApi.get;
+export const updateDocumentReference   = docRefApi.update;
+export const deleteDocumentReference   = docRefApi.remove;
+
+export const searchServiceRequests     = serviceReqApi.search;
+export const createServiceRequest      = serviceReqApi.create;
+export const getServiceRequest         = serviceReqApi.get;
+export const updateServiceRequest      = serviceReqApi.update;
+export const deleteServiceRequest      = serviceReqApi.remove;
+
+export const searchCarePlans           = carePlanApi.search;
+export const createCarePlan            = carePlanApi.create;
+export const getCarePlan               = carePlanApi.get;
+export const updateCarePlan            = carePlanApi.update;
+export const deleteCarePlan            = carePlanApi.remove;
+
+export const searchFamilyMemberHistories = famHistApi.search;
+export const createFamilyMemberHistory   = famHistApi.create;
+export const getFamilyMemberHistory      = famHistApi.get;
+export const updateFamilyMemberHistory   = famHistApi.update;
+export const deleteFamilyMemberHistory   = famHistApi.remove;
+
+export const searchImmunizations       = immunizationApi.search;
+export const createImmunization        = immunizationApi.create;
+export const getImmunization             = immunizationApi.get;
+export const updateImmunization        = immunizationApi.update;
+export const deleteImmunization          = immunizationApi.remove;
+
+export const searchMedicationAdministrations = medAdminApi.search;
+export const createMedicationAdministration  = medAdminApi.create;
+export const getMedicationAdministration     = medAdminApi.get;
+export const updateMedicationAdministration  = medAdminApi.update;
+export const deleteMedicationAdministration  = medAdminApi.remove;
+
+export const searchMedicationStatements  = medStmtApi.search;
+export const createMedicationStatement   = medStmtApi.create;
+export const getMedicationStatement      = medStmtApi.get;
+export const updateMedicationStatement   = medStmtApi.update;
+export const deleteMedicationStatement   = medStmtApi.remove;
+
+/* Local helpers for filtering / sorting */
+
+export async function getLocalPatients() {
+    return dbGetAll('patients');
+}
+export async function getLocalEncounters() {
+    return dbGetAll('encounters');
+}
+export async function getLocalObservations() {
+    return dbGetAll('observations');
+}
+export async function getLocalConditions() {
+    return dbGetAll('conditions');
+}
+export async function getLocalMedicationRequests() {
+    return dbGetAll('medicationRequests');
+}
+export async function getLocalProcedures() {
+    return dbGetAll('procedures');
+}
+export async function getLocalAllergyIntolerances() {
+    return dbGetAll('allergyIntolerances');
+}
+export async function getLocalDocumentReferences() {
+    return dbGetAll('documentReferences');
+}
+export async function getLocalServiceRequests() {
+    return dbGetAll('serviceRequests');
+}
+export async function getLocalCarePlans() {
+    return dbGetAll('carePlans');
+}
+export async function getLocalFamilyMemberHistories() {
+    return dbGetAll('familyMemberHistories');
+}
+export async function getLocalImmunizations() {
+    return dbGetAll('immunizations');
+}
+export async function getLocalMedicationAdministrations() {
+    return dbGetAll('medicationAdministrations');
+}
+export async function getLocalMedicationStatements() {
+    return dbGetAll('medicationStatements');
+}
+

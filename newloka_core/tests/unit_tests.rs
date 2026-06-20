@@ -145,6 +145,7 @@ mod tests {
                 team_ids: vec!["team-1".to_string()],
                 session_valid: true,
                 emergency_override: false,
+                lab_affiliations: vec![],
             },
             resource: abac::Resource {
                 resource_type: "Patient".to_string(),
@@ -153,6 +154,7 @@ mod tests {
                 department_id: Some("dept-a".to_string()),
                 owner_team_ids: vec!["team-1".to_string()],
                 sensitivity: abac::SensitivityLevel::Normal,
+                lab_department: None,
             },
             action: abac::Action::Create,
             context: abac::Context {
@@ -160,6 +162,8 @@ mod tests {
                 offline: false,
                 peer_node_id: None,
                 time_of_day: "14:00".to_string(),
+                lab_config: cpoe::LabConfiguration::default(),
+                patient_has_lab_order: false,
             },
         };
         let decision = abac::PolicyEngine::evaluate(&req);
@@ -176,6 +180,7 @@ mod tests {
                 team_ids: vec![],
                 session_valid: true,
                 emergency_override: false,
+                lab_affiliations: vec![],
             },
             resource: abac::Resource {
                 resource_type: "MedicationRequest".to_string(),
@@ -184,6 +189,7 @@ mod tests {
                 department_id: Some("dept-a".to_string()),
                 owner_team_ids: vec![],
                 sensitivity: abac::SensitivityLevel::Normal,
+                lab_department: None,
             },
             action: abac::Action::Override,
             context: abac::Context {
@@ -191,6 +197,8 @@ mod tests {
                 offline: false,
                 peer_node_id: None,
                 time_of_day: "09:00".to_string(),
+                lab_config: cpoe::LabConfiguration::default(),
+                patient_has_lab_order: false,
             },
         };
         let decision = abac::PolicyEngine::evaluate(&req);
@@ -212,6 +220,7 @@ mod tests {
                 team_ids: vec!["team-1".to_string()],
                 session_valid: true,
                 emergency_override: false,
+                lab_affiliations: vec![],
             },
             resource: abac::Resource {
                 resource_type: "Patient".to_string(),
@@ -220,6 +229,7 @@ mod tests {
                 department_id: Some("dept-b".to_string()),
                 owner_team_ids: vec!["team-2".to_string()],
                 sensitivity: abac::SensitivityLevel::Normal,
+                lab_department: None,
             },
             action: abac::Action::Read,
             context: abac::Context {
@@ -227,6 +237,8 @@ mod tests {
                 offline: false,
                 peer_node_id: None,
                 time_of_day: "10:00".to_string(),
+                lab_config: cpoe::LabConfiguration::default(),
+                patient_has_lab_order: false,
             },
         };
         let decision = abac::PolicyEngine::evaluate(&req);
@@ -248,6 +260,7 @@ mod tests {
                 team_ids: vec![],
                 session_valid: true,
                 emergency_override: true,
+                lab_affiliations: vec![],
             },
             resource: abac::Resource {
                 resource_type: "Patient".to_string(),
@@ -256,6 +269,7 @@ mod tests {
                 department_id: Some("dept-b".to_string()),
                 owner_team_ids: vec![],
                 sensitivity: abac::SensitivityLevel::Critical,
+                lab_department: None,
             },
             action: abac::Action::Read,
             context: abac::Context {
@@ -263,6 +277,8 @@ mod tests {
                 offline: false,
                 peer_node_id: None,
                 time_of_day: "02:00".to_string(),
+                lab_config: cpoe::LabConfiguration::default(),
+                patient_has_lab_order: false,
             },
         };
         let decision = abac::PolicyEngine::evaluate(&req);

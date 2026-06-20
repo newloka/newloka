@@ -1,20 +1,84 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#0f172a">
+    <meta name="theme-color" content="#f4f8f5">
     <title>New Loka — EMR & Patient Management</title>
     <link rel="stylesheet" href="/static/css/styles.css">
     <link rel="manifest" href="/static/assets/manifest.json">
+    <script>
+      (function() {
+        try {
+          const raw = localStorage.getItem('nl_config');
+          const cfg = raw ? JSON.parse(raw) : {};
+          const theme = cfg.theme || 'newloka';
+          const themes = {
+            newloka: {
+              "--color-bg":"#f4f8f5","--color-surface":"#ffffff","--color-surface-raised":"#e6f1f5",
+              "--color-text":"#4a3c31","--color-text-muted":"#6b5e54","--color-primary":"#2a9d8f",
+              "--color-primary-dark":"#1f7a73","--color-success":"#5c8a63","--color-warning":"#d97706",
+              "--color-danger":"#c0504d","--color-danger-soft":"#8a3b3b",
+              "--color-border":"rgba(42, 157, 143, 0.30)","--color-border-light":"rgba(42, 157, 143, 0.20)",
+              "--color-border-subtle":"rgba(42, 157, 143, 0.14)","--color-input-bg":"#ffffff",
+              "--color-overlay":"rgba(45, 36, 29, 0.45)","--color-glass-bg":"rgba(255, 255, 255, 0.72)",
+              "--color-glass-border":"rgba(255, 255, 255, 0.55)","--color-hover":"rgba(42, 157, 143, 0.08)",
+              "--color-active-bg":"rgba(42, 157, 143, 0.12)","--color-row-alt":"rgba(230, 241, 245, 0.5)",
+              "--color-chart-bg":"rgba(255,255,255,0.45)","--shadow":"0 4px 24px rgba(0,0,0,0.06)",
+              "--header-bg":"linear-gradient(180deg, rgba(244,248,245,0.98), rgba(230,241,245,0.92))",
+              "--header-border":"rgba(42, 157, 143, 0.22)","--nav-bg":"#ffffff",
+              "--nav-border":"rgba(42, 157, 143, 0.22)","--theme-type":"light"
+            },
+            dark: {
+              "--color-bg":"#0f172a","--color-surface":"#1e293b","--color-surface-raised":"#334155",
+              "--color-text":"#f1f5f9","--color-text-muted":"#94a3b8","--color-primary":"#38bdf8",
+              "--color-primary-dark":"#0284c7","--color-success":"#22c55e","--color-warning":"#eab308",
+              "--color-danger":"#ef4444","--color-danger-soft":"#7f1d1d",
+              "--color-border":"rgba(148,163,184,0.12)","--color-border-light":"rgba(148,163,184,0.10)",
+              "--color-border-subtle":"rgba(148,163,184,0.08)","--color-input-bg":"#0f172a",
+              "--color-overlay":"rgba(0,0,0,0.65)","--color-glass-bg":"rgba(30, 41, 59, 0.85)",
+              "--color-glass-border":"rgba(148,163,184,0.15)","--color-hover":"rgba(255,255,255,0.05)",
+              "--color-active-bg":"rgba(56,189,248,0.08)","--color-row-alt":"rgba(30,41,59,0.5)",
+              "--color-chart-bg":"rgba(255,255,255,0.03)","--shadow":"0 4px 24px rgba(0,0,0,0.35)",
+              "--header-bg":"linear-gradient(180deg, rgba(15,23,42,0.98), rgba(15,23,42,0.92))",
+              "--header-border":"rgba(148,163,184,0.12)","--nav-bg":"#1e293b",
+              "--nav-border":"rgba(148,163,184,0.12)","--theme-type":"dark"
+            },
+            light: {
+              "--color-bg":"#f8fafc","--color-surface":"#ffffff","--color-surface-raised":"#f1f5f9",
+              "--color-text":"#0f172a","--color-text-muted":"#64748b","--color-primary":"#0ea5e9",
+              "--color-primary-dark":"#0369a1","--color-success":"#22c55e","--color-warning":"#eab308",
+              "--color-danger":"#ef4444","--color-danger-soft":"#7f1d1d",
+              "--color-border":"rgba(148,163,184,0.22)","--color-border-light":"rgba(148,163,184,0.15)",
+              "--color-border-subtle":"rgba(148,163,184,0.10)","--color-input-bg":"#ffffff",
+              "--color-overlay":"rgba(15,23,42,0.45)","--color-glass-bg":"rgba(255,255,255,0.72)",
+              "--color-glass-border":"rgba(255,255,255,0.55)","--color-hover":"rgba(14,165,233,0.06)",
+              "--color-active-bg":"rgba(14,165,233,0.10)","--color-row-alt":"rgba(241,245,249,0.6)",
+              "--color-chart-bg":"rgba(255,255,255,0.5)","--shadow":"0 4px 24px rgba(0,0,0,0.08)",
+              "--header-bg":"linear-gradient(180deg, rgba(248,250,252,0.98), rgba(248,250,252,0.92))",
+              "--header-border":"rgba(148,163,184,0.22)","--nav-bg":"#ffffff",
+              "--nav-border":"rgba(148,163,184,0.22)","--theme-type":"light"
+            }
+          };
+          const vars = theme === 'custom' && cfg.customTheme ? { ...themes.newloka, ...cfg.customTheme } : (themes[theme] || themes.newloka);
+          const root = document.documentElement;
+          for (const [k, v] of Object.entries(vars)) { root.style.setProperty(k, v); }
+          root.setAttribute('data-theme', theme);
+          document.querySelector('meta[name="theme-color"]').content = vars['--color-bg'] || '#f4f8f5';
+        } catch(e) {}
+      })();
+    </script>
 </head>
 <body>
     <div id="app">
-        <div id="offline-banner" class="offline-banner hidden" role="status" aria-live="polite">Offline</div>
+        <div id="offline-banner" class="offline-banner hidden" role="status" aria-live="polite">Offline — Working from local cache</div>
         <div id="alert-bar" class="alert-bar hidden"></div>
         <header id="app-header" class="app-header hidden">
             <button id="menu-btn" class="icon-btn" aria-label="Open menu">☰</button>
-            <h1 class="app-title">New Loka</h1>
+            <div class="app-brand">
+                <img src="/static/assets/logo.svg" alt="New Loka" class="app-logo">
+                <h1 class="app-title">New Loka</h1>
+            </div>
             <div class="header-actions">
                 <button id="search-toggle" class="icon-btn" aria-label="Search">🔍</button>
                 <button id="quick-add-btn" class="icon-btn" aria-label="Quick add">＋</button>
@@ -22,6 +86,7 @@
         </header>
         <nav id="side-nav" class="side-nav">
             <div class="nav-header">
+                <img src="/static/assets/logo.svg" alt="New Loka" class="nav-logo">
                 <strong>New Loka</strong>
                 <span id="tier-badge" class="tier-badge">T1</span>
                 <button id="close-nav" class="icon-btn" aria-label="Close menu">✕</button>
@@ -29,14 +94,26 @@
             <ul class="nav-list">
                 <li><a href="#dashboard" data-view="dashboard">Dashboard</a></li>
                 <li><a href="#patients" data-view="patients">Patients</a></li>
+                <li><a href="#patientChart" data-view="patientChart">Patient Chart</a></li>
+                <li><a href="#clinicalNotes" data-view="clinicalNotes">Clinical Notes</a></li>
+                <li><a href="#cpoeOrders" data-view="cpoeOrders">Orders</a></li>
+                <li><a href="#resultsReview" data-view="resultsReview">Results</a></li>
+                <li><a href="#mar" data-view="mar">MAR</a></li>
+                <li><a href="#vitalsFlowsheet" data-view="vitalsFlowsheet">Vitals Flowsheet</a></li>
+                <li><a href="#alerts" data-view="alerts">Alerts</a></li>
+                <li><a href="#carePlans" data-view="carePlans">Care Plans</a></li>
+                <li><a href="#familyHistory" data-view="familyHistory">Family History</a></li>
+                <li><a href="#immunizations" data-view="immunizations">Immunizations</a></li>
+                <li><a href="#documents" data-view="documents">Documents</a></li>
                 <li><a href="#encounters" data-view="encounters">Encounters</a></li>
                 <li><a href="#observations" data-view="observations">Observations</a></li>
                 <li><a href="#conditions" data-view="conditions">Conditions</a></li>
                 <li><a href="#medications" data-view="medications">Medications</a></li>
                 <li><a href="#procedures" data-view="procedures">Procedures</a></li>
+                <li><a href="#handoffSbar" data-view="handoffSbar">Handoff SBAR</a></li>
+                <li><a href="#whiteboard" data-view="whiteboard">Whiteboard</a></li>
                 <li><a href="#ingest" data-view="ingest">Ingest</a></li>
-                <li><a href="#handoff" data-view="handoff">Handoff</a></li>
-                <li><a href="#audit" data-view="audit">Audit</a></li>
+                <li><a href="#audit" data-view="audit">Audit Log</a></li>
                 <li><a href="#settings" data-view="settings">Settings</a></li>
             </ul>
             <div class="nav-footer">

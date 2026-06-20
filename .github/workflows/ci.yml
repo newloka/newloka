@@ -1,4 +1,4 @@
-name: CI
+﻿name: CI
 
 on:
   push:
@@ -46,6 +46,7 @@ jobs:
         with:
           name: newloka-${{ matrix.os }}
           path: |
-            target/release/newloka
-            target/release/newloka-server
+            target/release/newloka-cli
+            target/release/newloka-cli-server
           if-no-files-found: warn
+

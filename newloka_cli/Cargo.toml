@@ -1,4 +1,4 @@
-[package]
+﻿[package]
 name = "newloka_cli"
 version.workspace = true
 edition.workspace = true
@@ -6,7 +6,7 @@ authors.workspace = true
 license.workspace = true
 
 [[bin]]
-name = "newloka"
+name = "newloka-cli"
 path = "src/main.rs"
 
 [dependencies]
@@ -20,3 +20,4 @@ tracing-subscriber = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
+

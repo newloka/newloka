@@ -15,6 +15,7 @@ pub struct User {
     pub roles: Vec<Role>,
     pub department_id: Option<String>,
     pub team_ids: Vec<String>,
+    pub lab_affiliations: Vec<crate::cpoe::LabDepartment>,
     pub active: bool,
     pub created_at: DateTime<Utc>,
     pub password_hash: String,
@@ -29,6 +30,9 @@ pub enum Role {
     Nurse,
     Pharmacist,
     LabTechnician,
+    ImagingTechnician,
+    ResidentDoctor,
+    DepartmentHead,
     Administrator,
     System,
     Researcher,
@@ -39,19 +43,31 @@ impl Role {
     pub fn can_create_patient(&self) -> bool {
         matches!(
             self,
-            Role::Clinician | Role::Nurse | Role::Administrator | Role::EmergencyOverride
+            Role::Clinician
+                | Role::Nurse
+                | Role::Administrator
+                | Role::EmergencyOverride
+                | Role::DepartmentHead
+                | Role::ResidentDoctor
         )
     }
 
     pub fn can_prescribe(&self) -> bool {
         matches!(
             self,
-            Role::Clinician | Role::Pharmacist | Role::EmergencyOverride
+            Role::Clinician
+                | Role::Pharmacist
+                | Role::EmergencyOverride
+                | Role::DepartmentHead
+                | Role::ResidentDoctor
         )
     }
 
     pub fn can_override(&self) -> bool {
-        matches!(self, Role::EmergencyOverride | Role::Administrator)
+        matches!(
+            self,
+            Role::EmergencyOverride | Role::Administrator | Role::DepartmentHead
+        )
     }
 
     pub fn can_admin(&self) -> bool {
@@ -60,6 +76,79 @@ impl Role {
 
     pub fn can_access_research(&self) -> bool {
         matches!(self, Role::Researcher | Role::Administrator)
+    }
+
+    pub fn can_add_lab_report(&self) -> bool {
+        matches!(
+            self,
+            Role::LabTechnician
+                | Role::Administrator
+                | Role::System
+                | Role::Clinician
+                | Role::DepartmentHead
+        )
+    }
+
+    pub fn can_add_imaging_report(&self) -> bool {
+        matches!(
+            self,
+            Role::ImagingTechnician
+                | Role::Administrator
+                | Role::System
+                | Role::Clinician
+                | Role::DepartmentHead
+        )
+    }
+
+    pub fn can_view_patient_list(&self) -> bool {
+        matches!(
+            self,
+            Role::Clinician
+                | Role::Nurse
+                | Role::Administrator
+                | Role::EmergencyOverride
+                | Role::DepartmentHead
+                | Role::ResidentDoctor
+                | Role::Pharmacist
+        )
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Role::Clinician => "clinician",
+            Role::Nurse => "nurse",
+            Role::Pharmacist => "pharmacist",
+            Role::LabTechnician => "lab_technician",
+            Role::ImagingTechnician => "imaging_technician",
+            Role::ResidentDoctor => "resident_doctor",
+            Role::DepartmentHead => "department_head",
+            Role::Administrator => "administrator",
+            Role::System => "system",
+            Role::Researcher => "researcher",
+            Role::EmergencyOverride => "emergency_override",
+        }
+    }
+}
+
+impl std::str::FromStr for Role {
+    type Err = ();
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "clinician" => Ok(Role::Clinician),
+            "nurse" => Ok(Role::Nurse),
+            "pharmacist" => Ok(Role::Pharmacist),
+            "lab_technician" | "labtechnician" => Ok(Role::LabTechnician),
+            "imaging_technician" | "imagingtechnician" | "radiologist" => {
+                Ok(Role::ImagingTechnician)
+            }
+            "resident_doctor" | "residentdoctor" => Ok(Role::ResidentDoctor),
+            "department_head" | "departmenthead" => Ok(Role::DepartmentHead),
+            "administrator" | "admin" => Ok(Role::Administrator),
+            "system" => Ok(Role::System),
+            "researcher" => Ok(Role::Researcher),
+            "emergency_override" | "emergencyoverride" => Ok(Role::EmergencyOverride),
+            _ => Err(()),
+        }
     }
 }
 
@@ -73,6 +162,7 @@ pub struct Session {
     pub tier: crate::DeploymentTier,
     pub emergency_override: bool,
     pub override_reason: Option<String>,
+    pub lab_config: crate::cpoe::LabConfiguration,
 }
 
 impl Session {
@@ -86,6 +176,7 @@ impl Session {
             expires_at: now + Duration::try_hours(12).expect("valid hours"),
             tier,
             emergency_override: false,
+            lab_config: crate::cpoe::LabConfiguration::for_tier(tier),
             override_reason: None,
         }
     }

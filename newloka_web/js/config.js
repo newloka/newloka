@@ -8,9 +8,12 @@ const DEFAULTS = {
     offlineAuth: 'pin',
     language: 'en',
     emergencyAccess: false,
-    theme: 'dark',
+    sessionUser: 'clinician',
+    theme: 'newloka',
+    customTheme: {},
     pageSize: 20,
     defaultEncounterStatus: 'in-progress',
+    activePatientId: null,
 };
 function load() {
     try {
@@ -23,11 +26,11 @@ function load() {
 function save(cfg) { localStorage.setItem('nl_config', JSON.stringify(cfg)); }
 function reset() { localStorage.removeItem('nl_config'); }
 const FEATURES = {
-    T0: ['patients','encounters','observations','ingest','chart','offline_auth','local_storage','pin','conditions','medications','procedures'],
-    T1: ['patients','encounters','observations','conditions','medications','procedures','ingest','chart','offline_auth','mesh','sync','audit'],
-    T2: ['patients','encounters','observations','conditions','medications','procedures','ingest','chart','offline_auth','mesh','sync','audit','server'],
-    T3: ['patients','encounters','observations','conditions','medications','procedures','reports','ingest','chart','offline_auth','mesh','sync','audit','server','departments','ldap','handoff'],
-    T4: ['patients','encounters','observations','conditions','medications','procedures','reports','ingest','chart','offline_auth','mesh','sync','audit','server','departments','ldap','handoff','research','consent','federation'],
+    T0: ['dashboard','patients','encounters','observations','conditions','medications','procedures','ingest','audit','settings','patientChart','clinicalNotes','cpoeOrders','resultsReview','mar','vitalsFlowsheet','alerts','carePlans','familyHistory','immunizations','documents'],
+    T1: ['dashboard','patients','encounters','observations','conditions','medications','procedures','ingest','audit','settings','patientChart','clinicalNotes','cpoeOrders','resultsReview','mar','vitalsFlowsheet','alerts','carePlans','familyHistory','immunizations','documents','handoffSbar','whiteboard','mesh','sync'],
+    T2: ['dashboard','patients','encounters','observations','conditions','medications','procedures','ingest','audit','settings','patientChart','clinicalNotes','cpoeOrders','resultsReview','mar','vitalsFlowsheet','alerts','carePlans','familyHistory','immunizations','documents','handoffSbar','whiteboard','mesh','sync','server'],
+    T3: ['dashboard','patients','encounters','observations','conditions','medications','procedures','ingest','audit','settings','patientChart','clinicalNotes','cpoeOrders','resultsReview','mar','vitalsFlowsheet','alerts','carePlans','familyHistory','immunizations','documents','handoffSbar','whiteboard','mesh','sync','server','departments','reports'],
+    T4: ['dashboard','patients','encounters','observations','conditions','medications','procedures','ingest','audit','settings','patientChart','clinicalNotes','cpoeOrders','resultsReview','mar','vitalsFlowsheet','alerts','carePlans','familyHistory','immunizations','documents','handoffSbar','whiteboard','mesh','sync','server','departments','reports','research','consent','federation'],
 };
 function allowed(tier, feature) {
     return FEATURES[tier]?.includes(feature) ?? false;

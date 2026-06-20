@@ -5,6 +5,37 @@ pub async fn seed_demo_data(
 ) -> anyhow::Result<()> {
     use chrono::Utc;
 
+    let male_names = [
+        "Ramesh", "Suresh", "Rajesh", "Amit", "Vikram", "Arjun", "Ravi", "Kiran", "Anil", "Sunil",
+        "Mahesh", "Ganesh", "Deepak", "Sanjay", "Manoj", "Nitin", "Rahul", "Karthik", "Vijay",
+        "Prakash",
+    ];
+    let female_names = [
+        "Priya",
+        "Sunita",
+        "Anjali",
+        "Pooja",
+        "Neha",
+        "Meera",
+        "Lakshmi",
+        "Saraswati",
+        "Kavita",
+        "Rekha",
+        "Sneha",
+        "Divya",
+        "Rani",
+        "Shalini",
+        "Asha",
+        "Geeta",
+        "Nisha",
+        "Ritu",
+        "Sangeeta",
+        "Vidya",
+    ];
+    let families = [
+        "Patel", "Sharma", "Gupta", "Singh", "Kumar", "Rao", "Nair", "Shah", "Mehta", "Iyer",
+        "Das", "Banerjee", "Reddy", "Yadav", "Dubey", "Ali", "Khan", "Rahman", "Hassan", "Verma",
+    ];
     let cities = [
         "Mumbai",
         "Delhi",
@@ -31,14 +62,46 @@ pub async fn seed_demo_data(
         ("Appendicitis", "K35.80"),
     ];
 
-    for i in 0..15 {
+    let categories = ["inpatient", "outpatient", "ed", "or"];
+    let wards = [
+        "Cardiology 4N",
+        "Medical 4N",
+        "Emergency Dept",
+        "Surgical Suite",
+        "ICU",
+    ];
+    let rooms = ["4N-412", "4N-408", "ED-03", "OR-2", "ICU-7"];
+    let attendings = [
+        "Dr. Smith, J",
+        "Dr. Patel, R",
+        "Dr. Khan, S",
+        "Dr. Rao, A",
+        "Dr. Iyer, M",
+    ];
+    let class_codes = [
+        ("IMP", "Inpatient"),
+        ("AMB", "Ambulatory"),
+        ("EMER", "Emergency"),
+        ("AMB", "Ambulatory"),
+    ];
+
+    for i in 0..10 {
         let city = cities[i % cities.len()];
         let patient_id = uuid::Uuid::new_v4().to_string();
         let gender = if i % 2 == 0 { "male" } else { "female" };
-        let given = if i % 2 == 0 { "Rajesh" } else { "Priya" };
-        let family = if i % 3 == 0 { "Sharma" } else { "Patel" };
+        let given = if i % 2 == 0 {
+            male_names[i % male_names.len()]
+        } else {
+            female_names[i % female_names.len()]
+        };
+        let family = families[i % families.len()];
         let birth_year = 1950 + (i * 3) % 60;
         let birth_date = format!("{}-{:02}-{:02}", birth_year, (i % 12) + 1, (i % 28) + 1);
+        let category = categories[i % categories.len()];
+        let ward = wards[i % wards.len()];
+        let room = rooms[i % rooms.len()];
+        let attending = attendings[i % attendings.len()];
+        let (class_code, class_display) = class_codes[i % class_codes.len()];
 
         let patient = serde_json::json!({
             "resourceType": "Patient",
@@ -61,18 +124,30 @@ pub async fn seed_demo_data(
             .await?;
 
         let enc_id = uuid::Uuid::new_v4().to_string();
+        let admit_days = (i % 30) as i64;
+        let period_start = Utc::now()
+            .checked_sub_signed(chrono::Duration::days(admit_days))
+            .unwrap_or(Utc::now())
+            .to_rfc3339();
+        let enc_status = if category == "inpatient" {
+            "inprogress"
+        } else {
+            "finished"
+        };
         let encounter = serde_json::json!({
             "resourceType": "Encounter",
             "id": enc_id,
             "meta": { "versionId": "1", "lastUpdated": Utc::now().to_rfc3339() },
-            "status": "finished",
-            "class": { "system": "http://hl7.org/fhir/v3/ActCode", "code": "AMB", "display": "Ambulatory" },
+            "status": enc_status,
+            "class": { "system": "http://hl7.org/fhir/v3/ActCode", "code": class_code, "display": class_display },
+            "serviceType": { "text": category, "coding": [{ "code": category, "display": category }] },
             "subject": { "reference": format!("Patient/{}", patient_id) },
+            "participant": [{ "individual": { "display": attending }, "type": [{ "coding": [{ "code": "att", "display": "attending" }] }] }],
             "period": {
-                "start": Utc::now().checked_sub_signed(chrono::Duration::days((i % 30) as i64)).unwrap_or(Utc::now()).to_rfc3339(),
+                "start": period_start,
                 "end": Utc::now().to_rfc3339()
             },
-            "location": [{ "location": { "display": city } }]
+            "location": [{ "location": { "display": format!("{} / {}", ward, room) } }]
         });
         storage
             .store_json(
@@ -84,6 +159,29 @@ pub async fn seed_demo_data(
             )
             .await?;
 
+        if category == "or" {
+            let proc_id = uuid::Uuid::new_v4().to_string();
+            let procedure = serde_json::json!({
+                "resourceType": "Procedure",
+                "id": proc_id,
+                "meta": { "versionId": "1", "lastUpdated": Utc::now().to_rfc3339() },
+                "status": "completed",
+                "code": { "text": "Laparoscopic Appendectomy", "coding": [{ "system": "http://www.cms.gov/Medicare/Coding/ICD10", "code": "0DBJ4ZZ" }] },
+                "subject": { "reference": format!("Patient/{}", patient_id) },
+                "encounter": { "reference": format!("Encounter/{}", enc_id) },
+                "performedDateTime": Utc::now().checked_sub_signed(chrono::Duration::days(admit_days)).unwrap_or(Utc::now()).to_rfc3339(),
+                "performer": [{ "actor": { "display": attending } }]
+            });
+            storage
+                .store_json(
+                    "Procedure",
+                    &proc_id,
+                    &procedure,
+                    Some(patient_id.clone()),
+                    None,
+                )
+                .await?;
+        }
         let bp_id = uuid::Uuid::new_v4().to_string();
         let systolic = 110 + (i * 7) % 40;
         let diastolic = 70 + (i * 5) % 30;
@@ -166,6 +264,102 @@ pub async fn seed_demo_data(
                     "Condition",
                     &cond_id,
                     &condition,
+                    Some(patient_id.clone()),
+                    None,
+                )
+                .await?;
+        }
+        // MedicationRequest
+        {
+            let med_id = uuid::Uuid::new_v4().to_string();
+            let med = serde_json::json!({
+                "resourceType": "MedicationRequest",
+                "id": med_id,
+                "meta": { "versionId": "1", "lastUpdated": Utc::now().to_rfc3339() },
+                "status": "active",
+                "intent": "order",
+                "medicationCodeableConcept": { "text": "Metformin 500mg", "coding": [{ "system": "http://www.nlm.nih.gov/research/umls/rxnorm", "code": "860975" }] },
+                "subject": { "reference": format!("Patient/{}", patient_id) },
+                "encounter": { "reference": format!("Encounter/{}", enc_id) },
+                "authoredOn": Utc::now().to_rfc3339(),
+                "requester": { "display": attending }
+            });
+            storage
+                .store_json(
+                    "MedicationRequest",
+                    &med_id,
+                    &med,
+                    Some(patient_id.clone()),
+                    None,
+                )
+                .await?;
+        }
+
+        // AllergyIntolerance
+        {
+            let alg_id = uuid::Uuid::new_v4().to_string();
+            let allergy = serde_json::json!({
+                "resourceType": "AllergyIntolerance",
+                "id": alg_id,
+                "meta": { "versionId": "1", "lastUpdated": Utc::now().to_rfc3339() },
+                "clinicalStatus": { "coding": [{ "system": "http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical", "code": "active" }] },
+                "code": { "text": "Penicillin", "coding": [{ "system": "http://snomed.info/sct", "code": "91936005" }] },
+                "patient": { "reference": format!("Patient/{}", patient_id) },
+                "reaction": [{ "manifestation": [{ "text": "Rash" }] }]
+            });
+            storage
+                .store_json(
+                    "AllergyIntolerance",
+                    &alg_id,
+                    &allergy,
+                    Some(patient_id.clone()),
+                    None,
+                )
+                .await?;
+        }
+
+        // CarePlan
+        {
+            let cp_id = uuid::Uuid::new_v4().to_string();
+            let careplan = serde_json::json!({
+                "resourceType": "CarePlan",
+                "id": cp_id,
+                "meta": { "versionId": "1", "lastUpdated": Utc::now().to_rfc3339() },
+                "status": "active",
+                "intent": "plan",
+                "subject": { "reference": format!("Patient/{}", patient_id) },
+                "title": format!("Care plan for {}", given),
+                "category": [{ "coding": [{ "system": "http://hl7.org/fhir/us/core/CodeSystem/careplan-category", "code": "assess-plan" }] }],
+                "addresses": [{ "display": "General health management" }]
+            });
+            storage
+                .store_json(
+                    "CarePlan",
+                    &cp_id,
+                    &careplan,
+                    Some(patient_id.clone()),
+                    None,
+                )
+                .await?;
+        }
+
+        // Immunization
+        {
+            let imm_id = uuid::Uuid::new_v4().to_string();
+            let immunization = serde_json::json!({
+                "resourceType": "Immunization",
+                "id": imm_id,
+                "meta": { "versionId": "1", "lastUpdated": Utc::now().to_rfc3339() },
+                "status": "completed",
+                "vaccineCode": { "text": "Influenza", "coding": [{ "system": "http://hl7.org/fhir/sid/cvx", "code": "140" }] },
+                "patient": { "reference": format!("Patient/{}", patient_id) },
+                "occurrenceDateTime": Utc::now().to_rfc3339()
+            });
+            storage
+                .store_json(
+                    "Immunization",
+                    &imm_id,
+                    &immunization,
                     Some(patient_id.clone()),
                     None,
                 )

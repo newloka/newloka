@@ -22,6 +22,7 @@ pub struct Subject {
     pub team_ids: Vec<String>,
     pub session_valid: bool,
     pub emergency_override: bool,
+    pub lab_affiliations: Vec<crate::cpoe::LabDepartment>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -31,6 +32,7 @@ pub struct Resource {
     pub patient_id: Option<String>,
     pub department_id: Option<String>,
     pub owner_team_ids: Vec<String>,
+    pub lab_department: Option<crate::cpoe::LabDepartment>,
     pub sensitivity: SensitivityLevel,
 }
 
@@ -61,6 +63,23 @@ pub struct Context {
     pub offline: bool,
     pub peer_node_id: Option<String>,
     pub time_of_day: String,
+    pub lab_config: crate::cpoe::LabConfiguration,
+    /// For lab/imaging staff: whether the patient has an active lab order
+    /// that matches the subject's lab affiliation.
+    pub patient_has_lab_order: bool,
+}
+
+impl Default for Context {
+    fn default() -> Self {
+        Self {
+            tier: crate::DeploymentTier::T1_SmallClinic,
+            offline: false,
+            peer_node_id: None,
+            time_of_day: String::new(),
+            lab_config: crate::cpoe::LabConfiguration::default(),
+            patient_has_lab_order: false,
+        }
+    }
 }
 
 /// ABAC policy engine.
@@ -90,14 +109,44 @@ impl PolicyEngine {
                 reason: "Emergency override active".into(),
             };
         }
-        // Role-based action checks
+
         let has_role = |r: crate::identity::Role| req.subject.roles.contains(&r);
+
+        // Lab / Imaging specific restrictions on Patient creation
+        if req.action == Action::Create
+            && req.resource.resource_type == "Patient"
+            && (has_role(crate::identity::Role::LabTechnician)
+                || has_role(crate::identity::Role::ImagingTechnician))
+        {
+            return PolicyDecision::Deny {
+                reason: "Lab and imaging staff cannot add patients".into(),
+            };
+        }
+
+        // Lab / Imaging read access to Patient requires a lab order for that patient
+        if req.action == Action::Read
+            && req.resource.resource_type == "Patient"
+            && (has_role(crate::identity::Role::LabTechnician)
+                || has_role(crate::identity::Role::ImagingTechnician))
+            && !req.context.patient_has_lab_order
+            && !has_role(crate::identity::Role::Administrator)
+            && !has_role(crate::identity::Role::Clinician)
+            && !has_role(crate::identity::Role::DepartmentHead)
+        {
+            return PolicyDecision::Deny {
+                reason: "Lab and imaging staff can only view patients with lab orders".into(),
+            };
+        }
+
+        // Role-based action checks
         match req.action {
             Action::Create => {
                 if !has_role(crate::identity::Role::Clinician)
                     && !has_role(crate::identity::Role::Nurse)
                     && !has_role(crate::identity::Role::Administrator)
                     && !has_role(crate::identity::Role::EmergencyOverride)
+                    && !has_role(crate::identity::Role::DepartmentHead)
+                    && !has_role(crate::identity::Role::ResidentDoctor)
                 {
                     return PolicyDecision::Deny {
                         reason: "Insufficient role for create".into(),
@@ -108,6 +157,8 @@ impl PolicyEngine {
                 if !has_role(crate::identity::Role::Clinician)
                     && !has_role(crate::identity::Role::Administrator)
                     && !has_role(crate::identity::Role::EmergencyOverride)
+                    && !has_role(crate::identity::Role::DepartmentHead)
+                    && !has_role(crate::identity::Role::ResidentDoctor)
                 {
                     return PolicyDecision::Deny {
                         reason: "Insufficient role for modify".into(),
@@ -117,6 +168,7 @@ impl PolicyEngine {
             Action::Override => {
                 if !has_role(crate::identity::Role::EmergencyOverride)
                     && !has_role(crate::identity::Role::Administrator)
+                    && !has_role(crate::identity::Role::DepartmentHead)
                 {
                     return PolicyDecision::Deny {
                         reason: "Override requires emergency or admin role".into(),
@@ -132,6 +184,26 @@ impl PolicyEngine {
                 };
             }
             _ => {}
+        }
+
+        // Lab report creation permissions
+        if req.action == Action::Create
+            && (req.resource.resource_type == "Observation"
+                || req.resource.resource_type == "DiagnosticReport"
+                || req.resource.resource_type == "DocumentReference")
+        {
+            if has_role(crate::identity::Role::LabTechnician)
+                || has_role(crate::identity::Role::ImagingTechnician)
+                || has_role(crate::identity::Role::Clinician)
+                || has_role(crate::identity::Role::Administrator)
+                || has_role(crate::identity::Role::DepartmentHead)
+            {
+                // Allowed specifically for lab/imaging reports
+            } else {
+                return PolicyDecision::Deny {
+                    reason: "Insufficient role for report creation".into(),
+                };
+            }
         }
 
         // Department silo enforcement (T2+)
@@ -155,12 +227,35 @@ impl PolicyEngine {
             }
         }
 
+        // Team-scope enforcement for resident doctors
+        if req
+            .subject
+            .roles
+            .contains(&crate::identity::Role::ResidentDoctor)
+            && req.action != Action::Read
+        {
+            let shared_team = req
+                .subject
+                .team_ids
+                .iter()
+                .any(|t| req.resource.owner_team_ids.contains(t));
+            if !shared_team
+                && !has_role(crate::identity::Role::Administrator)
+                && !has_role(crate::identity::Role::DepartmentHead)
+            {
+                return PolicyDecision::Deny {
+                    reason: "Resident doctor can only modify resources within their team".into(),
+                };
+            }
+        }
+
         // Sensitivity checks
         match req.resource.sensitivity {
             SensitivityLevel::Critical => {
                 if !has_role(crate::identity::Role::Clinician)
                     && !has_role(crate::identity::Role::Administrator)
                     && !has_role(crate::identity::Role::EmergencyOverride)
+                    && !has_role(crate::identity::Role::DepartmentHead)
                 {
                     return PolicyDecision::Deny {
                         reason: "Critical sensitivity requires clinician or admin".into(),

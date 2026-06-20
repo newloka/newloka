@@ -24,6 +24,7 @@ async fn test_app() -> (axum::Router, Arc<RwLock<newloka_server::AppState>>) {
     let state = Arc::new(RwLock::new(newloka_server::AppState::new(
         "test-node".to_string(),
         storage,
+        newloka_server::NodeConfig::default(),
     )));
     (newloka_server::app(state.clone()), state)
 }
@@ -141,4 +142,51 @@ async fn test_audit_event_create_and_search() {
         .await
         .unwrap();
     assert_eq!(search.status(), StatusCode::OK);
+}
+
+#[cfg(feature = "demo")]
+#[tokio::test]
+async fn test_demo_seed_data() {
+    let dmk = newloka_core::crypto::DeviceMasterKey::generate();
+    let storage =
+        newloka_core::storage::StorageEngine::open(&db_path(), "test-node".to_string(), dmk)
+            .await
+            .unwrap();
+
+    newloka_server::demo::seed_demo_data(&storage, "test-node")
+        .await
+        .unwrap();
+
+    let patients = storage.search_json("Patient", None).await.unwrap();
+    assert_eq!(patients.len(), 10, "Expected 10 demo patients");
+
+    let conditions = storage.search_json("Condition", None).await.unwrap();
+    assert!(!conditions.is_empty(), "Expected demo conditions");
+
+    let observations = storage.search_json("Observation", None).await.unwrap();
+    assert!(!observations.is_empty(), "Expected demo observations");
+
+    let meds = storage
+        .search_json("MedicationRequest", None)
+        .await
+        .unwrap();
+    assert!(!meds.is_empty(), "Expected demo medications");
+
+    let encounters = storage.search_json("Encounter", None).await.unwrap();
+    assert!(!encounters.is_empty(), "Expected demo encounters");
+
+    let allergies = storage
+        .search_json("AllergyIntolerance", None)
+        .await
+        .unwrap();
+    assert!(!allergies.is_empty(), "Expected demo allergies");
+
+    let careplans = storage.search_json("CarePlan", None).await.unwrap();
+    assert!(!careplans.is_empty(), "Expected demo care plans");
+
+    let procedures = storage.search_json("Procedure", None).await.unwrap();
+    assert!(!procedures.is_empty(), "Expected demo procedures");
+
+    let immunizations = storage.search_json("Immunization", None).await.unwrap();
+    assert!(!immunizations.is_empty(), "Expected demo immunizations");
 }

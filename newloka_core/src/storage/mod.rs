@@ -102,6 +102,24 @@ impl StorageEngine {
             CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_events(timestamp);
             CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_events(actor_id);
             CREATE INDEX IF NOT EXISTS idx_audit_patient ON audit_events(patient_id);
+
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY,
+                username TEXT NOT NULL UNIQUE,
+                display_name TEXT NOT NULL,
+                roles TEXT NOT NULL DEFAULT '["clinician"]',
+                department_id TEXT,
+                team_ids TEXT NOT NULL DEFAULT '[]',
+                lab_affiliations TEXT NOT NULL DEFAULT '[]',
+                active INTEGER NOT NULL DEFAULT 1,
+                created_at INTEGER NOT NULL,
+                password_hash TEXT NOT NULL,
+                salt BLOB NOT NULL,
+                totp_secret TEXT,
+                last_login INTEGER
+            );
+            CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+            CREATE INDEX IF NOT EXISTS idx_users_active ON users(active);
             "#,
         )
         .execute(&pool)
@@ -393,5 +411,139 @@ impl StorageEngine {
         .fetch_one(&self.pool)
         .await?;
         Ok(count)
+    }
+}
+
+/// User row as stored in SQLite.
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct UserRow {
+    pub id: String,
+    pub username: String,
+    pub display_name: String,
+    pub roles: String,
+    pub department_id: Option<String>,
+    pub team_ids: String,
+    pub lab_affiliations: String,
+    pub active: i64,
+    pub created_at: i64,
+    pub password_hash: String,
+    pub salt: Vec<u8>,
+    pub totp_secret: Option<String>,
+    pub last_login: Option<i64>,
+}
+
+impl StorageEngine {
+    /// Upsert a user.
+    pub async fn store_user(&self, user: &crate::identity::User) -> crate::Result<()> {
+        let roles_json = serde_json::to_string(&user.roles)?;
+        let team_json = serde_json::to_string(&user.team_ids)?;
+        let lab_json = serde_json::to_string(&user.lab_affiliations)?;
+        sqlx::query(
+            r#"
+            INSERT INTO users
+            (id, username, display_name, roles, department_id, team_ids, lab_affiliations, active, created_at, password_hash, salt, totp_secret, last_login)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
+            ON CONFLICT(id) DO UPDATE SET
+              display_name = excluded.display_name,
+              roles = excluded.roles,
+              department_id = excluded.department_id,
+              team_ids = excluded.team_ids,
+              lab_affiliations = excluded.lab_affiliations,
+              active = excluded.active,
+              password_hash = excluded.password_hash,
+              salt = excluded.salt,
+              totp_secret = excluded.totp_secret,
+              last_login = excluded.last_login
+            "#,
+        )
+        .bind(&user.id)
+        .bind(&user.username)
+        .bind(&user.display_name)
+        .bind(roles_json)
+        .bind(&user.department_id)
+        .bind(team_json)
+        .bind(lab_json)
+        .bind(if user.active { 1i64 } else { 0i64 })
+        .bind(user.created_at.timestamp_millis())
+        .bind(&user.password_hash)
+        .bind(&user.salt)
+        .bind(&user.totp_secret)
+        .bind(user.last_login.map(|d| d.timestamp_millis()))
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    /// Get a user by username.
+    pub async fn get_user_by_username(
+        &self,
+        username: &str,
+    ) -> crate::Result<Option<crate::identity::User>> {
+        let row: Option<UserRow> = sqlx::query_as("SELECT * FROM users WHERE username = ?1")
+            .bind(username)
+            .fetch_optional(&self.pool)
+            .await?;
+        match row {
+            Some(r) => Ok(Some(self.row_to_user(r)?)),
+            None => Ok(None),
+        }
+    }
+
+    /// Get a user by id.
+    pub async fn get_user_by_id(&self, id: &str) -> crate::Result<Option<crate::identity::User>> {
+        let row: Option<UserRow> = sqlx::query_as("SELECT * FROM users WHERE id = ?1")
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?;
+        match row {
+            Some(r) => Ok(Some(self.row_to_user(r)?)),
+            None => Ok(None),
+        }
+    }
+
+    /// List all users.
+    pub async fn list_users(&self) -> crate::Result<Vec<crate::identity::User>> {
+        let rows: Vec<UserRow> = sqlx::query_as("SELECT * FROM users ORDER BY display_name")
+            .fetch_all(&self.pool)
+            .await?;
+        let mut users = Vec::with_capacity(rows.len());
+        for r in rows {
+            users.push(self.row_to_user(r)?);
+        }
+        Ok(users)
+    }
+
+    /// Delete a user by id.
+    pub async fn delete_user(&self, id: &str) -> crate::Result<bool> {
+        let result = sqlx::query("DELETE FROM users WHERE id = ?1")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+        Ok(result.rows_affected() > 0)
+    }
+
+    fn row_to_user(&self, row: UserRow) -> crate::Result<crate::identity::User> {
+        let roles: Vec<crate::identity::Role> = serde_json::from_str(&row.roles)?;
+        let team_ids: Vec<String> = serde_json::from_str(&row.team_ids)?;
+        let lab_affiliations: Vec<crate::cpoe::LabDepartment> =
+            serde_json::from_str(&row.lab_affiliations)?;
+        Ok(crate::identity::User {
+            id: row.id,
+            username: row.username,
+            display_name: row.display_name,
+            roles,
+            department_id: row.department_id,
+            team_ids,
+            lab_affiliations,
+            active: row.active != 0,
+            created_at: chrono::DateTime::from_timestamp_millis(row.created_at)
+                .unwrap_or_else(chrono::Utc::now),
+            password_hash: row.password_hash,
+            salt: row.salt,
+            totp_secret: row.totp_secret,
+            last_login: row
+                .last_login
+                .and_then(chrono::DateTime::from_timestamp_millis),
+        })
     }
 }

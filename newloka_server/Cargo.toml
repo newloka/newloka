@@ -10,6 +10,7 @@ name = "newloka-server"
 path = "src/main.rs"
 
 [features]
+default = ["demo"]
 demo = []
 
 [dependencies]
