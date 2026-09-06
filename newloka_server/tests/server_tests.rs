@@ -2,6 +2,7 @@
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
+use base64::Engine;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tower::util::ServiceExt;
@@ -361,7 +362,84 @@ async fn test_static_files() {
     println!("Body preview for /static/js/app.js: {}", &text_js[..text_js.len().min(100)]);
     assert!(ct_js.contains("javascript"), "Expected javascript, got: {}", ct_js);
     assert!(!text_js.starts_with("<!DOCTYPE"), "js/app.js returned HTML!");
-
 }
+
+#[tokio::test]
+async fn test_rxpad_pdf_and_events() {
+    let (app, state) = test_app().await;
+
+    // 1. Subscribe to SSE events
+    let mut rx = {
+        let s = state.read().await;
+        s.rxpad_tx.subscribe()
+    };
+
+    // 2. Sync with pdf_base64
+    let dummy_pdf = b"%PDF-1.4 mock pdf content for testing";
+    let pdf_b64 = base64::engine::general_purpose::STANDARD.encode(dummy_pdf);
+    let filename = "060926_0005_TestPatient.pdf";
+
+    let payload = serde_json::json!({
+        "patientName": "Test Event Patient",
+        "date": "06/09/2026",
+        "serial": 5,
+        "filename": filename,
+        "pdfBase64": format!("data:application/pdf;base64,{}", pdf_b64),
+        "meds": [{ "drug": "PARACETAMOL 500MG", "dose": "1 tab", "freq": "TDS" }]
+    });
+
+    let resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/rxpad/sync")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&payload).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    // 3. Verify event received on broadcast
+    let event = rx.try_recv().expect("Expected prescription_created event");
+    assert_eq!(event, "prescription_created");
+
+    // 4. Dispense and check event
+    let disp_resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/rxpad/prescriptions/rxpad-0005/dispense")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&serde_json::json!({})).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(disp_resp.status(), StatusCode::OK);
+    let disp_event = rx.try_recv().expect("Expected prescription_dispensed event");
+    assert_eq!(disp_event, "prescription_dispensed");
+
+    // 5. Delete and check event
+    let del_resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri("/api/rxpad/prescriptions/rxpad-0005")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(del_resp.status(), StatusCode::OK);
+    let del_event = rx.try_recv().expect("Expected prescription_deleted event");
+    assert_eq!(del_event, "prescription_deleted");
+}
+
 
 

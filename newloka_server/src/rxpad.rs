@@ -6,12 +6,19 @@
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
-    response::{Html, Json},
+    response::{
+        sse::{Event, KeepAlive, Sse},
+        Html, Json,
+    },
 };
+use base64::Engine;
 use chrono::Utc;
+use futures_core::Stream;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use tokio_stream::wrappers::BroadcastStream;
+use tokio_stream::StreamExt;
 
 use crate::AppState;
 
@@ -55,6 +62,8 @@ pub struct RxPadSyncRequest {
     pub patient_id: Option<String>,
     #[serde(alias = "raw_snapshot", rename = "rawSnapshot", default)]
     pub raw_snapshot: Option<String>,
+    #[serde(alias = "pdf_base64", rename = "pdfBase64", default)]
+    pub pdf_base64: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -432,6 +441,31 @@ pub async fn sync_prescription(
         patient_id
     );
 
+    // Direct PDF File Archival to Clinic folder
+    if let Some(ref b64) = payload.pdf_base64 {
+        let b64_clean = if let Some(idx) = b64.find(',') {
+            &b64[idx + 1..]
+        } else {
+            b64.as_str()
+        };
+        if let Ok(pdf_bytes) = base64::engine::general_purpose::STANDARD.decode(b64_clean.trim()) {
+            if let Ok(db_path) = std::env::var("NEWLOKA_DB_PATH") {
+                let p = std::path::Path::new(&db_path);
+                if let Some(dir) = p.parent() {
+                    let out_pdf = dir.join(&filename);
+                    if let Err(e) = std::fs::write(&out_pdf, &pdf_bytes) {
+                        tracing::warn!("Failed to save prescription PDF to {}: {}", out_pdf.display(), e);
+                    } else {
+                        tracing::info!("Saved prescription PDF directly to {}", out_pdf.display());
+                    }
+                }
+            }
+        }
+    }
+
+    // Broadcast real-time update event to all connected New Loka clients
+    let _ = state.rxpad_tx.send("prescription_created".to_string());
+
     let resp = RxPadSyncResponse {
         status: "success".to_string(),
         serial,
@@ -735,6 +769,9 @@ pub async fn dispense_prescription(
 
     tracing::info!("Prescription {} dispensed by {}", id, practitioner);
 
+    // Broadcast real-time update event
+    let _ = state.rxpad_tx.send("prescription_dispensed".to_string());
+
     (
         StatusCode::OK,
         Json(serde_json::json!({
@@ -921,6 +958,9 @@ pub async fn delete_prescription(
     let _ = state.storage.soft_delete(&id).await;
     deleted_count += 1;
 
+    // Broadcast real-time update event
+    let _ = state.rxpad_tx.send("prescription_deleted".to_string());
+
     (
         StatusCode::OK,
         Json(serde_json::json!({
@@ -943,6 +983,24 @@ pub async fn serve_rxpad() -> Html<String> {
     // Fallback if file path differs
     Html(include_str!("../../newloka_web/index.html").to_string())
 }
+
+/// Real-time Server-Sent Events stream for eRx Pad updates.
+pub async fn rxpad_events_handler(
+    State(state): State<Arc<RwLock<AppState>>>,
+) -> Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>> {
+    let rx = {
+        let st = state.read().await;
+        st.rxpad_tx.subscribe()
+    };
+
+    let stream = BroadcastStream::new(rx).filter_map(|msg| match msg {
+        Ok(m) => Some(Ok(Event::default().data(m))),
+        Err(_) => None,
+    });
+
+    Sse::new(stream).keep_alive(KeepAlive::default())
+}
+
 
 // ---------------------------------------------------------------------------
 // Helper Functions

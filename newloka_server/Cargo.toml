@@ -31,5 +31,8 @@ chrono = { workspace = true }
 rust-embed = { workspace = true }
 reqwest = { workspace = true }
 zip = { workspace = true }
+tokio-stream = { version = "0.1", features = ["sync"] }
+futures-core = "0.3"
+base64 = "0.22"
 
 

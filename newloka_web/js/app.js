@@ -4524,7 +4524,64 @@ views.rxpad = async () => {
   $("#rxpad-filter-status").onchange = () => render();
 
   await render();
+
+  // Real-time synchronization with clinic.db
+  let sse = null;
+  let pollTimer = null;
+
+  function stopLiveSync() {
+    if (sse) {
+      try { sse.close(); } catch {}
+      sse = null;
+    }
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+  }
+
+  // Auto clean-up when navigating away from #rxpad
+  const hashListener = () => {
+    if (!window.location.hash.startsWith("#rxpad")) {
+      stopLiveSync();
+      window.removeEventListener("hashchange", hashListener);
+    }
+  };
+  window.addEventListener("hashchange", hashListener);
+
+  try {
+    sse = new EventSource("/api/rxpad/events");
+    sse.onmessage = () => {
+      render();
+      api.getNextRxPadSerial().then(s => {
+        if (s && s.nextSerial && $("#rxpad-next-badge")) {
+          $("#rxpad-next-badge").textContent = `#${String(s.nextSerial).padStart(4, '0')}`;
+        }
+      }).catch(() => {});
+    };
+  } catch (err) {
+    console.warn("SSE connection error:", err);
+  }
+
+  // Active polling fallback (every 3 seconds while on rxpad view)
+  let lastCount = -1;
+  pollTimer = setInterval(async () => {
+    if (!window.location.hash.startsWith("#rxpad") && window.location.hash !== "") {
+      stopLiveSync();
+      return;
+    }
+    try {
+      const s = await api.getNextRxPadSerial();
+      if (s && s.nextSerial && (s.nextSerial !== nextSerial || (allPrescriptions && allPrescriptions.length !== lastCount))) {
+        nextSerial = s.nextSerial;
+        if ($("#rxpad-next-badge")) $("#rxpad-next-badge").textContent = `#${String(nextSerial).padStart(4, '0')}`;
+        await render();
+        lastCount = allPrescriptions.length;
+      }
+    } catch {}
+  }, 3000);
 };
+
 
 /* ---------- PROCEDURES ---------- */
 views.procedures = async () => {

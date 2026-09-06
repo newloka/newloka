@@ -11,6 +11,7 @@ pub struct AppState {
     pub storage: Arc<newloka_core::storage::StorageEngine>,
     pub config: NodeConfig,
     pub sessions: Arc<RwLock<HashMap<String, newloka_core::identity::Session>>>,
+    pub rxpad_tx: tokio::sync::broadcast::Sender<String>,
 }
 
 impl AppState {
@@ -19,11 +20,13 @@ impl AppState {
         storage: Arc<newloka_core::storage::StorageEngine>,
         config: NodeConfig,
     ) -> Self {
+        let (rxpad_tx, _) = tokio::sync::broadcast::channel(256);
         Self {
             node_id,
             storage,
             config,
             sessions: Arc::new(RwLock::new(HashMap::new())),
+            rxpad_tx,
         }
     }
 }
