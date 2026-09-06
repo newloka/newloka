@@ -1038,6 +1038,7 @@ views.dashboard = async () => {
         <button class="btn btn-secondary btn-sm" onclick="location.hash='encounters'">＋ New Encounter</button>
         <button class="btn btn-secondary btn-sm" onclick="location.hash='cpoeOrders'">＋ CPOE Order</button>
         <button class="btn btn-secondary btn-sm" onclick="location.hash='clinicalNotes'">＋ Clinical Note</button>
+        <button class="btn btn-secondary btn-sm" onclick="location.hash='rxpad'">📝 Prescription Pad</button>
         <button class="btn btn-secondary btn-sm" onclick="location.hash='vitalsFlowsheet'">＋ Record Vitals</button>
         <button class="btn btn-secondary btn-sm" onclick="location.hash='appointmentSchedule'">📅 View Schedule</button>
       </div>
@@ -1269,21 +1270,34 @@ views.patientChart = async () => {
 
   container.innerHTML = `
     ${bannerHtml}
-    <div class="tabs" id="chart-tabs">
-      <button class="tab active" data-tab="summary">Summary</button>
-      <button class="tab" data-tab="encounters">Encounters</button>
-      <button class="tab" data-tab="observations">Observations</button>
-      <button class="tab" data-tab="conditions">Conditions</button>
-      <button class="tab" data-tab="medications">Meds</button>
-      <button class="tab" data-tab="procedures">Procedures</button>
-      <button class="tab" data-tab="alerts">Alerts</button>
-      <button class="tab" data-tab="notes">Notes</button>
-      <button class="tab" data-tab="labs">Labs</button>
-      <button class="tab" data-tab="imaging">Imaging</button>
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.5rem;">
+      <div class="tabs" id="chart-tabs" style="margin-bottom:0;">
+        <button class="tab active" data-tab="summary">Summary</button>
+        <button class="tab" data-tab="encounters">Encounters</button>
+        <button class="tab" data-tab="observations">Observations</button>
+        <button class="tab" data-tab="conditions">Conditions</button>
+        <button class="tab" data-tab="medications">Meds</button>
+        <button class="tab" data-tab="procedures">Procedures</button>
+        <button class="tab" data-tab="alerts">Alerts</button>
+        <button class="tab" data-tab="notes">Notes</button>
+        <button class="tab" data-tab="labs">Labs</button>
+        <button class="tab" data-tab="imaging">Imaging</button>
+      </div>
+      <button class="btn btn-sm btn-primary" id="btn-chart-rxpad" style="margin-left:auto;">📝 Write Rx (eRx Pad)</button>
     </div>
     <div id="chart-content"></div>`;
 
   wirePatientSwitcher("patientChart");
+  const rxPadBtn = $("#btn-chart-rxpad");
+  if (rxPadBtn) {
+    rxPadBtn.onclick = () => {
+      const pName = patientName(p);
+      const ageSex = fmtAge(p.birthDate) + " / " + (p.gender ? p.gender.toUpperCase().slice(0, 1) : "");
+      const phone = p.telecom?.[0]?.value || "";
+      const padUrl = `/rxpad?patientId=${encodeURIComponent(p.id)}&name=${encodeURIComponent(pName)}&ageSex=${encodeURIComponent(ageSex)}&phone=${encodeURIComponent(phone)}`;
+      window.open(padUrl, "_blank");
+    };
+  }
   const content = $("#chart-content");
 
   async function renderTab(tab) {
@@ -4066,6 +4080,329 @@ views.medications = async () => {
     });
   };
   render();
+};
+
+/* ---------- RXPAD (Prescription Pad & Medication Dispensing) ---------- */
+views.rxpad = async () => {
+  highlightNav("rxpad");
+  const container = $("#view-container");
+
+  const activePat = await loadActivePatient();
+  let nextSerial = 1;
+  try {
+    const s = await api.getNextRxPadSerial();
+    if (s && s.nextSerial) nextSerial = s.nextSerial;
+  } catch {}
+
+  container.innerHTML = `
+    <div class="patient-banner" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.75rem;">
+      <div>
+        <h2>Prescription Pad Pro &amp; Medication Dispensing <span class="badge badge-ok">clinic.db</span></h2>
+        <div class="banner-row" style="margin-top:0.25rem;">
+          <span><strong>Practitioner:</strong> Dr. Yash Kulkarni (MMC-20260608539)</span>
+          <span><strong>Next Rx #:</strong> <span class="badge badge-info" id="rxpad-next-badge">#${String(nextSerial).padStart(4, '0')}</span></span>
+          ${activePat ? `<span><strong>Active Patient:</strong> ${escapeHtml(patientName(activePat))}</span>` : ''}
+        </div>
+      </div>
+      <div style="display:flex;gap:0.5rem;align-items:center;">
+        <button class="btn btn-secondary btn-sm" id="rxpad-btn-refresh">🔄 Refresh</button>
+        <button class="btn btn-primary" id="rxpad-btn-open-pad">📝 Open eRx Pad Pro</button>
+      </div>
+    </div>
+
+    <div class="row" style="margin-bottom:1rem;">
+      <div class="col"><div class="card"><div style="display:flex;justify-content:space-between;align-items:center;"><h3>Total Prescriptions</h3><span class="badge badge-info">eRx</span></div><p style="font-size:1.8rem;font-weight:700;color:var(--color-primary);" id="rx-metric-total">0</p><p class="meta">Recorded in clinic.db</p></div></div>
+      <div class="col"><div class="card"><div style="display:flex;justify-content:space-between;align-items:center;"><h3>Pending Dispense</h3><span class="badge badge-warn">To Fill</span></div><p style="font-size:1.8rem;font-weight:700;color:var(--color-warning);" id="rx-metric-pending">0</p><p class="meta">Active MedicationRequests</p></div></div>
+      <div class="col"><div class="card"><div style="display:flex;justify-content:space-between;align-items:center;"><h3>Dispensed &amp; Filled</h3><span class="badge badge-ok">Completed</span></div><p style="font-size:1.8rem;font-weight:700;color:var(--color-success);" id="rx-metric-dispensed">0</p><p class="meta">MedicationDispenses verified</p></div></div>
+    </div>
+
+    <div class="toolbar" style="margin-bottom:0.75rem;">
+      <div class="search-bar" style="flex:1;margin:0;">
+        <input class="input" id="rxpad-search" placeholder="Search by patient name, medication, serial, or diagnosis..." />
+      </div>
+      <div style="display:flex;gap:0.4rem;align-items:center;">
+        <label class="meta" style="font-weight:600;">Status:</label>
+        <select class="select" id="rxpad-filter-status" style="margin:0;width:auto;">
+          <option value="all">All Statuses</option>
+          <option value="prescribed">Prescribed (Pending Dispense)</option>
+          <option value="dispensed">Dispensed (Filled)</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="rxpad-table-container">
+      <div class="empty-state"><p>Loading prescriptions from clinic.db...</p></div>
+    </div>`;
+
+  function openPad(pat = activePat) {
+    let padUrl = "/rxpad";
+    if (pat) {
+      const pName = patientName(pat);
+      const ageSex = fmtAge(pat.birthDate) + " / " + (pat.gender ? pat.gender.toUpperCase().slice(0, 1) : "");
+      const phone = pat.telecom?.[0]?.value || "";
+      padUrl += `?patientId=${encodeURIComponent(pat.id)}&name=${encodeURIComponent(pName)}&ageSex=${encodeURIComponent(ageSex)}&phone=${encodeURIComponent(phone)}`;
+    }
+    window.open(padUrl, "_blank");
+  }
+
+  $("#rxpad-btn-open-pad").onclick = () => openPad(activePat);
+  $("#rxpad-btn-refresh").onclick = () => render();
+
+  let allPrescriptions = [];
+
+  async function render() {
+    const listContainer = $("#rxpad-table-container");
+    try {
+      allPrescriptions = await api.getRxPadPrescriptions();
+    } catch (err) {
+      listContainer.innerHTML = `<div class="card"><p class="meta">Could not load prescriptions: ${escapeHtml(err.message)}</p></div>`;
+      return;
+    }
+
+    const total = allPrescriptions.length;
+    const pending = allPrescriptions.filter(p => p.dispense_status === 'prescribed').length;
+    const dispensed = allPrescriptions.filter(p => p.dispense_status === 'dispensed').length;
+
+    const totalEl = $("#rx-metric-total");
+    const pendEl = $("#rx-metric-pending");
+    const dispEl = $("#rx-metric-dispensed");
+    if (totalEl) totalEl.textContent = total;
+    if (pendEl) pendEl.textContent = pending;
+    if (dispEl) dispEl.textContent = dispensed;
+
+    const q = ($("#rxpad-search")?.value || "").trim().toLowerCase();
+    const filterStatus = $("#rxpad-filter-status")?.value || "all";
+
+    const filtered = allPrescriptions.filter(p => {
+      if (filterStatus !== "all" && p.dispense_status !== filterStatus) return false;
+      if (!q) return true;
+      const haystack = [
+        String(p.serial || ""),
+        p.patient_name || "",
+        p.diagnosis || "",
+        p.filename || "",
+        ...(p.meds || []).map(m => m.drug || ""),
+        ...(p.labs || [])
+      ].join(" ").toLowerCase();
+      return haystack.includes(q);
+    });
+
+    if (!filtered.length) {
+      listContainer.innerHTML = `
+        <div class="empty-state">
+          <div class="big-icon">📝</div>
+          <p>No prescriptions match your criteria.</p>
+          <p class="meta">Click 'Open eRx Pad Pro' above to create and print a new prescription.</p>
+        </div>`;
+      return;
+    }
+
+    listContainer.innerHTML = `
+      <div class="card" style="padding:0;overflow:hidden;">
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Rx #</th>
+                <th>Date</th>
+                <th>Patient</th>
+                <th>Diagnosis</th>
+                <th>Prescribed Medications</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${filtered.map(p => {
+                const isDisp = p.dispense_status === 'dispensed';
+                const medsList = (p.meds || []).map(m => `
+                  <span class="badge badge-info" style="margin-right:0.25rem;margin-bottom:0.2rem;display:inline-block;">
+                    <strong>${escapeHtml(m.drug)}</strong> ${m.dose ? '&bull; ' + escapeHtml(m.dose) : ''} ${m.freq ? '&bull; ' + escapeHtml(m.freq) : ''}
+                  </span>
+                `).join('');
+                return `
+                  <tr>
+                    <td><strong style="font-family:monospace;font-size:0.95rem;">#${String(p.serial).padStart(4, '0')}</strong></td>
+                    <td style="white-space:nowrap;">${escapeHtml(p.date || fmtDate(p.created_at))}</td>
+                    <td>
+                      <div><strong>${escapeHtml(p.patient_name || 'Unnamed')}</strong></div>
+                      <div class="meta" style="font-size:0.75rem;">${escapeHtml(p.age_sex || '')}</div>
+                    </td>
+                    <td>
+                      <div style="max-width:220px;font-size:0.82rem;line-height:1.4;white-space:pre-wrap;" class="line-clamp-2">${escapeHtml(p.diagnosis || '—')}</div>
+                    </td>
+                    <td>
+                      <div style="max-width:320px;">
+                        ${medsList || '<span class="meta">No medications</span>'}
+                        ${p.labs && p.labs.length ? `<div class="meta" style="font-size:0.75rem;margin-top:0.2rem;">Labs: ${escapeHtml(p.labs.join(', '))}</div>` : ''}
+                      </div>
+                    </td>
+                    <td>
+                      ${isDisp
+                        ? '<span class="badge badge-ok" style="font-weight:600;">💊 Dispensed</span>'
+                        : '<span class="badge badge-warn" style="font-weight:600;">🟡 Prescribed</span>'}
+                    </td>
+                    <td style="white-space:nowrap;">
+                      <div style="display:flex;gap:0.35rem;">
+                        ${!isDisp ? `<button class="btn btn-sm btn-primary rx-dispense-btn" data-id="${p.id}" data-serial="${p.serial}" data-patient="${escapeHtml(p.patient_name)}">💊 Dispense</button>` : ''}
+                        <button class="btn btn-sm btn-secondary rx-view-btn" data-id="${p.id}">👁️ View</button>
+                        ${p.patient_id ? `<button class="btn btn-sm btn-secondary rx-chart-btn" data-pid="${p.patient_id}">Chart</button>` : ''}
+                      </div>
+                    </td>
+                  </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+
+    // Wire chart buttons
+    listContainer.querySelectorAll('.rx-chart-btn').forEach(btn => {
+      btn.onclick = () => {
+        setActivePatient(btn.dataset.pid);
+        location.hash = "patientChart";
+      };
+    });
+
+    // Wire view details modal
+    listContainer.querySelectorAll('.rx-view-btn').forEach(btn => {
+      btn.onclick = async () => {
+        const id = btn.dataset.id;
+        try {
+          const detail = await api.getRxPadPrescription(id);
+          openModal(`Prescription #${String(detail.serial).padStart(4, '0')} — ${escapeHtml(detail.patient_name)}`, `
+            <div class="card" style="margin-bottom:0.75rem;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                <div>
+                  <h3 style="margin:0;">${escapeHtml(detail.patient_name)}</h3>
+                  <p class="meta">${escapeHtml(detail.age_sex || '')} &bull; ${escapeHtml(detail.date || '')}</p>
+                </div>
+                <div>
+                  ${detail.dispense_status === 'dispensed'
+                    ? '<span class="badge badge-ok">💊 Dispensed / Filled</span>'
+                    : '<span class="badge badge-warn">🟡 Prescribed (Pending Dispense)</span>'}
+                </div>
+              </div>
+              <div style="margin-top:0.5rem;">
+                <strong>Provisional Diagnosis:</strong>
+                <p style="white-space:pre-wrap;background:var(--color-bg);padding:0.5rem;border-radius:0.35rem;margin-top:0.25rem;">${escapeHtml(detail.diagnosis || '—')}</p>
+              </div>
+              ${detail.follow_up ? `<p><strong>Follow Up:</strong> ${escapeHtml(detail.follow_up)}</p>` : ''}
+              ${detail.filename ? `<p class="meta"><strong>PDF Archive:</strong> ${escapeHtml(detail.filename)}</p>` : ''}
+            </div>
+
+            <div class="card" style="margin-bottom:0.75rem;">
+              <h3>Prescribed Medications</h3>
+              <div class="table-wrap" style="margin-top:0.5rem;">
+                <table class="table">
+                  <thead><tr><th>Drug</th><th>Dose</th><th>Frequency</th><th>Duration</th><th>Instructions</th></tr></thead>
+                  <tbody>
+                    ${(detail.meds || []).map(m => `
+                      <tr>
+                        <td><strong>${escapeHtml(m.drug)}</strong></td>
+                        <td>${escapeHtml(m.dose || '—')}</td>
+                        <td>${escapeHtml(m.freq || '—')}</td>
+                        <td>${escapeHtml(m.dur || '—')}</td>
+                        <td>${escapeHtml(m.instr || '—')}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            ${detail.labs && detail.labs.length ? `
+              <div class="card">
+                <h3>Ordered Laboratory &amp; Diagnostic Tests</h3>
+                <ul style="padding-left:1.25rem;margin-top:0.5rem;">
+                  ${detail.labs.map(l => `<li>${escapeHtml(l)}</li>`).join('')}
+                </ul>
+              </div>` : ''}
+
+            <div style="display:flex;gap:0.5rem;justify-content:flex-end;margin-top:1rem;">
+              <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+              ${detail.dispense_status !== 'dispensed' ? `<button class="btn btn-primary" id="modal-rx-dispense">💊 Fill &amp; Dispense Now</button>` : ''}
+            </div>`,
+            (body) => {
+              const dBtn = body.querySelector('#modal-rx-dispense');
+              if (dBtn) {
+                dBtn.onclick = () => {
+                  closeModal();
+                  openDispenseModal(detail.id, detail.serial, detail.patient_name, detail.meds);
+                };
+              }
+            }
+          );
+        } catch (err) {
+          showAlert("Failed to load prescription: " + err.message, "err");
+        }
+      };
+    });
+
+    // Wire dispense modal
+    listContainer.querySelectorAll('.rx-dispense-btn').forEach(btn => {
+      btn.onclick = () => {
+        const id = btn.dataset.id;
+        const p = allPrescriptions.find(x => x.id === id);
+        openDispenseModal(id, btn.dataset.serial, btn.dataset.patient, p?.meds || []);
+      };
+    });
+  }
+
+  function openDispenseModal(id, serial, patientName, meds) {
+    openModal(`Dispense Prescription #${String(serial).padStart(4, '0')} — ${escapeHtml(patientName)}`, `
+      <div class="card" style="margin-bottom:1rem;background:var(--color-bg);">
+        <p><strong>Confirm Medication Dispense for:</strong> ${escapeHtml(patientName)}</p>
+        <p class="meta">Filling this prescription will mark all corresponding FHIR MedicationRequests as completed and create immutable MedicationDispense records in clinic.db.</p>
+        <div style="margin-top:0.5rem;">
+          <strong>Medications to be dispensed:</strong>
+          <ul style="padding-left:1.25rem;margin-top:0.25rem;">
+            ${meds.map(m => `<li><strong>${escapeHtml(m.drug)}</strong> &bull; ${escapeHtml(m.dose || '')} &bull; ${escapeHtml(m.freq || '')} ${m.dur ? '('+escapeHtml(m.dur)+')' : ''}</li>`).join('')}
+          </ul>
+        </div>
+      </div>
+
+      <label class="label">Dispensed By / Pharmacist</label>
+      <input class="input" id="modal-disp-by" value="${escapeHtml(cfg.sessionUser || 'Dr. Yash Kulkarni')}" />
+
+      <label class="label">Dispensing Notes / Lot &amp; Batch Numbers (Optional)</label>
+      <textarea class="input" id="modal-disp-notes" placeholder="e.g. Verified contraindications. Batch #LOT-2026-A1 dispensed. Patient counseled on administration with meals." style="height:70px;"></textarea>
+
+      <div style="display:flex;gap:0.5rem;justify-content:flex-end;margin-top:1.25rem;">
+        <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" id="modal-confirm-dispense">✅ Confirm &amp; Dispense</button>
+      </div>`,
+      (body) => {
+        body.querySelector('#modal-confirm-dispense').onclick = async () => {
+          const btn = body.querySelector('#modal-confirm-dispense');
+          btn.disabled = true;
+          btn.textContent = "Dispensing...";
+          const by = body.querySelector('#modal-disp-by').value.trim();
+          const notes = body.querySelector('#modal-disp-notes').value.trim();
+          try {
+            await api.dispenseRxPadPrescription(id, notes, by);
+            closeModal();
+            showAlert(`Prescription #${String(serial).padStart(4, '0')} successfully dispensed!`, "ok");
+            logAudit("Dispense", "C", {
+              patient: patientName,
+              entity: "MedicationDispense",
+              details: `Dispensed Rx #${serial} for ${patientName} by ${by}`
+            });
+            await render();
+          } catch (err) {
+            showAlert("Dispense failed: " + err.message, "err");
+            btn.disabled = false;
+            btn.textContent = "✅ Confirm & Dispense";
+          }
+        };
+      }
+    );
+  }
+
+  $("#rxpad-search").oninput = () => render();
+  $("#rxpad-filter-status").onchange = () => render();
+
+  await render();
 };
 
 /* ---------- PROCEDURES ---------- */

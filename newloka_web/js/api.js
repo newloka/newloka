@@ -540,3 +540,70 @@ export async function restartServer() {
     return res.json();
 }
 
+/* ------------------------------------------------------------------ */
+/* eRx Pad Pro & Medication Dispensing Endpoints                     */
+/* ------------------------------------------------------------------ */
+
+export async function getRxPadPrescriptions() {
+    const res = await fetchWithRetry(url('/api/rxpad/prescriptions'), {
+        method: 'GET',
+        headers: headers()
+    }, 2, 10000);
+    if (!res.ok) {
+        throw new Error(`Failed to fetch prescriptions (${res.status})`);
+    }
+    return res.json();
+}
+
+export async function getRxPadPrescription(id) {
+    const res = await fetchWithRetry(url(`/api/rxpad/prescriptions/${id}`), {
+        method: 'GET',
+        headers: headers()
+    }, 2, 10000);
+    if (!res.ok) {
+        throw new Error(`Failed to fetch prescription details (${res.status})`);
+    }
+    return res.json();
+}
+
+export async function dispenseRxPadPrescription(id, notes = '', dispensedBy = 'Clinician') {
+    const res = await fetchWithRetry(url(`/api/rxpad/prescriptions/${id}/dispense`), {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            ...(headers())
+        },
+        body: JSON.stringify({
+            notes: notes || null,
+            dispensed_by: dispensedBy || null
+        })
+    }, 1, 15000);
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: res.statusText }));
+        throw new Error(err.message || 'Medication dispensing failed');
+    }
+    return res.json();
+}
+
+export async function getNextRxPadSerial() {
+    const res = await fetchWithRetry(url('/api/rxpad/next-serial'), {
+        method: 'GET',
+        headers: headers()
+    }, 1, 5000);
+    if (!res.ok) {
+        throw new Error(`Failed to get next serial (${res.status})`);
+    }
+    return res.json();
+}
+
+export async function searchRxPadPatients(q = '') {
+    const res = await fetchWithRetry(url(`/api/rxpad/patients?q=${encodeURIComponent(q)}`), {
+        method: 'GET',
+        headers: headers()
+    }, 1, 5000);
+    if (!res.ok) {
+        throw new Error(`Failed to search patients (${res.status})`);
+    }
+    return res.json();
+}
+

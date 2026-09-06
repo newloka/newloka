@@ -23,6 +23,7 @@ use tower_http::cors::CorsLayer;
 
 pub mod demo;
 pub mod updater;
+pub mod rxpad;
 
 pub mod state;
 pub use crate::state::{AppState, NodeConfig};
@@ -232,6 +233,9 @@ pub fn app(state: Arc<RwLock<AppState>>) -> Router {
         /* MedicationRequest */
         .route("/MedicationRequest", get(search_medication_requests).post(create_medication_request))
         .route("/MedicationRequest/:id", get(get_medication_request).put(update_medication_request).delete(delete_medication_request))
+        /* MedicationDispense */
+        .route("/MedicationDispense", get(search_medication_dispenses).post(create_medication_dispense))
+        .route("/MedicationDispense/:id", get(get_medication_dispense).put(update_medication_dispense).delete(delete_medication_dispense))
         /* Procedure */
         .route("/Procedure", get(search_procedures).post(create_procedure))
         .route("/Procedure/:id", get(get_procedure).put(update_procedure).delete(delete_procedure))
@@ -296,6 +300,14 @@ pub fn app(state: Arc<RwLock<AppState>>) -> Router {
         .route("/api/system/update/apply", post(update_apply_handler))
         .route("/api/system/update/upload", post(update_upload_handler))
         .route("/api/system/restart", post(system_restart_handler))
+        /* eRx Pad Integration */
+        .route("/api/rxpad/sync", post(rxpad::sync_prescription))
+        .route("/api/rxpad/prescriptions", get(rxpad::list_prescriptions))
+        .route("/api/rxpad/prescriptions/:id", get(rxpad::get_prescription))
+        .route("/api/rxpad/prescriptions/:id/dispense", post(rxpad::dispense_prescription))
+        .route("/api/rxpad/next-serial", get(rxpad::get_next_serial))
+        .route("/api/rxpad/patients", get(rxpad::search_patients))
+        .route("/rxpad", get(rxpad::serve_rxpad))
         .nest_service("/static", tower::util::service_fn(embedded_static_handler))
         .fallback(|| async { axum::response::Redirect::temporary("/static/index.html") })
         .layer(CorsLayer::permissive())
@@ -389,6 +401,7 @@ async fn capability_statement() -> Json<CapabilityStatement> {
                 resource_info("Observation"),
                 resource_info("Condition"),
                 resource_info("MedicationRequest"),
+                resource_info("MedicationDispense"),
                 resource_info("Procedure"),
                 resource_info("DiagnosticReport"),
                 resource_info("Composition"),
@@ -833,6 +846,42 @@ async fn delete_medication_request(
     Path(id): Path<String>,
 ) -> StatusCode {
     delete_resource(State(s), Path(id), "MedicationRequest").await
+}
+
+// ---------------------------------------------------------------------------
+// MedicationDispense
+// ---------------------------------------------------------------------------
+
+async fn search_medication_dispenses(
+    State(s): State<Arc<RwLock<AppState>>>,
+    Query(q): Query<SearchParams>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    search_resource(State(s), Query(q), "MedicationDispense").await
+}
+async fn create_medication_dispense(
+    State(s): State<Arc<RwLock<AppState>>>,
+    Json(b): Json<serde_json::Value>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    create_resource(State(s), Json(b), "MedicationDispense").await
+}
+async fn get_medication_dispense(
+    State(s): State<Arc<RwLock<AppState>>>,
+    Path(id): Path<String>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    get_resource(State(s), Path(id), "MedicationDispense").await
+}
+async fn update_medication_dispense(
+    State(s): State<Arc<RwLock<AppState>>>,
+    Path(id): Path<String>,
+    Json(b): Json<serde_json::Value>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    update_resource(State(s), Path(id), Json(b), "MedicationDispense").await
+}
+async fn delete_medication_dispense(
+    State(s): State<Arc<RwLock<AppState>>>,
+    Path(id): Path<String>,
+) -> StatusCode {
+    delete_resource(State(s), Path(id), "MedicationDispense").await
 }
 
 // ---------------------------------------------------------------------------

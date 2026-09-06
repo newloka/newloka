@@ -7,7 +7,7 @@ const CLINIC_PROFILES = {
             'dashboard', 'patients', 'patientChart', 'appointmentSchedule',
             'clinicalNotes', 'cpoeOrders', 'drugInteraction', 'resultsReview',
             'vitalsFlowsheet', 'alerts', 'encounters', 'observations',
-            'conditions', 'medications', 'procedures', 'immunizations',
+            'conditions', 'medications', 'rxpad', 'procedures', 'immunizations',
             'documents', 'ingest', 'audit', 'settings'
         ],
         hidden: ['whiteboard', 'handoffSbar', 'mar', 'carePlans']
@@ -20,7 +20,7 @@ const CLINIC_PROFILES = {
             'dashboard', 'patients', 'patientChart', 'appointmentSchedule',
             'clinicalNotes', 'cpoeOrders', 'drugInteraction', 'resultsReview',
             'vitalsFlowsheet', 'alerts', 'encounters', 'observations',
-            'conditions', 'medications', 'procedures', 'documents',
+            'conditions', 'medications', 'rxpad', 'procedures', 'documents',
             'ingest', 'audit', 'settings'
         ],
         hidden: ['whiteboard', 'handoffSbar', 'mar']
@@ -34,7 +34,7 @@ const CLINIC_PROFILES = {
             'clinicalNotes', 'cpoeOrders', 'drugInteraction', 'resultsReview',
             'mar', 'vitalsFlowsheet', 'alerts', 'carePlans', 'familyHistory',
             'immunizations', 'documents', 'encounters', 'observations',
-            'conditions', 'medications', 'procedures', 'handoffSbar',
+            'conditions', 'medications', 'rxpad', 'procedures', 'handoffSbar',
             'whiteboard', 'ingest', 'audit', 'settings'
         ],
         hidden: []
@@ -53,6 +53,7 @@ const ALL_MODULES = [
     { key: 'vitalsFlowsheet', label: 'Vitals Flowsheet & NEWS2', category: 'Diagnostics' },
     { key: 'alerts', label: 'Allergy & Risk Profiles', category: 'Safety' },
     { key: 'medications', label: 'Prescriptions & Medication Records', category: 'Pharmacy' },
+    { key: 'rxpad', label: 'Prescription Pad & Dispensing (eRx)', category: 'Pharmacy' },
     { key: 'immunizations', label: 'Vaccines & Immunization Registry', category: 'Preventive' },
     { key: 'documents', label: 'Clinical Media & Document Attachments', category: 'Media' },
     { key: 'encounters', label: 'Outpatient Encounters & Visits', category: 'Operations' },
@@ -103,34 +104,34 @@ function reset() { localStorage.removeItem('nl_config'); }
 
 const FEATURES = {
     T0: [
-        'dashboard','patients','encounters','observations','conditions','medications',
+        'dashboard','patients','encounters','observations','conditions','medications','rxpad',
         'procedures','ingest','audit','settings','patientChart','clinicalNotes',
         'cpoeOrders','resultsReview','vitalsFlowsheet','alerts','familyHistory',
         'immunizations','documents','appointmentSchedule','drugInteraction'
     ],
     T1: [
-        'dashboard','patients','encounters','observations','conditions','medications',
+        'dashboard','patients','encounters','observations','conditions','medications','rxpad',
         'procedures','ingest','audit','settings','patientChart','clinicalNotes',
         'cpoeOrders','resultsReview','mar','vitalsFlowsheet','alerts','carePlans',
         'familyHistory','immunizations','documents','appointmentSchedule','drugInteraction',
         'handoffSbar','whiteboard','mesh','sync'
     ],
     T2: [
-        'dashboard','patients','encounters','observations','conditions','medications',
+        'dashboard','patients','encounters','observations','conditions','medications','rxpad',
         'procedures','ingest','audit','settings','patientChart','clinicalNotes',
         'cpoeOrders','resultsReview','mar','vitalsFlowsheet','alerts','carePlans',
         'familyHistory','immunizations','documents','appointmentSchedule','drugInteraction',
         'handoffSbar','whiteboard','mesh','sync','server'
     ],
     T3: [
-        'dashboard','patients','encounters','observations','conditions','medications',
+        'dashboard','patients','encounters','observations','conditions','medications','rxpad',
         'procedures','ingest','audit','settings','patientChart','clinicalNotes',
         'cpoeOrders','resultsReview','mar','vitalsFlowsheet','alerts','carePlans',
         'familyHistory','immunizations','documents','appointmentSchedule','drugInteraction',
         'handoffSbar','whiteboard','mesh','sync','server','departments','reports'
     ],
     T4: [
-        'dashboard','patients','encounters','observations','conditions','medications',
+        'dashboard','patients','encounters','observations','conditions','medications','rxpad',
         'procedures','ingest','audit','settings','patientChart','clinicalNotes',
         'cpoeOrders','resultsReview','mar','vitalsFlowsheet','alerts','carePlans',
         'familyHistory','immunizations','documents','appointmentSchedule','drugInteraction',
