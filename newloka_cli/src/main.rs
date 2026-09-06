@@ -225,7 +225,11 @@ async fn main() -> Result<()> {
             println!("Querying last {} audit entries", limit);
         }
         Commands::Serve { bind } => {
-            println!("Starting server on {}", bind);
+            println!("Starting server on {} (tier: {}, db: {})", bind, cli.tier, cli.db.display());
+            std::env::set_var("NEWLOKA_TIER", cli.tier.to_uppercase());
+            let db_path = cli.db.to_string_lossy().to_string();
+            std::env::set_var("NEWLOKA_DB_PATH", db_path);
+            std::env::set_var("NEWLOKA_NODE_ID", &cli.node);
             newloka_server::run(&bind).await?;
         }
     }

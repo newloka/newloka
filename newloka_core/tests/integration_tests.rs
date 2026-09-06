@@ -450,4 +450,26 @@ mod integration {
         // 5. Verify audit trail
         assert_eq!(audit.entries().len(), 2);
     }
+
+    #[tokio::test]
+    async fn test_storage_auto_create_parent_directory() {
+        let unique = uuid::Uuid::new_v4();
+        let temp_dir = std::env::temp_dir().join(format!("newloka_nested_test_{}", unique));
+        let nested_db = temp_dir.join("subdir").join("clinic.db");
+        let db_path_str = nested_db.to_string_lossy().to_string();
+
+        assert!(!nested_db.parent().unwrap().exists());
+
+        let dmk = crypto::DeviceMasterKey::generate();
+        let storage = storage::StorageEngine::open(&db_path_str, "test-solo-node".to_string(), dmk)
+            .await
+            .unwrap();
+
+        assert!(nested_db.exists());
+        assert!(storage.is_empty().await.unwrap());
+
+        // Clean up
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
 }
+

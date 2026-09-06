@@ -181,20 +181,37 @@ function makeResourceApi(resourceType, storeName) {
     const lc = resourceType.toLowerCase();
 
     async function search(patientId = '') {
+        const filterLocal = (list) => {
+            if (!patientId) return list;
+            const target = patientId.replace(/^Patient\//, '');
+            return list.filter(o => {
+                const subRef = (o.subject?.reference || '').replace(/^Patient\//, '');
+                const patRef = (o.patient?.reference || '').replace(/^Patient\//, '');
+                return subRef === target || patRef === target || subRef.includes(target) || patRef.includes(target);
+            });
+        };
+
         if (!isOnline()) {
             const all = await dbGetAll(storeName);
-            const filtered = patientId ? all.filter(o => o.subject?.reference?.includes(patientId)) : all;
+            const filtered = filterLocal(all);
             return { resourceType: 'Bundle', type: 'searchset', total: filtered.length, entry: filtered.map(r => ({ resource: r })) };
         }
-        const q = patientId ? `?patient=${encodeURIComponent(patientId)}&_count=50` : '?_count=50';
-        const res = await fetchWithRetry(url(`/${resourceType}${q}`), { headers: headers() });
-        const data = await res.json();
-        if (data.entry) {
-            for (const e of data.entry) {
-                if (e.resource) await dbPut(storeName, e.resource);
+        try {
+            const q = patientId ? `?patient=${encodeURIComponent(patientId)}&_count=50` : '?_count=50';
+            const res = await fetchWithRetry(url(`/${resourceType}${q}`), { headers: headers() });
+            const data = await res.json();
+            if (data.entry) {
+                for (const e of data.entry) {
+                    if (e.resource) await dbPut(storeName, e.resource);
+                }
             }
+            return data;
+        } catch (err) {
+            console.warn(`Network search for ${resourceType} failed, falling back to local store:`, err);
+            const all = await dbGetAll(storeName);
+            const filtered = filterLocal(all);
+            return { resourceType: 'Bundle', type: 'searchset', total: filtered.length, entry: filtered.map(r => ({ resource: r })) };
         }
-        return data;
     }
 
     async function create(payload) {
@@ -464,5 +481,62 @@ export async function getLocalMedicationAdministrations() {
 }
 export async function getLocalMedicationStatements() {
     return dbGetAll('medicationStatements');
+}
+
+/* ------------------------------------------------------------------ */
+/* System & In-App Updater API                                        */
+/* ------------------------------------------------------------------ */
+
+export async function getSystemVersion() {
+    const res = await fetchWithRetry(url('/api/system/version'));
+    if (!res.ok) throw new Error(`Failed to fetch system version: ${res.statusText}`);
+    return res.json();
+}
+
+export async function checkSystemUpdate() {
+    const res = await fetchWithRetry(url('/api/system/update/check'));
+    if (!res.ok) throw new Error(`Failed to check for updates: ${res.statusText}`);
+    return res.json();
+}
+
+export async function applySystemUpdate(assetUrl) {
+    const res = await fetchWithRetry(url('/api/system/update/apply'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ asset_url: assetUrl || null })
+    }, 1, 180000);
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: res.statusText }));
+        throw new Error(err.message || 'Update installation failed');
+    }
+    return res.json();
+}
+
+export async function uploadSystemUpdate(file) {
+    const res = await fetch(url('/api/system/update/upload'), {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/octet-stream'
+        },
+        body: file
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: res.statusText }));
+        throw new Error(err.message || 'Offline package upload failed');
+    }
+    return res.json();
+}
+
+export async function restartServer() {
+    const res = await fetch(url('/api/system/restart'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: res.statusText }));
+        throw new Error(err.message || 'Server restart failed');
+    }
+    return res.json();
 }
 

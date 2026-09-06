@@ -5,7 +5,11 @@
 
 use chrono::Utc;
 use serde_json;
-use sqlx::{sqlite::SqlitePoolOptions, Pool, Sqlite};
+use sqlx::{
+    sqlite::{SqliteConnectOptions, SqlitePoolOptions},
+    Pool, Sqlite,
+};
+use std::str::FromStr;
 
 /// Storage backend using SQLite with CRDT metadata.
 pub struct StorageEngine {
@@ -56,10 +60,44 @@ impl StorageEngine {
         node_id: String,
         dmk: crate::crypto::DeviceMasterKey,
     ) -> crate::Result<Self> {
+        let connect_opts = if db_path.contains(":memory:") {
+            SqliteConnectOptions::from_str(db_path)?
+        } else {
+            let mut s = db_path;
+            if let Some(rest) = s.strip_prefix("sqlite:///") {
+                s = rest;
+            } else if let Some(rest) = s.strip_prefix("sqlite://") {
+                s = rest;
+            } else if let Some(rest) = s.strip_prefix("sqlite:") {
+                s = rest;
+            }
+            let file_path = s.split('?').next().unwrap_or(s);
+            #[cfg(windows)]
+            let file_path = if file_path.len() >= 3
+                && (file_path.starts_with('/') || file_path.starts_with('\\'))
+                && file_path.chars().nth(1).map_or(false, |c| c.is_ascii_alphabetic())
+                && file_path.chars().nth(2) == Some(':')
+            {
+                &file_path[1..]
+            } else {
+                file_path
+            };
+
+            let path = std::path::Path::new(file_path);
+            if let Some(parent) = path.parent() {
+                if !parent.as_os_str().is_empty() {
+                    std::fs::create_dir_all(parent)?;
+                }
+            }
+            SqliteConnectOptions::new()
+                .filename(path)
+                .create_if_missing(true)
+        };
+
         let pool = SqlitePoolOptions::new()
             .min_connections(1)
             .max_connections(5)
-            .connect(db_path)
+            .connect_with(connect_opts)
             .await?;
 
         sqlx::query(

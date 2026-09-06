@@ -1,15 +1,41 @@
 //! New Loka root launcher binary.
-//!
-//! Thin entry point that starts the HTTP server using environment
-//! configuration (`NEWLOKA_BIND_ADDR`). This is the binary packaged in the
-//! Docker image; the richer `newloka-cli` and `newloka-server` binaries remain
-//! available for interactive use.
+use clap::Parser;
 
-use anyhow::Result;
+#[derive(Parser)]
+#[command(name = "newloka")]
+#[command(about = "New Loka - Local-first clinical health management")]
+#[command(version = "0.1.0")]
+struct Args {
+    /// Bind address
+    #[arg(short, long, default_value = "127.0.0.1:8080")]
+    bind: String,
+
+    /// Deployment tier (e.g. T0, T1, T2, T3, T4)
+    #[arg(short, long)]
+    tier: Option<String>,
+
+    /// Database path or SQLite connection string (e.g. D:\Medical\Clinic\clinic.db)
+    #[arg(short, long)]
+    db: Option<String>,
+
+    /// Node ID identifier
+    #[arg(short, long)]
+    node_id: Option<String>,
+}
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> anyhow::Result<()> {
+    let args = Args::parse();
+    if let Some(tier) = args.tier {
+        std::env::set_var("NEWLOKA_TIER", tier);
+    }
+    if let Some(db) = args.db {
+        std::env::set_var("NEWLOKA_DB_PATH", db);
+    }
+    if let Some(node) = args.node_id {
+        std::env::set_var("NEWLOKA_NODE_ID", node);
+    }
     tracing_subscriber::fmt::init();
-    let bind = std::env::var("NEWLOKA_BIND_ADDR").unwrap_or_else(|_| "127.0.0.1:8080".to_string());
-    newloka_server::run(&bind).await
+    newloka_server::run(&args.bind).await
 }
+

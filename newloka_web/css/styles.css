@@ -248,6 +248,7 @@ html, body {
 .badge-ok { background: rgba(34,197,94,0.15); color: var(--color-success); }
 .badge-warn { background: rgba(234,179,8,0.15); color: var(--color-warning); }
 .badge-err { background: rgba(239,68,68,0.15); color: var(--color-danger); }
+.badge-info { background: rgba(37,99,235,0.15); color: var(--color-primary); }
 
 .status-dot {
     width: 0.55rem; height: 0.55rem; border-radius: 50%; display: inline-block; margin-right: 0.35rem;
@@ -584,3 +585,261 @@ html, body {
   font-weight: 500;
   color: var(--color-text-muted);
 }
+
+/* Patient Banner & Switcher */
+.patient-banner {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+  box-shadow: var(--shadow);
+}
+.banner-row {
+  display: flex;
+  gap: 1.25rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+  font-size: 0.88rem;
+  color: var(--color-text-muted);
+}
+.banner-row strong {
+  color: var(--color-text);
+}
+.patient-switcher {
+  background: var(--color-input-bg);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  padding: 0.3rem 0.6rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+/* Alert Strips */
+.alert-strip {
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm);
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.alert-strip.danger {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid var(--color-danger);
+  color: var(--color-danger);
+}
+.alert-strip.warning {
+  background: rgba(217, 119, 6, 0.15);
+  border: 1px solid var(--color-warning);
+  color: var(--color-warning);
+}
+
+/* Critical & Panic Indicators */
+@keyframes panic-pulse {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.06); opacity: 0.85; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.panic-badge {
+  background: var(--color-danger);
+  color: #fff;
+  padding: 0.2rem 0.5rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  animation: panic-pulse 2s infinite ease-in-out;
+}
+.panic-row {
+  background: rgba(239, 68, 68, 0.12) !important;
+}
+
+/* NEWS2 Early Warning Gauge */
+.news2-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1.15rem;
+  border-radius: var(--radius-md);
+  margin-bottom: 1rem;
+}
+.news2-low {
+  background: rgba(92, 138, 99, 0.15);
+  border: 1px solid var(--color-success);
+}
+.news2-medium {
+  background: rgba(217, 119, 6, 0.18);
+  border: 1px solid var(--color-warning);
+}
+.news2-high {
+  background: rgba(239, 68, 68, 0.18);
+  border: 1px solid var(--color-danger);
+}
+.news2-score-num {
+  font-size: 2.2rem;
+  font-weight: 800;
+  line-height: 1;
+  margin-right: 0.5rem;
+}
+
+/* SVG Trend Graph */
+.svg-chart-container {
+  width: 100%;
+  height: 220px;
+  background: var(--color-chart-bg);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  padding: 0.5rem;
+  overflow: hidden;
+}
+.svg-chart-container svg {
+  width: 100%;
+  height: 100%;
+}
+.chart-legend {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+  font-size: 0.82rem;
+}
+.chart-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.chart-legend-dot {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+/* CPOE Order Sets */
+.order-set-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+.order-set-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0.85rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.order-set-card:hover {
+  border-color: var(--color-primary);
+  background: var(--color-hover);
+  transform: translateY(-2px);
+}
+.order-set-card h4 {
+  color: var(--color-primary);
+  margin-bottom: 0.3rem;
+  font-size: 0.95rem;
+}
+
+/* Global Search Spotlight */
+.spotlight-box {
+  width: 100%;
+  max-width: 34rem;
+}
+.spotlight-input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  font-size: 1.1rem;
+  background: var(--color-input-bg);
+  border: 2px solid var(--color-primary);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  margin-bottom: 0.75rem;
+}
+.spotlight-results {
+  max-height: 20rem;
+  overflow-y: auto;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+.spotlight-item {
+  padding: 0.65rem 0.9rem;
+  border-bottom: 1px solid var(--color-border-subtle);
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.spotlight-item:hover, .spotlight-item.active {
+  background: var(--color-hover);
+}
+
+/* Quick Actions Grid */
+.quick-action-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  cursor: pointer;
+  font-weight: 600;
+  gap: 0.5rem;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+.quick-action-btn:hover {
+  background: var(--color-hover);
+  border-color: var(--color-primary);
+  transform: translateY(-2px);
+}
+.quick-action-btn span.qa-icon {
+  font-size: 2rem;
+}
+
+/* Ingest Review Interface */
+.ingest-review-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  margin-top: 1rem;
+}
+.confidence-pill {
+  padding: 0.15rem 0.4rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: rgba(92, 138, 99, 0.2);
+  color: var(--color-success);
+}
+
+/* Print Styles for SBAR and Clinical Documents */
+@media print {
+  .app-header, .side-nav, .toolbar, .btn, .tabs, #offline-banner {
+    display: none !important;
+  }
+  .main-content {
+    margin-left: 0 !important;
+    padding: 0 !important;
+  }
+  .card, .sbar-block {
+    border: 1px solid #ddd !important;
+    box-shadow: none !important;
+    page-break-inside: avoid;
+  }
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+}

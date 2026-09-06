@@ -1,0 +1,143 @@
+name: Release
+run-name: Build and Publish Release ${{ github.ref_name }}
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v0.1.0)'
+        required: true
+        default: 'v0.1.0'
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: newloka-windows-x86_64.zip
+            binary_ext: .exe
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: newloka-linux-x86_64.tar.gz
+            binary_ext: ''
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name: newloka-macos-arm64.tar.gz
+            binary_ext: ''
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ matrix.target }}
+
+      - name: Install Linux build dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev pkg-config libssl-dev
+
+      - name: Build release binaries
+        run: cargo build --release --target ${{ matrix.target }} --workspace
+
+      - name: Package Windows binaries (.zip)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path staging
+          Copy-Item target/${{ matrix.target }}/release/newloka-server.exe staging/
+          Copy-Item target/${{ matrix.target }}/release/newloka.exe staging/
+          Copy-Item target/${{ matrix.target }}/release/newloka-cli.exe staging/
+          Copy-Item README.md staging/
+          Copy-Item LICENSE staging/
+          Compress-Archive -Path staging/* -DestinationPath ${{ matrix.artifact_name }}
+
+      - name: Package Unix binaries (.tar.gz)
+        if: matrix.os != 'windows-latest'
+        run: |
+          mkdir staging
+          cp target/${{ matrix.target }}/release/newloka-server staging/
+          cp target/${{ matrix.target }}/release/newloka staging/
+          cp target/${{ matrix.target }}/release/newloka-cli staging/
+          cp README.md LICENSE staging/
+          tar -czvf ${{ matrix.artifact_name }} -C staging .
+
+      - name: Upload artifact to job
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: ${{ matrix.artifact_name }}
+
+  publish:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release_assets
+          merge-multiple: true
+
+      - name: Compute SHA256 Checksums
+        run: |
+          cd release_assets
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Determine Release Tag
+        id: tag_name
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "TAG=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "TAG=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag_name.outputs.TAG }}
+          name: New Loka ${{ steps.tag_name.outputs.TAG }}
+          files: |
+            release_assets/*
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          body: |
+            ## New Loka Official Precompiled Release (${{ steps.tag_name.outputs.TAG }})
+
+            Zero-build-tool distribution for clinicians and administrators.
+
+            ### Quick Download
+            - **Windows (x86_64)**: `newloka-windows-x86_64.zip`
+            - **Linux (x86_64)**: `newloka-linux-x86_64.tar.gz`
+            - **macOS (Apple Silicon)**: `newloka-macos-arm64.tar.gz`
+            - **Integrity Checksums**: `SHA256SUMS.txt`
+
+            ### Quick Start (Windows)
+            1. Download and extract `newloka-windows-x86_64.zip`.
+            2. Run:
+               ```powershell
+               .\newloka-server.exe --tier T0 --db D:\Medical\Clinic\clinic.db --bind 127.0.0.1:8080
+               ```
+            3. Open `http://127.0.0.1:8080` in your web browser.

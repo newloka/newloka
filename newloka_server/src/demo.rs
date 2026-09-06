@@ -365,6 +365,108 @@ pub async fn seed_demo_data(
                 )
                 .await?;
         }
+
+        // Additional Vital Signs (Heart Rate, Respiratory Rate, SpO2)
+        {
+            let hr_id = uuid::Uuid::new_v4().to_string();
+            let hr_val = 65 + (i * 4) % 35;
+            let hr = serde_json::json!({
+                "resourceType": "Observation",
+                "id": hr_id,
+                "meta": { "versionId": "1", "lastUpdated": Utc::now().to_rfc3339() },
+                "status": "final",
+                "category": [{ "coding": [{ "system": "http://terminology.hl7.org/CodeSystem/observation-category", "code": "vital-signs" }] }],
+                "code": { "text": "Heart Rate", "coding": [{ "system": "http://loinc.org", "code": "8867-4", "display": "Heart rate" }] },
+                "subject": { "reference": format!("Patient/{}", patient_id) },
+                "effectiveDateTime": Utc::now().to_rfc3339(),
+                "valueQuantity": { "value": hr_val, "unit": "beats/min" }
+            });
+            storage.store_json("Observation", &hr_id, &hr, Some(patient_id.clone()), None).await?;
+
+            let rr_id = uuid::Uuid::new_v4().to_string();
+            let rr_val = 14 + (i * 2) % 10;
+            let rr = serde_json::json!({
+                "resourceType": "Observation",
+                "id": rr_id,
+                "meta": { "versionId": "1", "lastUpdated": Utc::now().to_rfc3339() },
+                "status": "final",
+                "category": [{ "coding": [{ "system": "http://terminology.hl7.org/CodeSystem/observation-category", "code": "vital-signs" }] }],
+                "code": { "text": "Respiratory Rate", "coding": [{ "system": "http://loinc.org", "code": "9279-1", "display": "Respiratory rate" }] },
+                "subject": { "reference": format!("Patient/{}", patient_id) },
+                "effectiveDateTime": Utc::now().to_rfc3339(),
+                "valueQuantity": { "value": rr_val, "unit": "/min" }
+            });
+            storage.store_json("Observation", &rr_id, &rr, Some(patient_id.clone()), None).await?;
+
+            let spo2_id = uuid::Uuid::new_v4().to_string();
+            let spo2_val = 94 + (i * 3) % 6;
+            let spo2 = serde_json::json!({
+                "resourceType": "Observation",
+                "id": spo2_id,
+                "meta": { "versionId": "1", "lastUpdated": Utc::now().to_rfc3339() },
+                "status": "final",
+                "category": [{ "coding": [{ "system": "http://terminology.hl7.org/CodeSystem/observation-category", "code": "vital-signs" }] }],
+                "code": { "text": "Oxygen Saturation", "coding": [{ "system": "http://loinc.org", "code": "2708-6", "display": "Oxygen saturation" }] },
+                "subject": { "reference": format!("Patient/{}", patient_id) },
+                "effectiveDateTime": Utc::now().to_rfc3339(),
+                "valueQuantity": { "value": spo2_val, "unit": "%" }
+            });
+            storage.store_json("Observation", &spo2_id, &spo2, Some(patient_id.clone()), None).await?;
+        }
+
+        // CPOE ServiceRequest
+        {
+            let sr_id = uuid::Uuid::new_v4().to_string();
+            let order_names = ["Basic Metabolic Panel (BMP)", "Complete Blood Count (CBC)", "Chest X-Ray PA/Lateral", "12-Lead ECG", "Lipid Profile"];
+            let order_name = order_names[i % order_names.len()];
+            let service_request = serde_json::json!({
+                "resourceType": "ServiceRequest",
+                "id": sr_id,
+                "meta": { "versionId": "1", "lastUpdated": Utc::now().to_rfc3339() },
+                "status": "active",
+                "intent": "order",
+                "category": [{ "text": if order_name.contains("X-Ray") { "radiology" } else { "laboratory" } }],
+                "code": { "text": order_name },
+                "subject": { "reference": format!("Patient/{}", patient_id) },
+                "authoredOn": Utc::now().to_rfc3339(),
+                "requester": { "display": attending }
+            });
+            storage.store_json("ServiceRequest", &sr_id, &service_request, Some(patient_id.clone()), None).await?;
+        }
+
+        // FamilyMemberHistory
+        {
+            let fmh_id = uuid::Uuid::new_v4().to_string();
+            let relationships = ["Father", "Mother", "Sibling", "Maternal Grandfather"];
+            let conditions_fh = ["Coronary Artery Disease", "Essential Hypertension", "Type 2 Diabetes", "Asthma"];
+            let fmh = serde_json::json!({
+                "resourceType": "FamilyMemberHistory",
+                "id": fmh_id,
+                "meta": { "versionId": "1", "lastUpdated": Utc::now().to_rfc3339() },
+                "status": "completed",
+                "patient": { "reference": format!("Patient/{}", patient_id) },
+                "relationship": { "text": relationships[i % relationships.len()] },
+                "condition": [{ "code": { "text": conditions_fh[i % conditions_fh.len()] } }]
+            });
+            storage.store_json("FamilyMemberHistory", &fmh_id, &fmh, Some(patient_id.clone()), None).await?;
+        }
+
+        // DocumentReference
+        {
+            let doc_id = uuid::Uuid::new_v4().to_string();
+            let doc_types = ["Discharge Summary", "Initial H&P Consultation", "Cardiology Progress Note", "Radiology Imaging Report"];
+            let doc = serde_json::json!({
+                "resourceType": "DocumentReference",
+                "id": doc_id,
+                "meta": { "versionId": "1", "lastUpdated": Utc::now().to_rfc3339() },
+                "status": "current",
+                "description": doc_types[i % doc_types.len()],
+                "subject": { "reference": format!("Patient/{}", patient_id) },
+                "date": Utc::now().to_rfc3339(),
+                "content": [{ "attachment": { "contentType": "application/pdf", "size": 102400 } }]
+            });
+            storage.store_json("DocumentReference", &doc_id, &doc, Some(patient_id.clone()), None).await?;
+        }
     }
 
     let signer = newloka_core::crypto::AuditSigner::generate();

@@ -29,5 +29,7 @@ anyhow = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
 rust-embed = { workspace = true }
+reqwest = { workspace = true }
+zip = { workspace = true }
 
 

@@ -195,6 +195,108 @@ export async function seedLocal(count = 15) {
       };
       await api.dbPut('procedures', proc);
     }
+
+    // Allergies
+    const ALLERGIES_LIST = [
+      { substance: 'Penicillin', reaction: 'Urticaria & Wheezing', criticality: 'high' },
+      { substance: 'Sulfonamides (Sulfa)', reaction: 'Anaphylaxis', criticality: 'high' },
+      { substance: 'Latex', reaction: 'Contact Dermatitis', criticality: 'low' },
+      { substance: 'Shellfish', reaction: 'Pruritus & Lip Swelling', criticality: 'moderate' },
+      { substance: 'NSAIDs (Aspirin)', reaction: 'Bronchospasm', criticality: 'high' }
+    ];
+    if (Math.random() < 0.75) {
+      const aPick = pick(ALLERGIES_LIST);
+      const algId = crypto.randomUUID ? crypto.randomUUID() : `alg-${Date.now()}-${i}`;
+      await api.dbPut('allergyIntolerances', {
+        resourceType: 'AllergyIntolerance',
+        id: algId,
+        clinicalStatus: { coding: [{ code: 'active' }] },
+        verificationStatus: { text: 'confirmed' },
+        criticality: aPick.criticality,
+        category: ['medication'],
+        code: { text: aPick.substance },
+        patient: { reference: `Patient/${pid}` },
+        reaction: [{ manifestation: [{ text: aPick.reaction }] }]
+      });
+    }
+
+    // CPOE Orders (ServiceRequest)
+    const ORDERS_LIST = [
+      { name: 'Complete Blood Count (CBC)', cat: 'laboratory' },
+      { name: 'Basic Metabolic Panel (BMP)', cat: 'laboratory' },
+      { name: 'Chest X-Ray PA/Lateral', cat: 'radiology' },
+      { name: '12-Lead Electrocardiogram (ECG)', cat: 'diagnostic' },
+      { name: 'Lipid Panel', cat: 'laboratory' },
+      { name: 'Echocardiogram Transthoracic', cat: 'radiology' }
+    ];
+    const ordPick = pick(ORDERS_LIST);
+    const sreqId = crypto.randomUUID ? crypto.randomUUID() : `sr-${Date.now()}-${i}`;
+    await api.dbPut('serviceRequests', {
+      resourceType: 'ServiceRequest',
+      id: sreqId,
+      status: 'active',
+      intent: 'order',
+      category: [{ text: ordPick.cat }],
+      code: { text: ordPick.name },
+      subject: { reference: `Patient/${pid}` },
+      authoredOn: randDateTime(2024, 2026)
+    });
+
+    // Care Plans
+    const CARE_PLANS = [
+      'Comprehensive Type 2 Diabetes Management Plan',
+      'Hypertension & Cardiovascular Risk Reduction Protocol',
+      'COPD Action & Pulmonary Rehabilitation Plan',
+      'Post-Operative Recovery and Follow-up'
+    ];
+    const cpId = crypto.randomUUID ? crypto.randomUUID() : `cp-${Date.now()}-${i}`;
+    await api.dbPut('carePlans', {
+      resourceType: 'CarePlan',
+      id: cpId,
+      status: 'active',
+      intent: 'plan',
+      title: pick(CARE_PLANS),
+      description: 'Individualized multidisciplinary outpatient care plan.',
+      subject: { reference: `Patient/${pid}` },
+      period: { start: randDate(2023, 2025) }
+    });
+
+    // Immunizations
+    const VACCINES = ['Influenza Quadrivalent', 'COVID-19 mRNA Booster', 'Tdap Booster', 'Pneumococcal Conjugate (PCV20)'];
+    const immId = crypto.randomUUID ? crypto.randomUUID() : `imm-${Date.now()}-${i}`;
+    await api.dbPut('immunizations', {
+      resourceType: 'Immunization',
+      id: immId,
+      status: 'completed',
+      vaccineCode: { text: pick(VACCINES) },
+      patient: { reference: `Patient/${pid}` },
+      occurrenceDateTime: randDateTime(2023, 2026),
+      lotNumber: `LOT-${randInt(10000, 99999)}`
+    });
+
+    // Family Member History
+    const fmhId = crypto.randomUUID ? crypto.randomUUID() : `fmh-${Date.now()}-${i}`;
+    await api.dbPut('familyMemberHistories', {
+      resourceType: 'FamilyMemberHistory',
+      id: fmhId,
+      status: 'completed',
+      patient: { reference: `Patient/${pid}` },
+      relationship: { text: pick(['Father', 'Mother', 'Brother', 'Maternal Grandmother']) },
+      condition: [{ code: { text: pick(['Coronary Artery Disease', 'Type 2 Diabetes', 'Hypertension', 'Colon Cancer']) } }]
+    });
+
+    // Document References
+    const DOC_TYPES = ['Discharge Summary', 'Outpatient Consultation Note', 'Radiology Report - Chest X-Ray', 'Echocardiogram Report'];
+    const docId = crypto.randomUUID ? crypto.randomUUID() : `doc-${Date.now()}-${i}`;
+    await api.dbPut('documentReferences', {
+      resourceType: 'DocumentReference',
+      id: docId,
+      status: 'current',
+      description: pick(DOC_TYPES),
+      subject: { reference: `Patient/${pid}` },
+      date: randDateTime(2023, 2026),
+      content: [{ attachment: { contentType: 'application/pdf', size: randInt(45000, 250000) } }]
+    });
   }
 
   // Seed audit

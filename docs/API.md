@@ -1,15 +1,16 @@
-﻿# New Loka API Documentation
+# New Loka API Documentation
 
 ## Base URL
 
 - Local CLI: direct core library calls
-- T1+ Server: `http://localhost:8080`
+- HTTP Server (T0–T4): `http://127.0.0.1:8080` (or configured `--bind` address)
 
 ## Authentication
 
-T0: Local PIN / biometric-derived DMK (demo mode uses any PIN).
-T1+: Session tokens with Argon2id + optional TOTP.
-T3+: LDAP/Active Directory integration points.
+- **T0 (Solo Clinician)**: Local PIN / biometric-derived DMK or local session token.
+- **T1+ (Mesh / Clinic)**: Session tokens with Argon2id password hashing + optional TOTP.
+- **T3+ (Hospital)**: LDAP / Active Directory integration points.
+
 
 Every request validated through:
 1. Identity check (session token validity)
@@ -105,9 +106,71 @@ Response:
   "status": "healthy",
   "version": "0.1.0",
   "node_id": "server-node",
-  "tier": "T1"
+  "tier": "T0"
 }
 ```
+
+## System & In-App Updater Endpoints
+
+### System Information
+`GET /api/system/version`
+
+Response:
+```json
+{
+  "version": "0.1.0",
+  "tier": "T0",
+  "os": "windows",
+  "arch": "x86_64",
+  "exe_path": "C:\\Users\\synch\\.cargo\\bin\\newloka-server.exe",
+  "uptime_seconds": 3600
+}
+```
+
+### Check for Updates
+`GET /api/system/update/check`
+
+Queries the latest release from GitHub Releases API:
+```json
+{
+  "status": "update_available",
+  "current_version": "0.1.0",
+  "latest_version": "0.2.0",
+  "update_available": true,
+  "release_name": "New Loka v0.2.0",
+  "release_notes": "...",
+  "published_at": "2026-09-06T12:00:00Z",
+  "asset_name": "newloka-windows-x86_64.zip",
+  "asset_url": "https://github.com/newloka/newloka/releases/download/v0.2.0/newloka-windows-x86_64.zip",
+  "asset_size": 12908000,
+  "os": "windows",
+  "arch": "x86_64",
+  "message": "A new version (v0.2.0) is available for download."
+}
+```
+
+### Apply Update (1-Click)
+`POST /api/system/update/apply`
+
+Request body:
+```json
+{
+  "asset_url": "https://github.com/newloka/newloka/releases/download/v0.2.0/newloka-windows-x86_64.zip"
+}
+```
+
+Downloads and unpacks the release package, safely replaces running executables on disk, and sets `requires_restart: true`.
+
+### Offline Package Upload
+`POST /api/system/update/upload`
+
+Accepts raw bytes of a `.zip` or `.exe` release file for air-gapped clinic deployments.
+
+### Server Restart
+`POST /api/system/restart`
+
+Spawns the updated binary with the same arguments and gracefully shuts down the current process.
+
 
 ## Data Model
 

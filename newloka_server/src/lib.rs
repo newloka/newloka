@@ -22,6 +22,7 @@ use tokio::sync::RwLock;
 use tower_http::cors::CorsLayer;
 
 pub mod demo;
+pub mod updater;
 
 pub mod state;
 pub use crate::state::{AppState, NodeConfig};
@@ -289,6 +290,12 @@ pub fn app(state: Arc<RwLock<AppState>>) -> Router {
         .route("/auth/login", post(login_handler))
         .route("/auth/session", get(session_handler))
         .route("/auth/logout", post(logout_handler))
+        /* System & Updates */
+        .route("/api/system/version", get(system_version_handler))
+        .route("/api/system/update/check", get(update_check_handler))
+        .route("/api/system/update/apply", post(update_apply_handler))
+        .route("/api/system/update/upload", post(update_upload_handler))
+        .route("/api/system/restart", post(system_restart_handler))
         .nest_service("/static", tower::util::service_fn(embedded_static_handler))
         .fallback(|| async { axum::response::Redirect::temporary("/static/index.html") })
         .layer(CorsLayer::permissive())
@@ -297,6 +304,7 @@ pub fn app(state: Arc<RwLock<AppState>>) -> Router {
 
 /// Start the New Loka HTTP server.
 pub async fn run(bind: &str) -> anyhow::Result<()> {
+    updater::record_start_time();
     let node_id = std::env::var("NEWLOKA_NODE_ID").unwrap_or_else(|_| "server-node".to_string());
     let db_path = std::env::var("NEWLOKA_DB_PATH")
         .unwrap_or_else(|_| "sqlite::memory:?cache=shared".to_string());
@@ -311,14 +319,20 @@ pub async fn run(bind: &str) -> anyhow::Result<()> {
     }
     seed_demo_users(&storage).await?;
     let storage = std::sync::Arc::new(storage);
+    let tier_str = std::env::var("NEWLOKA_TIER").unwrap_or_else(|_| "T1".to_string());
+    let is_t0 = tier_str.eq_ignore_ascii_case("T0");
     let config = NodeConfig {
-        tier: std::env::var("NEWLOKA_TIER").unwrap_or_else(|_| "T1".to_string()),
+        tier: tier_str.to_uppercase(),
         node_id: node_id.clone(),
-        department: std::env::var("NEWLOKA_DEPARTMENT").unwrap_or_else(|_| "default".to_string()),
-        sync_enabled: std::env::var("NEWLOKA_SYNC_ENABLED").unwrap_or_else(|_| "true".to_string())
-            == "true",
-        mesh_enabled: std::env::var("NEWLOKA_MESH_ENABLED").unwrap_or_else(|_| "false".to_string())
-            == "true",
+        department: std::env::var("NEWLOKA_DEPARTMENT").unwrap_or_else(|_| {
+            if is_t0 { "Solo Practice".to_string() } else { "default".to_string() }
+        }),
+        sync_enabled: std::env::var("NEWLOKA_SYNC_ENABLED")
+            .map(|v| v == "true")
+            .unwrap_or(!is_t0),
+        mesh_enabled: std::env::var("NEWLOKA_MESH_ENABLED")
+            .map(|v| v == "true")
+            .unwrap_or(false),
         offline_auth: std::env::var("NEWLOKA_OFFLINE_AUTH").unwrap_or_else(|_| "pin".to_string()),
         language: std::env::var("NEWLOKA_LANGUAGE").unwrap_or_else(|_| "en".to_string()),
         emergency_access: std::env::var("NEWLOKA_EMERGENCY_ACCESS")
@@ -2007,3 +2021,81 @@ async fn seed_demo_users(storage: &newloka_core::storage::StorageEngine) -> anyh
     tracing::info!("Seeded demo users");
     Ok(())
 }
+
+/* ------------------------------------------------------------------ */
+/* System & In-App Updater Handlers                                    */
+/* ------------------------------------------------------------------ */
+
+async fn system_version_handler(
+    State(state): State<Arc<RwLock<AppState>>>,
+) -> Json<updater::SystemInfo> {
+    let tier = {
+        let s = state.read().await;
+        s.config.tier.clone()
+    };
+    Json(updater::get_system_info(&tier))
+}
+
+async fn update_check_handler() -> Json<updater::UpdateCheckResponse> {
+    Json(updater::check_for_updates().await)
+}
+
+async fn update_apply_handler(
+    payload: Option<Json<updater::UpdateApplyRequest>>,
+) -> Result<Json<updater::UpdateApplyResponse>, (StatusCode, Json<serde_json::Value>)> {
+    let asset_url = payload.and_then(|p| p.0.asset_url);
+    match updater::apply_update(asset_url).await {
+        Ok(res) => Ok(Json(res)),
+        Err(e) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "status": "error",
+                "message": format!("Update failed: {:#}", e),
+                "requires_restart": false,
+                "updated_files": []
+            })),
+        )),
+    }
+}
+
+async fn update_upload_handler(
+    body: axum::body::Bytes,
+) -> Result<Json<updater::UpdateApplyResponse>, (StatusCode, Json<serde_json::Value>)> {
+    if body.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "status": "error",
+                "message": "Uploaded update package is empty.",
+                "requires_restart": false,
+                "updated_files": []
+            })),
+        ));
+    }
+    match updater::apply_binary_or_archive(&body) {
+        Ok(res) => Ok(Json(res)),
+        Err(e) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "status": "error",
+                "message": format!("Failed to apply offline update package: {:#}", e),
+                "requires_restart": false,
+                "updated_files": []
+            })),
+        )),
+    }
+}
+
+async fn system_restart_handler() -> Result<Json<updater::RestartResponse>, (StatusCode, Json<serde_json::Value>)> {
+    match updater::restart_server() {
+        Ok(res) => Ok(Json(res)),
+        Err(e) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "status": "error",
+                "message": format!("Failed to restart server: {:#}", e),
+            })),
+        )),
+    }
+}
+
