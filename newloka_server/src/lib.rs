@@ -303,10 +303,11 @@ pub fn app(state: Arc<RwLock<AppState>>) -> Router {
         /* eRx Pad Integration */
         .route("/api/rxpad/sync", post(rxpad::sync_prescription))
         .route("/api/rxpad/prescriptions", get(rxpad::list_prescriptions))
-        .route("/api/rxpad/prescriptions/:id", get(rxpad::get_prescription))
+        .route("/api/rxpad/prescriptions/:id", get(rxpad::get_prescription).delete(rxpad::delete_prescription))
         .route("/api/rxpad/prescriptions/:id/dispense", post(rxpad::dispense_prescription))
         .route("/api/rxpad/next-serial", get(rxpad::get_next_serial))
         .route("/api/rxpad/patients", get(rxpad::search_patients))
+        .route("/api/rxpad/formulary", get(rxpad::get_formulary).post(rxpad::update_formulary))
         .route("/rxpad", get(rxpad::serve_rxpad))
         .nest_service("/static", tower::util::service_fn(embedded_static_handler))
         .fallback(|| async { axum::response::Redirect::temporary("/static/index.html") })

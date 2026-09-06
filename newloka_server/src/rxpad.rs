@@ -87,6 +87,13 @@ pub struct RxPadPrescriptionSummary {
     pub dispense_status: String,
     pub dispensed_at: Option<i64>,
     pub dispensed_by: Option<String>,
+    #[serde(default)]
+    pub meds: Vec<RxPadMedItem>,
+    #[serde(default)]
+    pub labs: Vec<String>,
+    pub follow_up: Option<String>,
+    pub weight: Option<String>,
+    pub bp: Option<String>,
     pub snapshot: Option<serde_json::Value>,
 }
 
@@ -338,6 +345,11 @@ pub async fn sync_prescription(
         med_ids.push(med_id);
     }
 
+    // Automatically update formulary in clinic database with prescribed medications
+    if !payload.meds.is_empty() {
+        let _ = merge_formulary_items(&state, &payload.meds).await;
+    }
+
     // 6. Create ServiceRequest for Lab Orders
     let mut srv_ids = Vec::new();
     for lab in &payload.labs {
@@ -522,24 +534,37 @@ pub async fn list_prescriptions(
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string());
 
-            let meds = pad
+            let meds_vec: Vec<RxPadMedItem> = pad
                 .get("meds")
-                .and_then(|m| m.as_array())
-                .cloned()
+                .and_then(|m| serde_json::from_value(m.clone()).ok())
                 .unwrap_or_default();
-            let meds_count = meds.len();
-            let meds_summary = meds
+            let meds_count = meds_vec.len();
+            let meds_summary = meds_vec
                 .iter()
-                .filter_map(|m| m.get("drug").and_then(|d| d.as_str()))
+                .filter_map(|m| if m.drug.trim().is_empty() { None } else { Some(m.drug.as_str()) })
                 .take(3)
                 .collect::<Vec<_>>()
                 .join(", ");
 
-            let labs_count = pad
+            let labs_vec: Vec<String> = pad
                 .get("labs")
-                .and_then(|l| l.as_array())
-                .map(|arr| arr.len())
-                .unwrap_or(0);
+                .and_then(|l| serde_json::from_value(l.clone()).ok())
+                .unwrap_or_default();
+            let labs_count = labs_vec.len();
+
+            let follow_up = pad
+                .get("followUp")
+                .or_else(|| pad.get("follow_up"))
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            let weight = pad
+                .get("weight")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            let bp = pad
+                .get("bp")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
 
             summaries.push(RxPadPrescriptionSummary {
                 id,
@@ -557,6 +582,11 @@ pub async fn list_prescriptions(
                 dispense_status,
                 dispensed_at,
                 dispensed_by,
+                meds: meds_vec,
+                labs: labs_vec,
+                follow_up,
+                weight,
+                bp,
                 snapshot: Some(pad.clone()),
             });
         }
@@ -807,6 +837,100 @@ pub async fn search_patients(
     (StatusCode::OK, Json(results))
 }
 
+/// Get the clinic's centralized formulary.
+pub async fn get_formulary(
+    State(state): State<Arc<RwLock<AppState>>>,
+) -> (StatusCode, Json<Vec<RxPadMedItem>>) {
+    let state = state.read().await;
+    let items = fetch_formulary_items(&state).await;
+    (StatusCode::OK, Json(items))
+}
+
+/// Update or merge into the clinic's centralized formulary.
+pub async fn update_formulary(
+    State(state): State<Arc<RwLock<AppState>>>,
+    Json(payload): Json<serde_json::Value>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let state = state.read().await;
+    let incoming_items: Vec<RxPadMedItem> = if let Ok(items) = serde_json::from_value(payload.clone()) {
+        items
+    } else if let Some(items) = payload.get("items") {
+        serde_json::from_value(items.clone()).unwrap_or_default()
+    } else {
+        vec![]
+    };
+
+    let updated = merge_formulary_items(&state, &incoming_items).await;
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "status": "success",
+            "count": updated.len(),
+            "items": updated
+        })),
+    )
+}
+
+/// Delete a prescription and its associated clinical entities.
+pub async fn delete_prescription(
+    State(state): State<Arc<RwLock<AppState>>>,
+    Path(id): Path<String>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let state = state.read().await;
+    let doc = match state.storage.get_json(&id).await {
+        Ok(Some(d)) => d,
+        _ => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({"error": format!("Prescription {} not found", id)})),
+            );
+        }
+    };
+
+    let mut deleted_count = 0;
+    if let Some(pad) = doc.get("_rxpad") {
+        if let Some(med_ids) = pad.get("medicationRequestIds").and_then(|m| m.as_array()) {
+            for mid in med_ids {
+                if let Some(mid_str) = mid.as_str() {
+                    if state.storage.soft_delete(mid_str).await.is_ok() {
+                        deleted_count += 1;
+                    }
+                }
+            }
+        }
+        if let Some(srv_ids) = pad.get("serviceRequestIds").and_then(|m| m.as_array()) {
+            for sid in srv_ids {
+                if let Some(sid_str) = sid.as_str() {
+                    if state.storage.soft_delete(sid_str).await.is_ok() {
+                        deleted_count += 1;
+                    }
+                }
+            }
+        }
+        if let Some(disp_ids) = pad.get("dispenseIds").and_then(|m| m.as_array()) {
+            for did in disp_ids {
+                if let Some(did_str) = did.as_str() {
+                    if state.storage.soft_delete(did_str).await.is_ok() {
+                        deleted_count += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    let _ = state.storage.soft_delete(&id).await;
+    deleted_count += 1;
+
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "status": "deleted",
+            "prescription_id": id,
+            "deleted_resources": deleted_count
+        })),
+    )
+}
+
 /// Serve the prescription pad HTML directly to the browser.
 pub async fn serve_rxpad() -> Html<String> {
     let local_path = std::path::Path::new(r"D:\Medical\Clinic\eRx Pad Pro.html");
@@ -946,4 +1070,152 @@ async fn resolve_or_create_patient(
         .await?;
 
     Ok(patient_id)
+}
+
+const FORMULARY_DOC_ID: &str = "rxpad-formulary";
+
+async fn fetch_formulary_items(state: &AppState) -> Vec<RxPadMedItem> {
+    if let Ok(Some(doc)) = state.storage.get_json(FORMULARY_DOC_ID).await {
+        if let Some(items) = doc.get("items") {
+            if let Ok(list) = serde_json::from_value::<Vec<RxPadMedItem>>(items.clone()) {
+                if !list.is_empty() {
+                    return list;
+                }
+            }
+        }
+    }
+
+    // Default clinic formulary
+    vec![
+        RxPadMedItem {
+            drug: "NITROFURANTOIN 100MG".to_string(),
+            dose: Some("1 Tab".to_string()),
+            freq: Some("BD".to_string()),
+            dur: Some("5d".to_string()),
+            instr: Some("After breakfast and dinner".to_string()),
+        },
+        RxPadMedItem {
+            drug: "ZINCOVIT (VIT C) 500MG".to_string(),
+            dose: Some("1 Tab".to_string()),
+            freq: Some("OD".to_string()),
+            dur: Some("15d".to_string()),
+            instr: Some("After lunch".to_string()),
+        },
+        RxPadMedItem {
+            drug: "T. FEXOFENADINE 180MG".to_string(),
+            dose: Some("1 tab".to_string()),
+            freq: Some("OD".to_string()),
+            dur: Some("10 d".to_string()),
+            instr: Some("Before breakfast / Disp: Send 10 such tablets".to_string()),
+        },
+        RxPadMedItem {
+            drug: "T. VIT B-COMPLEX".to_string(),
+            dose: Some("1 tab".to_string()),
+            freq: Some("OD".to_string()),
+            dur: Some("10 d".to_string()),
+            instr: Some("After breakfast / Disp: Send 10 such tablets".to_string()),
+        },
+        RxPadMedItem {
+            drug: "T. CAL+VITD3".to_string(),
+            dose: Some("1 tab".to_string()),
+            freq: Some("OD".to_string()),
+            dur: Some("10 d".to_string()),
+            instr: Some("After lunch / Disp: Send 10 such tablets".to_string()),
+        },
+        RxPadMedItem {
+            drug: "T. RIZATRIPTAN 10MG".to_string(),
+            dose: Some("1 tab".to_string()),
+            freq: Some("PRN".to_string()),
+            dur: None,
+            instr: Some("Min 2 hr b/w tabs, max 3/day / Disp: Send 8 such tablets".to_string()),
+        },
+        RxPadMedItem {
+            drug: "T. VALACICLOVIR 1G".to_string(),
+            dose: Some("1 tab".to_string()),
+            freq: Some("BD".to_string()),
+            dur: Some("10d".to_string()),
+            instr: Some("after meals".to_string()),
+        },
+        RxPadMedItem {
+            drug: "T. VALACICLOVIR 500MG".to_string(),
+            dose: Some("1 tab".to_string()),
+            freq: Some("BD".to_string()),
+            dur: Some("5d".to_string()),
+            instr: Some("after meals (FOR FLARES)".to_string()),
+        },
+        RxPadMedItem {
+            drug: "INJ BENZATHINE PENICILLIN G 2.4M IU".to_string(),
+            dose: Some("1 inj".to_string()),
+            freq: Some("1 weekly".to_string()),
+            dur: Some("3wk".to_string()),
+            instr: Some("inj deep IM".to_string()),
+        },
+    ]
+}
+
+async fn merge_formulary_items(state: &AppState, new_items: &[RxPadMedItem]) -> Vec<RxPadMedItem> {
+    let mut current = fetch_formulary_items(state).await;
+
+    for item in new_items {
+        let clean_drug = item.drug.trim();
+        if clean_drug.is_empty() {
+            continue;
+        }
+
+        if let Some(existing) = current
+            .iter_mut()
+            .find(|x| x.drug.eq_ignore_ascii_case(clean_drug))
+        {
+            if let Some(ref d) = item.dose {
+                if !d.trim().is_empty() {
+                    existing.dose = Some(d.trim().to_string());
+                }
+            }
+            if let Some(ref f) = item.freq {
+                if !f.trim().is_empty() {
+                    existing.freq = Some(f.trim().to_string());
+                }
+            }
+            if let Some(ref dur) = item.dur {
+                if !dur.trim().is_empty() {
+                    existing.dur = Some(dur.trim().to_string());
+                }
+            }
+            if let Some(ref instr) = item.instr {
+                if !instr.trim().is_empty() {
+                    existing.instr = Some(instr.trim().to_string());
+                }
+            }
+        } else {
+            current.push(RxPadMedItem {
+                drug: clean_drug.to_string(),
+                dose: item.dose.as_ref().map(|s| s.trim().to_string()),
+                freq: item.freq.as_ref().map(|s| s.trim().to_string()),
+                dur: item.dur.as_ref().map(|s| s.trim().to_string()),
+                instr: item.instr.as_ref().map(|s| s.trim().to_string()),
+            });
+        }
+    }
+
+    let doc_json = serde_json::json!({
+        "resourceType": "DocumentReference",
+        "id": FORMULARY_DOC_ID,
+        "status": "current",
+        "type": {
+            "coding": [{
+                "system": "urn:newloka:doc-type",
+                "code": "rxpad-formulary",
+                "display": "eRx Pad Formulary"
+            }]
+        },
+        "description": "Clinic Drug Formulary and Order Defaults",
+        "items": &current
+    });
+
+    let _ = state
+        .storage
+        .store_json("DocumentReference", FORMULARY_DOC_ID, &doc_json, None, None)
+        .await;
+
+    current
 }

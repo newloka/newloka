@@ -637,3 +637,40 @@ export async function searchRxPadPatients(q = '') {
     return res.json();
 }
 
+export async function deleteRxPadPrescription(id) {
+    const res = await fetchWithRetry(url(`/api/rxpad/prescriptions/${id}`), {
+        method: 'DELETE',
+        headers: headers()
+    }, 1, 10000);
+    if (!res.ok) {
+        throw new Error(`Failed to delete prescription (${res.status})`);
+    }
+    return res.json();
+}
+
+export async function getRxPadFormulary() {
+    const res = await fetchWithRetry(url('/api/rxpad/formulary'), {
+        method: 'GET',
+        headers: headers()
+    }, 2, 10000);
+    if (!res.ok) {
+        throw new Error(`Failed to fetch formulary (${res.status})`);
+    }
+    return res.json();
+}
+
+export async function updateRxPadFormulary(items) {
+    const res = await fetchWithRetry(url('/api/rxpad/formulary'), {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            ...(headers())
+        },
+        body: JSON.stringify(items)
+    }, 1, 10000);
+    if (!res.ok) {
+        throw new Error(`Failed to update formulary (${res.status})`);
+    }
+    return res.json();
+}
+
