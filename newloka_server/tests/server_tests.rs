@@ -320,3 +320,48 @@ async fn test_rxpad_sync_and_dispense() {
     assert_eq!(s_res["next_serial"], 5);
 }
 
+#[tokio::test]
+async fn test_static_files() {
+    let (app, _) = test_app().await;
+
+    let resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/static/index.html")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let ct = resp.headers().get("content-type").unwrap().to_str().unwrap().to_string();
+    println!("Content-Type for /static/index.html: {}", ct);
+    let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+    let text = String::from_utf8_lossy(&body);
+    println!("Body preview for /static/index.html: {}", &text[..text.len().min(100)]);
+
+    let resp_js = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/static/js/app.js")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp_js.status(), StatusCode::OK);
+    let ct_js = resp_js.headers().get("content-type").unwrap().to_str().unwrap().to_string();
+    println!("Content-Type for /static/js/app.js: {}", ct_js);
+    let body_js = axum::body::to_bytes(resp_js.into_body(), usize::MAX).await.unwrap();
+    let text_js = String::from_utf8_lossy(&body_js);
+    println!("Body preview for /static/js/app.js: {}", &text_js[..text_js.len().min(100)]);
+    assert!(ct_js.contains("javascript"), "Expected javascript, got: {}", ct_js);
+    assert!(!text_js.starts_with("<!DOCTYPE"), "js/app.js returned HTML!");
+
+}
+
+

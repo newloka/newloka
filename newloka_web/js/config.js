@@ -6,11 +6,11 @@ const CLINIC_PROFILES = {
         features: [
             'dashboard', 'patients', 'patientChart', 'appointmentSchedule',
             'clinicalNotes', 'cpoeOrders', 'drugInteraction', 'resultsReview',
-            'vitalsFlowsheet', 'alerts', 'encounters', 'observations',
-            'conditions', 'medications', 'rxpad', 'procedures', 'immunizations',
-            'documents', 'ingest', 'audit', 'settings'
+            'vitalsFlowsheet', 'alerts', 'carePlans', 'familyHistory',
+            'encounters', 'observations', 'conditions', 'medications', 'rxpad',
+            'procedures', 'immunizations', 'documents', 'ingest', 'audit', 'settings'
         ],
-        hidden: ['whiteboard', 'handoffSbar', 'mar', 'carePlans']
+        hidden: ['whiteboard', 'handoffSbar', 'mar']
     },
     specialist: {
         name: "Solo Specialist Practice (Cardiology, Derm, Surgery)",
@@ -19,9 +19,9 @@ const CLINIC_PROFILES = {
         features: [
             'dashboard', 'patients', 'patientChart', 'appointmentSchedule',
             'clinicalNotes', 'cpoeOrders', 'drugInteraction', 'resultsReview',
-            'vitalsFlowsheet', 'alerts', 'encounters', 'observations',
-            'conditions', 'medications', 'rxpad', 'procedures', 'documents',
-            'ingest', 'audit', 'settings'
+            'vitalsFlowsheet', 'alerts', 'carePlans', 'familyHistory',
+            'encounters', 'observations', 'conditions', 'medications', 'rxpad',
+            'procedures', 'documents', 'ingest', 'audit', 'settings'
         ],
         hidden: ['whiteboard', 'handoffSbar', 'mar']
     },
@@ -80,6 +80,7 @@ const DEFAULTS = {
     meshEnabled: false,
     department: 'Solo Practice',
     offlineAuth: 'pin',
+    sessionPin: '1234',
     language: 'en',
     emergencyAccess: false,
     sessionUser: 'Dr. Clinician',
@@ -106,7 +107,7 @@ const FEATURES = {
     T0: [
         'dashboard','patients','encounters','observations','conditions','medications','rxpad',
         'procedures','ingest','audit','settings','patientChart','clinicalNotes',
-        'cpoeOrders','resultsReview','vitalsFlowsheet','alerts','familyHistory',
+        'cpoeOrders','resultsReview','vitalsFlowsheet','alerts','carePlans','familyHistory',
         'immunizations','documents','appointmentSchedule','drugInteraction'
     ],
     T1: [

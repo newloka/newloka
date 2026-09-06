@@ -62,74 +62,104 @@ async function fetchWithRetry(resource, opts = {}, retries = 3, timeoutMs = 1500
 /* ------------------------------------------------------------------ */
 
 function openDB() {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
+        if (typeof indexedDB === 'undefined') return resolve(null);
         if (_db) return resolve(_db);
-        const req = indexedDB.open('newloka_store', 4);
-        req.onerror = () => reject(req.error);
-        req.onsuccess = () => { _db = req.result; resolve(_db); };
-        req.onupgradeneeded = (e) => {
-            const db = e.target.result;
-            const stores = ['patients','encounters','observations','conditions','medicationRequests','procedures','queue','audit','allergyIntolerances','documentReferences','serviceRequests','carePlans','familyMemberHistories','immunizations','medicationAdministrations','medicationStatements'];
-            stores.forEach(s => {
-                if (!db.objectStoreNames.contains(s)) db.createObjectStore(s, { keyPath: 'id' });
-            });
-        };
+        try {
+            const req = indexedDB.open('newloka_store', 4);
+            req.onerror = () => resolve(null);
+            req.onsuccess = () => { _db = req.result; resolve(_db); };
+            req.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                const stores = ['patients','encounters','observations','conditions','medicationRequests','procedures','queue','audit','allergyIntolerances','documentReferences','serviceRequests','carePlans','familyMemberHistories','immunizations','medicationAdministrations','medicationStatements'];
+                stores.forEach(s => {
+                    if (!db.objectStoreNames.contains(s)) db.createObjectStore(s, { keyPath: 'id' });
+                });
+            };
+        } catch {
+            resolve(null);
+        }
     });
 }
 
 async function dbPut(store, obj) {
     const db = await openDB();
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction([store], 'readwrite');
-        const st = tx.objectStore(store);
-        const req = st.put(obj);
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
+    if (!db) return obj?.id;
+    return new Promise((resolve) => {
+        try {
+            const tx = db.transaction([store], 'readwrite');
+            const st = tx.objectStore(store);
+            const req = st.put(obj);
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => resolve(null);
+        } catch {
+            resolve(null);
+        }
     });
 }
 
 async function dbGetAll(store) {
     const db = await openDB();
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction([store], 'readonly');
-        const st = tx.objectStore(store);
-        const req = st.getAll();
-        req.onsuccess = () => resolve(req.result || []);
-        req.onerror = () => reject(req.error);
+    if (!db) return [];
+    return new Promise((resolve) => {
+        try {
+            const tx = db.transaction([store], 'readonly');
+            const st = tx.objectStore(store);
+            const req = st.getAll();
+            req.onsuccess = () => resolve(req.result || []);
+            req.onerror = () => resolve([]);
+        } catch {
+            resolve([]);
+        }
     });
 }
 
 async function dbGet(store, id) {
     if (!id) return null;
     const db = await openDB();
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction([store], 'readonly');
-        const st = tx.objectStore(store);
-        const req = st.get(id);
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
+    if (!db) return null;
+    return new Promise((resolve) => {
+        try {
+            const tx = db.transaction([store], 'readonly');
+            const st = tx.objectStore(store);
+            const req = st.get(id);
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => resolve(null);
+        } catch {
+            resolve(null);
+        }
     });
 }
 
 async function dbDelete(store, id) {
     const db = await openDB();
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction([store], 'readwrite');
-        const st = tx.objectStore(store);
-        const req = st.delete(id);
-        req.onsuccess = () => resolve();
-        req.onerror = () => reject(req.error);
+    if (!db) return;
+    return new Promise((resolve) => {
+        try {
+            const tx = db.transaction([store], 'readwrite');
+            const st = tx.objectStore(store);
+            const req = st.delete(id);
+            req.onsuccess = () => resolve();
+            req.onerror = () => resolve();
+        } catch {
+            resolve();
+        }
     });
 }
 
 async function dbClear(store) {
     const db = await openDB();
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction([store], 'readwrite');
-        const st = tx.objectStore(store);
-        const req = st.clear();
-        req.onsuccess = () => resolve();
-        req.onerror = () => reject(req.error);
+    if (!db) return;
+    return new Promise((resolve) => {
+        try {
+            const tx = db.transaction([store], 'readwrite');
+            const st = tx.objectStore(store);
+            const req = st.clear();
+            req.onsuccess = () => resolve();
+            req.onerror = () => resolve();
+        } catch {
+            resolve();
+        }
     });
 }
 

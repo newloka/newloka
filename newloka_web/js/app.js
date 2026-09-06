@@ -67,8 +67,12 @@ function hideFeatureLinks() {
   });
 }
 
-function isLoggedIn() { return !!cfg.sessionPin || cfg.tier !== "T0"; }
-function logout() { delete cfg.sessionPin; delete cfg.token; saveCfg(cfg); location.reload(); }
+function isLoggedIn() {
+  if (cfg.loggedOut) return false;
+  if (cfg.tier === "T0") return true;
+  return !!cfg.sessionPin || !!cfg.token;
+}
+function logout() { cfg.loggedOut = true; delete cfg.sessionPin; delete cfg.token; saveCfg(cfg); location.reload(); }
 function fmtDate(iso) { if (!iso) return "?"; const d = new Date(iso); return isNaN(d) ? iso : d.toLocaleDateString(); }
 function fmtDateTime(iso) { if (!iso) return "?"; const d = new Date(iso); return isNaN(d) ? iso : d.toLocaleString(); }
 function fmtAge(dob) {
@@ -314,7 +318,7 @@ function seedIfEmpty() {
  * National Early Warning Score 2 (NEWS2) Calculator
  * Conforms to Royal College of Physicians (UK) guidelines.
  */
-function calculateNEWS2({ rr, spo2, onOxygen = false, sbp, hr, temp, consciousness = "A" }) {
+function calculateNEWS2({ rr, spo2, onOxygen = false, o2 = false, sbp, hr, temp, consciousness = "A", avpu = "A" }) {
   let score = 0;
   let singleParamAlert = false;
 
@@ -335,7 +339,7 @@ function calculateNEWS2({ rr, spo2, onOxygen = false, sbp, hr, temp, consciousne
   }
 
   // 3. Supplemental Oxygen
-  if (onOxygen) score += 2;
+  if (onOxygen || o2) score += 2;
 
   // 4. Systolic Blood Pressure (mmHg)
   if (sbp != null) {
@@ -354,7 +358,8 @@ function calculateNEWS2({ rr, spo2, onOxygen = false, sbp, hr, temp, consciousne
   }
 
   // 6. Consciousness (Alert, Voice, Pain, Unresponsive)
-  if (consciousness && consciousness !== "A") { score += 3; singleParamAlert = true; }
+  const c = (avpu && avpu !== "A") ? avpu : consciousness;
+  if (c && c !== "A") { score += 3; singleParamAlert = true; }
 
   // 7. Temperature (°C)
   if (temp != null) {
@@ -364,25 +369,29 @@ function calculateNEWS2({ rr, spo2, onOxygen = false, sbp, hr, temp, consciousne
     else if (t <= 36.0 || t >= 38.1) score += 1;
   }
 
-  let risk = "low";
+  let risk = "Low";
   let label = "Low Clinical Risk";
   let action = "Routine ward-based observations (q4–12h).";
   let badgeClass = "news2-low";
+  let color = "#10b981";
 
   if (score >= 7) {
-    risk = "high";
+    risk = "High";
     label = "High Clinical Risk — Emergency Escalation";
     action = "Immediate assessment by Medical Emergency / Critical Care Team. Continuous monitoring.";
     badgeClass = "news2-high";
+    color = "#ef4444";
   } else if (score >= 5 || singleParamAlert) {
-    risk = "medium";
+    risk = "Medium";
     label = "Medium Clinical Risk — Urgent Response Required";
     action = "Urgent review by registered nurse and attending physician. Increase observations to q1h.";
     badgeClass = "news2-medium";
+    color = "#f59e0b";
   }
 
-  return { score, risk, label, action, badgeClass };
+  return { score, risk, label, action, response: action, badgeClass, color };
 }
+const calculateNews2 = calculateNEWS2;
 
 /**
  * Real-Time Drug-Drug & Drug-Allergy Interaction Checker
@@ -622,6 +631,107 @@ function renderSvgTrendChart(series, { title, width = 700, height = 180, yLabel 
     </div>`;
 }
 
+/**
+ * Simple SVG Sparkline for lab & telemetry trends
+ */
+function renderSvgSparkline(points = [], width = 120, height = 30, color = "var(--color-primary, #2a9d8f)") {
+  if (!points || !points.length) {
+    return `<svg width="${width}" height="${height}"><text x="5" y="${height / 2}" font-size="10" fill="var(--color-text-muted)">—</text></svg>`;
+  }
+  const min = Math.min(...points);
+  const max = Math.max(...points);
+  const range = max - min || 1;
+  const pad = 4;
+  const w = width - pad * 2;
+  const h = height - pad * 2;
+  const step = points.length > 1 ? w / (points.length - 1) : w;
+
+  const pts = points.map((val, idx) => {
+    const x = pad + idx * step;
+    const y = pad + h - ((val - min) / range) * h;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+
+  return `
+    <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" style="overflow:visible;">
+      <polyline fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" points="${pts.join(' ')}" />
+      <circle cx="${pts[pts.length - 1].split(',')[0]}" cy="${pts[pts.length - 1].split(',')[1]}" r="3" fill="${color}" />
+    </svg>`;
+}
+
+/**
+ * Multi-Line SVG Trend Chart for Vitals Flowsheet
+ */
+function renderMultiLineSvg(series = [], width = 640, height = 180) {
+  if (!series || !series.length) {
+    return `<div class="chart-placeholder"><p>No vital trends recorded.</p></div>`;
+  }
+  const padLeft = 45;
+  const padRight = 20;
+  const padTop = 15;
+  const padBottom = 25;
+  const graphW = width - padLeft - padRight;
+  const graphH = height - padTop - padBottom;
+
+  let allVals = [];
+  series.forEach(s => (s.points || []).forEach(p => allVals.push(Number(p) || 0)));
+  if (!allVals.length) return `<div class="chart-placeholder"><p>No vital trends recorded.</p></div>`;
+
+  let min = Math.min(...allVals);
+  let max = Math.max(...allVals);
+  if (min === max) { min -= 10; max += 10; }
+  const range = max - min || 1;
+
+  const maxPts = Math.max(...series.map(s => (s.points || []).length));
+  const xStep = maxPts > 1 ? graphW / (maxPts - 1) : graphW / 2;
+
+  let svg = `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" style="width:100%;height:${height}px;background:var(--color-surface);border-radius:6px;">
+    <!-- Grid -->
+    <line x1="${padLeft}" y1="${padTop}" x2="${width - padRight}" y2="${padTop}" stroke="var(--color-border-subtle, rgba(0,0,0,0.06))" stroke-dasharray="3,3" />
+    <line x1="${padLeft}" y1="${padTop + graphH / 2}" x2="${width - padRight}" y2="${padTop + graphH / 2}" stroke="var(--color-border-subtle, rgba(0,0,0,0.06))" stroke-dasharray="3,3" />
+    <line x1="${padLeft}" y1="${padTop + graphH}" x2="${width - padRight}" y2="${padTop + graphH}" stroke="var(--color-border, rgba(0,0,0,0.15))" />
+    <!-- Labels -->
+    <text x="${padLeft - 6}" y="${padTop + 4}" font-size="10" fill="var(--color-text-muted)" text-anchor="end">${Math.round(max)}</text>
+    <text x="${padLeft - 6}" y="${padTop + graphH / 2 + 3}" font-size="10" fill="var(--color-text-muted)" text-anchor="end">${Math.round((min + max) / 2)}</text>
+    <text x="${padLeft - 6}" y="${padTop + graphH + 3}" font-size="10" fill="var(--color-text-muted)" text-anchor="end">${Math.round(min)}</text>`;
+
+  series.forEach(s => {
+    const pts = (s.points || []).map((val, idx) => {
+      const v = Number(val) || 0;
+      const x = padLeft + idx * xStep;
+      const y = padTop + graphH - ((v - min) / range) * graphH;
+      return { x, y, v };
+    });
+    if (pts.length > 0) {
+      const polyPts = pts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+      svg += `<polyline fill="none" stroke="${s.color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" points="${polyPts}" />`;
+      pts.forEach(p => {
+        svg += `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3.5" fill="${s.color}"><title>${escapeHtml(s.label)}: ${p.v}</title></circle>`;
+      });
+    }
+  });
+
+  svg += `</svg>`;
+  return svg;
+}
+
+/**
+ * Circular Gauge for NEWS2 score
+ */
+function renderNews2Gauge(score = 0) {
+  const s = Math.max(0, Math.min(Number(score) || 0, 20));
+  let color = "#10b981";
+  let label = "LOW";
+  if (s >= 7) { color = "#ef4444"; label = "HIGH"; }
+  else if (s >= 5) { color = "#f59e0b"; label = "MED"; }
+
+  return `
+    <div style="text-align:center;width:80px;">
+      <div style="font-size:2.2rem;font-weight:800;color:${color};line-height:1;">${s}</div>
+      <div style="font-size:0.72rem;font-weight:700;color:${color};margin-top:0.25rem;">${label} RISK</div>
+    </div>`;
+}
+
 /* ------------------------------------------------------------------ */
 /* Reusable Patient Banner with 1-Click Patient Switcher              */
 /* ------------------------------------------------------------------ */
@@ -798,6 +908,14 @@ function openQuickAdd() {
         <span class="qa-icon">🧑‍⚕️</span>
         <span>Register Patient</span>
       </button>
+      <button class="quick-action-btn" id="qa-rxpad">
+        <span class="qa-icon">📝</span>
+        <span>Write Rx (eRx Pad)</span>
+      </button>
+      <button class="quick-action-btn" id="qa-schedule">
+        <span class="qa-icon">📅</span>
+        <span>Schedule Appointment</span>
+      </button>
       <button class="quick-action-btn" id="qa-encounter">
         <span class="qa-icon">📋</span>
         <span>New Encounter</span>
@@ -817,6 +935,8 @@ function openQuickAdd() {
     </div>`,
     (body) => {
       body.querySelector("#qa-patient").onclick = () => { closeModal(); openNewPatientModal(); };
+      body.querySelector("#qa-rxpad").onclick = () => { closeModal(); location.hash = "rxpad"; };
+      body.querySelector("#qa-schedule").onclick = () => { closeModal(); location.hash = "appointmentSchedule"; };
       body.querySelector("#qa-encounter").onclick = () => { closeModal(); location.hash = "encounters"; };
       body.querySelector("#qa-order").onclick = () => { closeModal(); location.hash = "cpoeOrders"; };
       body.querySelector("#qa-note").onclick = () => { closeModal(); location.hash = "clinicalNotes"; };
@@ -994,6 +1114,7 @@ views.login = () => {
     cfg.sessionPin = $("#login-pin").value;
     cfg.department = $("#login-dept").value.trim() || "General Medicine";
     cfg.apiBase = $("#login-api").value.trim() || cfg.apiBase;
+    cfg.loggedOut = false;
     saveCfg(cfg);
     api.init(cfg);
     seedIfEmpty();
@@ -5288,6 +5409,17 @@ function bootstrap() {
   }
 }
 
+const openSpotlightSearch = openGlobalSearch;
+const openQuickAddModal = openQuickAdd;
+
+// Spotlight search button
+const spotBtn = document.getElementById("spotlight-search-btn") || document.getElementById("search-toggle");
+if (spotBtn) spotBtn.onclick = openSpotlightSearch;
+
+// Quick add button
+const quickBtn = document.getElementById("quick-add-btn");
+if (quickBtn) quickBtn.onclick = openQuickAddModal;
+
 // Global hotkeys: / for Spotlight Search, Escape to close modal, Ctrl+K for quick add
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
@@ -5301,14 +5433,6 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
-// Spotlight search button
-const spotBtn = document.getElementById("spotlight-search-btn");
-if (spotBtn) spotBtn.onclick = openSpotlightSearch;
-
-// Quick add button
-const quickBtn = document.getElementById("quick-add-btn");
-if (quickBtn) quickBtn.onclick = openQuickAddModal;
-
 window.addEventListener("hashchange", () => {
   const hashParts = window.location.hash.replace("#","").split("/");
   const hash = hashParts[0] || "dashboard";
@@ -5316,6 +5440,8 @@ window.addEventListener("hashchange", () => {
   else { route("dashboard"); }
 });
 
+window.views = views;
+window.route = route;
 window.closeModal = closeModal;
 window.openSpotlightSearch = openSpotlightSearch;
 window.openQuickAddModal = openQuickAddModal;
