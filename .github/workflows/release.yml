@@ -138,6 +138,6 @@ jobs:
             1. Download and extract `newloka-windows-x86_64.zip`.
             2. Run:
                ```powershell
-               .\newloka-server.exe --tier T0 --db D:\Medical\Clinic\clinic.db --bind 127.0.0.1:8080
+               .\newloka-server.exe --tier T0 --db .\clinic.db --bind 127.0.0.1:8080
                ```
             3. Open `http://127.0.0.1:8080` in your web browser.

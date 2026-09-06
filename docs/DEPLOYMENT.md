@@ -22,17 +22,17 @@ Execute with the desired tier and custom database path:
 
 ```powershell
 # Using newloka-server
-newloka-server.exe --tier T0 --db D:\Medical\Clinic\clinic.db --bind 127.0.0.1:8080
+newloka-server.exe --tier T0 --db ./clinic.db --bind 127.0.0.1:8080
 
 # Using newloka (root launcher)
-newloka.exe --tier T0 --db D:\Medical\Clinic\clinic.db --bind 127.0.0.1:8080
+newloka.exe --tier T0 --db ./clinic.db --bind 127.0.0.1:8080
 
 # Using newloka-cli
-newloka-cli.exe --tier T0 --db D:\Medical\Clinic\clinic.db serve --bind 127.0.0.1:8080
+newloka-cli.exe --tier T0 --db ./clinic.db serve --bind 127.0.0.1:8080
 ```
 
 #### Automatic Directory & Path Creation
-When specifying `--db <path>`, the engine checks if the target directory exists (e.g. `D:\Medical\Clinic`). If not, it creates all parent directories automatically on startup with proper operating system permissions. Both raw filesystem paths (`D:\Medical\Clinic\clinic.db`) and SQLite URIs (`sqlite:D:\Medical\Clinic\clinic.db?mode=rwc`) are supported.
+When specifying `--db <path>`, the engine checks if the target directory exists. If not, it creates all parent directories automatically on startup with proper operating system permissions. Both raw filesystem paths (e.g. `./clinic.db`, `C:\ClinicData\clinic.db`, `/var/lib/newloka/clinic.db`) and SQLite URIs (`sqlite:clinic.db?mode=rwc`) are supported.
 
 #### Accessing the Web Interface
 Once started, open any web browser to:
@@ -115,7 +115,7 @@ The server binaries (`newloka-server.exe` and `newloka.exe`) accept the followin
 | Flag | Short | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `--tier <TIER>` | `-t` | `T1` | Target tier: `T0`, `T1`, `T2`, `T3`, `T4` |
-| `--db <PATH>` | `-d` | `:memory:` | Database file path (e.g. `D:\Medical\Clinic\clinic.db`) |
+| `--db <PATH>` | `-d` | `:memory:` | Database file path (e.g. `./clinic.db`, `/path/to/clinic.db`) |
 | `--bind <ADDR>` | `-b` | `127.0.0.1:8080` | IP and port to listen on |
 | `--node-id <NAME>` | `-n` | `server-node` | Unique identifier for the instance |
 
@@ -205,7 +205,7 @@ Setup:
 
 ### For Single-Person Clinic (T0):
 - **Encrypted Export**: In the web UI, navigate to **Settings** -> **Export Encrypted Backup** to save a password-encrypted FHIR bundle or SQLite snapshot to a USB flash drive or external SSD.
-- **Direct File Copy**: When the server is stopped, simply copy `D:\Medical\Clinic\clinic.db` to your secure backup location. The database file is encrypted at rest.
+- **Direct File Copy**: When the server is stopped, simply copy your database file (e.g. `./clinic.db` or your configured `--db` path) to your secure backup location. The database file is encrypted at rest.
 
 ### For T1–T3:
 - Automated scheduled SQLite VACUUM INTO snapshots.

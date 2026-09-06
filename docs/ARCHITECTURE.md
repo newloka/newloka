@@ -1,4 +1,4 @@
-﻿# New Loka Architecture
+# New Loka Architecture
 
 ## Overview
 
@@ -84,7 +84,7 @@ The development server ships with a deterministic demo DMK and auto-seeds 20 pat
 cargo build
 
 # Start server (T1+)
-$env:NEWLOKA_STATIC_DIR = "D:\New Loka\newloka\newloka_web"
+$env:NEWLOKA_STATIC_DIR = ".\newloka_web"
 cargo run -p newloka_server
 ```
 
@@ -92,10 +92,9 @@ Open `http://127.0.0.1:8080/` in a browser. The SPA will redirect and prompt for
 
 ## Frontend Architecture
 
+`newloka_web/` is a vanilla-JS ES-module SPA designed for easy extension:
 
-ewloka_web/ is a vanilla-JS ES-module SPA designed for easy extension:
-
-- **Modular imports** ? config.js, pi.js, mock-data.js, and 	hemes.js are separate modules.
-- **Runtime configuration** ? All defaults are exposed via DEFAULTS in config.js; users can override them through the Settings UI without rebuilding.
-- **Role-based UI gating** ? userCan() works alongside the server-side ABAC engine to hide/show actions based on the authenticated user's roles.
-- **Mobile-ready** ? Responsive CSS, touch-friendly controls, and an offline banner make the existing web app usable on tablets and phones today. The next step is a dedicated mobile app with native sync (see Roadmap).
+- **Modular imports** — `config.js`, `api.js`, `mock-data.js`, and `themes.js` are separate modules.
+- **Runtime configuration** — All defaults are exposed via `DEFAULTS` in `config.js`; users can override them through the Settings UI without rebuilding.
+- **Role-based UI gating** — `userCan()` works alongside the server-side ABAC engine to hide/show actions based on the authenticated user's roles.
+- **Mobile-ready** — Responsive CSS, touch-friendly controls, and an offline banner make the existing web app usable on tablets and phones today. The next step is a dedicated mobile app with native sync (see Roadmap).

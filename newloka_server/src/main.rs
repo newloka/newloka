@@ -13,7 +13,7 @@ struct Args {
     #[arg(short, long)]
     tier: Option<String>,
 
-    /// Database path or SQLite connection string (e.g. clinic.db)
+    /// Database path or SQLite connection string (e.g. ./clinic.db, /path/to/clinic.db, or :memory:)
     #[arg(short, long)]
     db: Option<String>,
 

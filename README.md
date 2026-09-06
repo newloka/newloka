@@ -35,16 +35,16 @@ To launch New Loka configured for a solo practitioner or single-person clinic wi
 
 ```bash
 # Using the dedicated HTTP server binary
-newloka-server.exe --tier T0 --db D:\Medical\Clinic\clinic.db --bind 127.0.0.1:8080
+newloka-server.exe --tier T0 --db ./clinic.db --bind 127.0.0.1:8080
 
 # Or using the root launcher
-newloka.exe --tier T0 --db D:\Medical\Clinic\clinic.db --bind 127.0.0.1:8080
+newloka.exe --tier T0 --db ./clinic.db --bind 127.0.0.1:8080
 
 # Or using newloka-cli
-newloka-cli.exe --tier T0 --db D:\Medical\Clinic\clinic.db serve --bind 127.0.0.1:8080
+newloka-cli.exe --tier T0 --db ./clinic.db serve --bind 127.0.0.1:8080
 ```
 
-> **Automatic Path Handling**: Parent directories (e.g. `D:\Medical\Clinic`) are created automatically if they do not exist. Both Windows backslash paths and SQLite connection URIs (`sqlite:...`) are supported.
+> **Automatic Path Handling**: The `--db` argument accepts any valid relative path, absolute path, or SQLite URI (`sqlite:...`). If parent directories do not already exist, New Loka creates them automatically on startup.
 
 When launched with `--tier T0`:
 - **Department**: Automatically set to `"Solo Practice"`.
@@ -81,7 +81,7 @@ Both `newloka-server.exe` and `newloka.exe` support the following options:
 | Flag | Short | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `--tier <TIER>` | `-t` | `T1` | Deployment tier: `T0`, `T1`, `T2`, `T3`, `T4` |
-| `--db <PATH>` | `-d` | `:memory:` | SQLite database file path (e.g. `D:\Medical\Clinic\clinic.db`) |
+| `--db <PATH>` | `-d` | `:memory:` | SQLite database file path (e.g. `./clinic.db`, `/path/to/clinic.db`) |
 | `--bind <ADDR>` | `-b` | `127.0.0.1:8080` | HTTP server listening address |
 | `--node-id <NAME>` | `-n` | `server-node` | Unique node identifier |
 
@@ -89,7 +89,7 @@ Both `newloka-server.exe` and `newloka.exe` support the following options:
 
 All CLI arguments can alternatively be configured via environment variables:
 - `NEWLOKA_TIER`: `T0`, `T1`, `T2`, `T3`, `T4`
-- `NEWLOKA_DB_PATH`: Absolute or relative path to SQLite database
+- `NEWLOKA_DB_PATH`: Absolute or relative path to SQLite database (or `:memory:`)
 - `NEWLOKA_BIND_ADDR`: Host and port to bind (e.g. `127.0.0.1:8080`)
 - `NEWLOKA_NODE_ID`: Node identifier
 - `NEWLOKA_MASTER_KEY`: 64-char hex key (optional in demo mode)
@@ -102,16 +102,16 @@ For headless operations, batch scripts, and direct terminal management:
 
 ```bash
 # Initialize node with derived master key
-newloka-cli --db D:\Medical\Clinic\clinic.db init --password yourpassword
+newloka-cli --db ./clinic.db init --password yourpassword
 
 # Register a patient
-newloka-cli --db D:\Medical\Clinic\clinic.db patient create --family Sharma --given Anita --gender female --birth-date 1988-04-12
+newloka-cli --db ./clinic.db patient create --family Sharma --given Anita --gender female --birth-date 1988-04-12
 
 # List patients
-newloka-cli --db D:\Medical\Clinic\clinic.db patient list
+newloka-cli --db ./clinic.db patient list
 
 # Query audit log
-newloka-cli --db D:\Medical\Clinic\clinic.db audit --limit 20
+newloka-cli --db ./clinic.db audit --limit 20
 ```
 
 ---
