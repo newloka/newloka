@@ -138,16 +138,54 @@ impl PolicyEngine {
             };
         }
 
+        // Billing staff clinical data boundaries
+        let is_clinical_staff = has_role(crate::identity::Role::Clinician)
+            || has_role(crate::identity::Role::ResidentDoctor)
+            || has_role(crate::identity::Role::DepartmentHead)
+            || has_role(crate::identity::Role::Administrator)
+            || has_role(crate::identity::Role::EmergencyOverride);
+
+        if has_role(crate::identity::Role::Billing) && !is_clinical_staff {
+            // Strictly prevent non-clinical billing staff from writing prescriptions or clinical orders
+            if req.action == Action::Create
+                && (req.resource.resource_type == "MedicationRequest"
+                    || req.resource.resource_type == "ServiceRequest"
+                    || req.resource.resource_type == "Observation"
+                    || req.resource.resource_type == "Condition")
+            {
+                return PolicyDecision::Deny {
+                    reason: "Billing staff do not hold clinical prescribing or charting privileges".into(),
+                };
+            }
+
+            // Strictly protect confidential clinical diagnostic charts from billing staff
+            if req.action == Action::Read
+                && (req.resource.resource_type == "Condition"
+                    || req.resource.resource_type == "ClinicalImpression"
+                    || req.resource.sensitivity == SensitivityLevel::Restricted)
+            {
+                return PolicyDecision::Deny {
+                    reason: "Confidential clinical diagnostic charts are restricted from billing staff by ABAC policy".into(),
+                };
+            }
+        }
+
         // Role-based action checks
         match req.action {
             Action::Create => {
-                if !has_role(crate::identity::Role::Clinician)
-                    && !has_role(crate::identity::Role::Nurse)
-                    && !has_role(crate::identity::Role::Administrator)
-                    && !has_role(crate::identity::Role::EmergencyOverride)
-                    && !has_role(crate::identity::Role::DepartmentHead)
-                    && !has_role(crate::identity::Role::ResidentDoctor)
-                {
+                let allowed_create = has_role(crate::identity::Role::Clinician)
+                    || has_role(crate::identity::Role::Nurse)
+                    || has_role(crate::identity::Role::Administrator)
+                    || has_role(crate::identity::Role::EmergencyOverride)
+                    || has_role(crate::identity::Role::DepartmentHead)
+                    || has_role(crate::identity::Role::ResidentDoctor)
+                    || (has_role(crate::identity::Role::Billing)
+                        && (req.resource.resource_type == "Patient"
+                            || req.resource.resource_type == "Invoice"
+                            || req.resource.resource_type == "Account"
+                            || req.resource.resource_type == "PaymentNotice"));
+
+                if !allowed_create {
                     return PolicyDecision::Deny {
                         reason: "Insufficient role for create".into(),
                     };

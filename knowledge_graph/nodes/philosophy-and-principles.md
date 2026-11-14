@@ -1,0 +1,23 @@
+# System Philosophy and Foundational Principles
+
+## Epistemic Metadata
+- **Entity**: System Philosophy & Design Invariants
+- **Layer**: Layer 0: Ontological & Foundational
+- **Status**: SHIPPED / ACTIVE
+- **Domain**: Healthcare Data Sovereignty & Offline Architecture
+
+## Facts
+- New Loka is architected as an open-source, local-first, polymorphic healthcare data management system for patient care, clinical operations, and privacy-preserving research. [valid_from: 2026-06-11, recorded: 2026-11-13, source: Project_Scope_and_Requirements.txt]
+- Core System Invariant 1: Platform-agnostic core (`newloka_core`) decoupling business and clinical logic from platform-specific user interfaces and OS targets. [valid_from: 2026-06-11, recorded: 2026-11-13, source: Project_Scope_and_Requirements.txt §3]
+- Core System Invariant 2: Local-first operation ensuring that every node functions autonomously offline without dependence on remote servers, external SaaS APIs, or continuous internet connectivity. [valid_from: 2026-06-11, recorded: 2026-11-13, source: README.md & Project_Scope_and_Requirements.txt]
+- Core System Invariant 3: Conflict-Free Replicated Data Types (CRDT) data model with vector clocks enabling asynchronous peer discovery, delta sync, and deterministic merge across mesh topologies. [valid_from: 2026-06-11, recorded: 2026-11-13, source: docs/ARCHITECTURE.md]
+- Core System Invariant 4: Polymorphic deployment without code forks. The identical codebase runs unmodified from a solo clinician's smartphone (T0) up to a federated national research network (T4) purely via runtime configuration and attribute-based security rules. [valid_from: 2026-06-11, recorded: 2026-11-13, source: Project_Scope_and_Requirements.txt §3]
+- Core System Invariant 5: Data-layer security enforcement. Cryptographic confidentiality (AES-256-GCM) and Attribute-Based Access Control (ABAC) are strictly executed inside the storage and core domain layer, eliminating UI-only security bypass vulnerabilities. [valid_from: 2026-06-11, recorded: 2026-11-13, source: docs/SECURITY.md]
+- Core System Invariant 6: FHIR R4 is the universal internal and external clinical data model, ensuring standards compliance across all patient records, encounters, observations, orders, and diagnostic results. [valid_from: 2026-06-11, recorded: 2026-11-13, source: Project_Scope_and_Requirements.txt §4.1]
+- Core System Invariant 7: Clinical Safety & Anti-Auto-Commit. Clinical data merges must never automatically resolve hazardous conflicts (such as conflicting medication dosages or contradictory allergy profiles); AI and OCR extractions strictly mandate human-in-the-loop review before committing to the patient chart. [valid_from: 2026-06-11, recorded: 2026-11-13, source: Project_Scope_and_Requirements.txt §2, §4.6, §4.7]
+- Core System Invariant 8: Decoupled Modularity × Exhaustive Scope. New Loka rejects narrow toy implementations in favor of exhaustive operational scope. Every subsystem—ingestion pipelines, backend data models, ABAC security policies, and UI viewports—is architected as decoupled modular components that dynamically assemble into specialized presets on demand without code bloat, scaling uniformly across all 22+ clinical/operational personas from solo clinics (T0) to federated research hospitals (T4). [valid_from: 2026-11-14, recorded: 2026-11-14, source: Project_Scope_and_Requirements.txt & docs/role_ui_matrix.md]
+- Adaptive Engineering & Ideological Debt Avoidance: Foundational principles (local-first data sovereignty, cryptographic data layer, clinical prudence/anti-auto-commit, single polymorphic core, and ergonomic empathy) serve as guiding axioms rather than rigid dogma. Recognizes system non-omniscience, avoids premature constraints that block future pathways, and prioritizes continuous learning, operational adaptation, and active problem solving. [valid_from: 2026-11-14, recorded: 2026-11-14, source: docs/MISSING_COMPONENTS_AND_REQUIREMENTS.md §1]
+- Licensing: Open-source under GNU General Public License v3.0 (GPL-3.0) to guarantee permanent freedom, transparency, and public ownership for global clinical care. [valid_from: 2026-05-22, recorded: 2026-11-13, source: LICENSE & Cargo.toml]
+
+## Superseded
+(none)

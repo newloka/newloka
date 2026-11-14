@@ -6,8 +6,11 @@
 
 pub mod abac;
 pub mod audit;
+pub mod consent;
 pub mod cpoe;
 pub mod crypto;
+pub mod department;
+pub mod federation;
 pub mod fhir;
 pub mod identity;
 pub mod storage;

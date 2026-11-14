@@ -1,5 +1,9 @@
 # New Loka
 
+[![CI](https://github.com/newloka/newloka/actions/workflows/ci.yml/badge.svg)](https://github.com/newloka/newloka/actions/workflows/ci.yml)
+[![Release](https://github.com/newloka/newloka/actions/workflows/release.yml/badge.svg)](https://github.com/newloka/newloka/actions/workflows/release.yml)
+[![License: GPL-3.0](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+
 Open source, local-first, polymorphic health data management system for patient care, clinical operations, and research.
 
 Designed to adapt across deployment scales:
@@ -131,17 +135,78 @@ newloka/
 
 ## Documentation
 
-- [Deployment Guide](file:///D:/New%20Loka/newloka/docs/DEPLOYMENT.md) — Step-by-step instructions for T0 through T4.
-- [API Documentation](file:///D:/New%20Loka/newloka/docs/API.md) — FHIR R4 endpoints, authentication, and sync protocols.
-- [Architecture Guide](file:///D:/New%20Loka/newloka/docs/ARCHITECTURE.md) — CRDT data structures, cryptographic envelope, and ABAC.
-- [Security Guide](file:///D:/New%20Loka/newloka/docs/SECURITY.md) — Cryptographic threat model, zero-knowledge storage, and audit logs.
-- [Developer Guide](file:///D:/New%20Loka/newloka/docs/DEVELOPER.md) — Local builds, testing, and contribution standards.
+- [Deployment Guide](docs/DEPLOYMENT.md) — Step-by-step operational setup for T0 (Solo Clinic) through T4 (Research Federation).
+- [API Documentation](docs/API.md) — FHIR R4 endpoints, enterprise authentication, department transfers, and research mesh APIs.
+- [Architecture Guide](docs/ARCHITECTURE.md) — Core CRDT data structures, cryptographic envelope, and ABAC engine.
+- [Security Guide](docs/SECURITY.md) — Cryptographic threat model, zero-knowledge storage, and audit logs.
+- [Developer Guide](docs/DEVELOPER.md) — Local builds, workspace testing, and contribution standards.
+- [Vision & Requirements Gap Analysis](docs/MISSING_COMPONENTS_AND_REQUIREMENTS.md) — Living tracking specification comparing implementation against full 11-phase roadmap.
+- [Master Role & UI Matrix](docs/role_ui_matrix.md) — Exhaustive 22-role clinical persona taxonomy and ABAC clearance boundaries.
+
+---
+
+## 🛠️ Build Pipeline & Developer Setup
+
+New Loka is designed with a **zero-dependency runtime architecture**: the entire single-page web interface (`newloka_web/`) is embedded directly into the Rust server executable at compile time via `rust-embed`. The compiled binary runs standalone with zero external web servers, runtime interpreters, or Node.js dependencies.
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│ Workspace Build Pipeline Overview                                      │
+├────────────────────────────────────────────────────────────────────────┤
+│ 1. rust-embed embeds newloka_web (HTML, CSS, JS) into newloka_server  │
+│ 2. newloka_core compiles FHIR R4, crypto, SQLite storage, ABAC, consent│
+│ 3. newloka_server, newloka_cli, and newloka binaries are generated    │
+│ 4. cargo test --workspace runs 51 unit, integration, and server tests │
+│ 5. Automated CI/CD builds release matrices (Win/Linux/macOS) on push  │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+### 1. Prerequisites
+- **Rust & Cargo**: Version 1.75+ (install via [rustup.rs](https://rustup.rs/)).
+- **SQLite Dev Libraries** (Linux only):
+  ```bash
+  sudo apt-get update && sudo apt-get install -y libsqlite3-dev pkg-config libssl-dev
+  ```
+
+### 2. Fast Compilation Check
+```bash
+cargo check
+```
+
+### 3. Build Binaries
+```bash
+# Debug build (faster compilation)
+cargo build
+
+# Optimized production release build
+cargo build --release
+```
+Compiled binaries are emitted to `target/release/`:
+- `newloka-server` (or `newloka-server.exe`) — Axum HTTP + FHIR API server with embedded web UI.
+- `newloka-cli` (or `newloka-cli.exe`) — Headless CLI administration tool.
+- `newloka` (or `newloka.exe`) — Unified launcher binary.
+
+### 4. Run the Full Test Suite
+Validate the complete workspace across all 51 unit, integration, and server tests:
+```bash
+cargo test --workspace
+```
+
+### 5. Launch Local Development Server
+```bash
+# Run server directly with embedded web interface
+cargo run -p newloka_server
+
+# Or specify a custom database and port
+cargo run -p newloka_server -- --db ./clinic.db --bind 127.0.0.1:8080
+```
+Open `http://127.0.0.1:8080/` in your browser.
 
 ---
 
 ## 📦 Packaging Releases Locally
 
-To build and package release archives locally:
+To build and package signed release archives locally:
 
 ```powershell
 # Windows PowerShell
@@ -149,6 +214,24 @@ powershell -ExecutionPolicy Bypass -File scripts\package-release.ps1
 ```
 
 This compiles release binaries and creates `dist/newloka-windows-x86_64.zip` accompanied by a cryptographic checksum file `dist/SHA256SUMS.txt`.
+
+---
+
+## 🚀 Automated CI/CD Pipeline (GitHub Actions)
+
+New Loka includes automated multi-platform CI/CD workflows under `.github/workflows/`:
+
+1. **Continuous Integration (`ci.yml`)**:
+   - Triggers on every push and pull request to `main`.
+   - Runs `cargo fmt -- --check`, `cargo clippy`, and `cargo test --verbose`.
+   - Cross-compiles release binaries across **Ubuntu (Linux)**, **Windows**, and **macOS**.
+2. **Automated Release Publisher (`release.yml`)**:
+   - Triggers automatically when a version tag (`v*`) is pushed to GitHub, or via manual workflow dispatch.
+   - Compiles optimized production archives:
+     - `newloka-windows-x86_64.zip`
+     - `newloka-linux-x86_64.tar.gz`
+     - `newloka-macos-arm64.tar.gz`
+   - Generates SHA-256 checksums and automatically publishes the draft/release on GitHub Releases.
 
 ---
 

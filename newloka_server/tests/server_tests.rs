@@ -441,5 +441,456 @@ async fn test_rxpad_pdf_and_events() {
     assert_eq!(del_event, "prescription_deleted");
 }
 
+#[tokio::test]
+async fn test_config_and_prescriber_endpoints() {
+    let (app, _) = test_app().await;
+
+    // Test GET /api/config
+    let res = app
+        .clone()
+        .oneshot(Request::builder().uri("/api/config").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+    let cfg: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(cfg["tier"], "T0");
+    assert_eq!(cfg["defaultLandingView"], "rxpad");
+
+    // Test GET /api/prescriber/profile
+    let res = app
+        .clone()
+        .oneshot(Request::builder().uri("/api/prescriber/profile").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+    let prescriber: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(prescriber["isLegalPrescriber"], true);
+    assert!(prescriber["clinicianName"].as_str().unwrap().contains("Dr."));
+}
+
+#[tokio::test]
+async fn test_inpatient_and_billing_with_abac() {
+    let (app, _) = test_app().await;
+
+    // Test GET /api/inpatient/census
+    let res = app
+        .clone()
+        .oneshot(Request::builder().uri("/api/inpatient/census").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+    let census: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert!(census.as_array().unwrap().len() >= 3);
+
+    // Test GET /api/billing/invoices as Clinician (full clinical correlation)
+    let res_doc = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/api/billing/invoices")
+                .header("x-user-role", "clinician")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res_doc.status(), StatusCode::OK);
+    let body_doc = axum::body::to_bytes(res_doc.into_body(), usize::MAX).await.unwrap();
+    let inv_doc: serde_json::Value = serde_json::from_slice(&body_doc).unwrap();
+    let diag_doc = inv_doc[0]["diagnosis"].as_str().unwrap();
+    assert!(!diag_doc.contains("REDACTED"));
+
+    // Test GET /api/billing/invoices as Billing Staff (ABAC clinical data redacted)
+    let res_bill = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/api/billing/invoices")
+                .header("x-user-role", "billing")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res_bill.status(), StatusCode::OK);
+    let body_bill = axum::body::to_bytes(res_bill.into_body(), usize::MAX).await.unwrap();
+    let inv_bill: serde_json::Value = serde_json::from_slice(&body_bill).unwrap();
+    let diag_bill = inv_bill[0]["diagnosis"].as_str().unwrap();
+    assert!(diag_bill.contains("REDACTED"));
+
+    // Test GET /api/pharmacy/summary
+    let res_pharm = app
+        .clone()
+        .oneshot(Request::builder().uri("/api/pharmacy/summary").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(res_pharm.status(), StatusCode::OK);
+    let body_pharm = axum::body::to_bytes(res_pharm.into_body(), usize::MAX).await.unwrap();
+    let pharm: serde_json::Value = serde_json::from_slice(&body_pharm).unwrap();
+    assert!(pharm["criticalStockAlerts"].as_array().unwrap().len() >= 2);
+    assert!(pharm["safetyAlerts"].as_array().unwrap().len() >= 2);
+}
+
+#[tokio::test]
+async fn test_departments_and_transfers_endpoints() {
+    let (app, _) = test_app().await;
+
+    // 1. GET /api/departments
+    let res_depts = app
+        .clone()
+        .oneshot(Request::builder().uri("/api/departments").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(res_depts.status(), StatusCode::OK);
+    let body_depts = axum::body::to_bytes(res_depts.into_body(), usize::MAX).await.unwrap();
+    let depts: serde_json::Value = serde_json::from_slice(&body_depts).unwrap();
+    assert!(depts.as_array().unwrap().len() >= 6);
+
+    // 2. GET /api/departments/transfers
+    let res_tr_list = app
+        .clone()
+        .oneshot(Request::builder().uri("/api/departments/transfers").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(res_tr_list.status(), StatusCode::OK);
+
+    // 3. POST /api/departments/transfers
+    let payload_tr = serde_json::json!({
+        "id": "tr-test-99",
+        "patient_id": "pat-test-001",
+        "patient_name": "Ramesh Sharma",
+        "mrn": "MRN-101",
+        "source_department": "Emergency & Trauma",
+        "target_department": "Cardiology & Cath Lab",
+        "requesting_clinician_id": "doc_emergency",
+        "requesting_clinician_name": "Dr. Acute",
+        "urgency": "urgent",
+        "reason": "Suspected STEMI",
+        "clinical_handover_notes": "Chest pain with anterior ST elevations.",
+        "active_medications_summary": ["Aspirin 325mg"],
+        "pending_orders_summary": ["Stat Troponin"],
+        "allergies_summary": ["None"]
+    });
+
+    let res_create = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/departments/transfers")
+                .header("Content-Type", "application/json")
+                .body(Body::from(payload_tr.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res_create.status(), StatusCode::CREATED);
+
+    // 4. POST /api/departments/transfers/tr-test-99/accept
+    let accept_payload = serde_json::json!({
+        "accepting_clinician_id": "doc_attending",
+        "accepting_clinician_name": "Dr. Cardio Attending",
+        "assigned_bed": "CCU Bed 05"
+    });
+
+    let res_accept = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/departments/transfers/tr-test-99/accept")
+                .header("Content-Type", "application/json")
+                .body(Body::from(accept_payload.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res_accept.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_enterprise_ldap_login_and_config() {
+    let (app, _) = test_app().await;
+
+    // GET /api/auth/directory/config
+    let res_cfg = app
+        .clone()
+        .oneshot(Request::builder().uri("/api/auth/directory/config").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(res_cfg.status(), StatusCode::OK);
+
+    // POST /api/auth/enterprise/login (valid doctor)
+    let login_payload = serde_json::json!({
+        "username": "dr.kulkarni@hospital.local",
+        "password": "valid_enterprise_password_2026",
+        "tier": "T3"
+    });
+    let res_login = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/auth/enterprise/login")
+                .header("Content-Type", "application/json")
+                .body(Body::from(login_payload.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res_login.status(), StatusCode::OK);
+    let body_login = axum::body::to_bytes(res_login.into_body(), usize::MAX).await.unwrap();
+    let login_res: serde_json::Value = serde_json::from_slice(&body_login).unwrap();
+    assert!(!login_res["token"].as_str().unwrap().is_empty());
+    assert_eq!(login_res["tier"].as_str().unwrap(), "T3");
+
+    // POST /api/auth/enterprise/login (empty password -> 401)
+    let bad_payload = serde_json::json!({
+        "username": "dr.kulkarni@hospital.local",
+        "password": ""
+    });
+    let res_bad = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/auth/enterprise/login")
+                .header("Content-Type", "application/json")
+                .body(Body::from(bad_payload.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res_bad.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn test_hospital_reports_endpoints() {
+    let (app, _) = test_app().await;
+
+    let res_rep = app
+        .clone()
+        .oneshot(Request::builder().uri("/api/reports/overview").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(res_rep.status(), StatusCode::OK);
+    let body_rep = axum::body::to_bytes(res_rep.into_body(), usize::MAX).await.unwrap();
+    let rep: serde_json::Value = serde_json::from_slice(&body_rep).unwrap();
+    assert!(rep["metrics"]["totalHospitalBeds"].as_u64().unwrap() > 0);
+    assert!(rep["departmentCensusBreakdown"].as_array().unwrap().len() >= 5);
+
+    let res_dept = app
+        .clone()
+        .oneshot(Request::builder().uri("/api/reports/department/dept-cardio").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(res_dept.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_research_federation_and_differential_privacy() {
+    let (app, _) = test_app().await;
+
+    // GET /api/federation/nodes
+    let res_nodes = app
+        .clone()
+        .oneshot(Request::builder().uri("/api/federation/nodes").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(res_nodes.status(), StatusCode::OK);
+
+    // POST /api/federation/ping
+    let res_ping = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/federation/ping")
+                .header("Content-Type", "application/json")
+                .body(Body::from(serde_json::json!({ "peer_url": "https://federation.aiims.edu/newloka" }).to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res_ping.status(), StatusCode::OK);
+
+    // POST /api/research/query
+    let query_payload = serde_json::json!({
+        "query_id": "q-diabetes-01",
+        "title": "Type 2 Diabetes HbA1c Cohort",
+        "inclusion_conditions": ["E11"],
+        "min_age": 40,
+        "max_age": 80,
+        "gender": null,
+        "epsilon": 0.5,
+        "k_anonymity": 5
+    });
+    let res_query = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/research/query")
+                .header("Content-Type", "application/json")
+                .body(Body::from(query_payload.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res_query.status(), StatusCode::OK);
+    let body_query = axum::body::to_bytes(res_query.into_body(), usize::MAX).await.unwrap();
+    let query_res: serde_json::Value = serde_json::from_slice(&body_query).unwrap();
+    assert_eq!(query_res["k_anonymity_guarantee"], 5);
+
+    // POST /api/research/export
+    let res_exp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/research/export")
+                .header("Content-Type", "application/json")
+                .body(Body::from(serde_json::json!({ "cohort_id": "cohort-001" }).to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res_exp.status(), StatusCode::OK);
+    let body_exp = axum::body::to_bytes(res_exp.into_body(), usize::MAX).await.unwrap();
+    let exp_res: serde_json::Value = serde_json::from_slice(&body_exp).unwrap();
+    assert!(exp_res["privacyGuarantees"]["piiStripped"].as_bool().unwrap());
+}
+
+#[tokio::test]
+async fn test_fhir_consent_and_directive_verification() {
+    let (app, _) = test_app().await;
+
+    // 1. POST /Consent (FHIR R4 resource)
+    let fhir_consent = serde_json::json!({
+        "resourceType": "Consent",
+        "id": "consent-fhir-001",
+        "status": "active",
+        "scope": {
+            "coding": [{ "system": "http://terminology.hl7.org/CodeSystem/consentscope", "code": "research" }]
+        },
+        "category": [{
+            "coding": [{ "system": "http://loinc.org", "code": "59284-0" }]
+        }]
+    });
+
+    let res_fhir = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/Consent")
+                .header("Content-Type", "application/fhir+json")
+                .body(Body::from(fhir_consent.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res_fhir.status(), StatusCode::CREATED);
+
+    // 2. GET /Consent/consent-fhir-001
+    let res_get_c = app
+        .clone()
+        .oneshot(Request::builder().uri("/Consent/consent-fhir-001").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(res_get_c.status(), StatusCode::OK);
+
+    // 3. POST /api/consent/directives
+    let directive_payload = serde_json::json!({
+        "id": "dir-test-01",
+        "patient_id": "pat-test-001",
+        "status": "active",
+        "scope": "research",
+        "purpose": "RESEARCH",
+        "recipient_node_id": "node-aiims-delhi",
+        "recipient_name": "AIIMS Central Research",
+        "data_categories": ["Observation", "Condition"],
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": "2027-12-31T23:59:59Z",
+        "revoked": false,
+        "consent_notes": "Patient authorized diabetes research"
+    });
+
+    let res_dir = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/consent/directives")
+                .header("Content-Type", "application/json")
+                .body(Body::from(directive_payload.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res_dir.status(), StatusCode::CREATED);
+
+    // 4. POST /api/consent/verify -> permitted: true
+    let verify_payload = serde_json::json!({
+        "patient_id": "pat-test-001",
+        "recipient_node_id": "node-aiims-delhi",
+        "purpose": "RESEARCH",
+        "resource_type": "Observation"
+    });
+    let res_ver = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/consent/verify")
+                .header("Content-Type", "application/json")
+                .body(Body::from(verify_payload.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res_ver.status(), StatusCode::OK);
+    let body_ver = axum::body::to_bytes(res_ver.into_body(), usize::MAX).await.unwrap();
+    let ver_res: serde_json::Value = serde_json::from_slice(&body_ver).unwrap();
+    assert!(ver_res["permitted"].as_bool().unwrap());
+
+    // 5. POST /api/consent/directives/dir-test-01/revoke
+    let res_revoke = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/consent/directives/dir-test-01/revoke")
+                .header("Content-Type", "application/json")
+                .body(Body::from(serde_json::json!({ "reason": "Patient requested opt-out" }).to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res_revoke.status(), StatusCode::OK);
+
+    // 6. POST /api/consent/verify -> permitted: false after revocation
+    let res_ver_after = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/consent/verify")
+                .header("Content-Type", "application/json")
+                .body(Body::from(verify_payload.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res_ver_after.status(), StatusCode::OK);
+    let body_after = axum::body::to_bytes(res_ver_after.into_body(), usize::MAX).await.unwrap();
+    let ver_after_res: serde_json::Value = serde_json::from_slice(&body_after).unwrap();
+    assert!(!ver_after_res["permitted"].as_bool().unwrap());
+}
+
+
 
 

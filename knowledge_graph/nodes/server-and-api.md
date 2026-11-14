@@ -1,0 +1,18 @@
+# HTTP Server Architecture and FHIR REST Endpoints
+
+## Epistemic Metadata
+- **Entity**: Axum HTTP Server & API Surface
+- **Layer**: Layer 2: Operational & Functional
+- **Status**: SHIPPED
+- **Domain**: Web Serving, REST Routing & Static Asset Embedding
+
+## Facts
+- Asynchronous Axum 0.7 Architecture: Engineered in Rust using Tokio and Axum 0.7, delivering non-blocking I/O, sub-millisecond response latencies, and high concurrent throughput suitable for local laptops up to busy hospital LAN hubs. [valid_from: 2026-06-11, recorded: 2026-11-13, source: newloka_server/src/lib.rs & Cargo.toml]
+- Zero-Dependency Binary Embedding: The complete single-page application frontend (`newloka_web/`) is compiled directly into the server executable via `rust-embed`, enabling the server to run as a single-file executable with zero runtime dependencies. [valid_from: 2026-06-11, recorded: 2026-11-13, source: newloka_server/Cargo.toml & newloka_server/src/lib.rs]
+- Comprehensive FHIR R4 REST API: Exposes full REST endpoints for Patient, Encounter, Observation, Condition, MedicationRequest, MedicationDispense, Procedure, AllergyIntolerance, Flag, DetectedIssue, Composition, CarePlan, FamilyMemberHistory, Immunization, DocumentReference, ServiceRequest, ImagingStudy, Specimen, MedicationAdministration, MedicationStatement, Whiteboard, Provenance, AuditEvent, and Consent. [valid_from: 2026-11-14, recorded: 2026-11-14, source: newloka_server/src/lib.rs & docs/API.md]
+- Subsystem & Enterprise Endpoints: Serves operational endpoints for `/config`, `/sync/manifest`, `/sync/delta`, `/users`, `/abac/evaluate`, `/auth/*`, `/api/system/*` in-app updater, `/api/rxpad/*` e-prescription workflows, `/api/config` system profile, `/api/prescriber/profile`, `/api/inpatient/census`, `/api/billing/invoices` (with ABAC data isolation), `/api/pharmacy/summary`, `/api/departments` hierarchy, `/api/departments/transfers` SBAR workflows, `/api/reports/overview` and department metrics, `/api/federation/nodes` & `/api/federation/ping` mesh telemetry, `/api/research/query` & `/api/research/export` differential privacy, `/api/consent/directives` enforcement, and `/api/auth/enterprise/login` LDAP authentication. [valid_from: 2026-11-14, recorded: 2026-11-14, source: newloka_server/src/lib.rs]
+- Deterministic Clinical Demo Seeding: In demo mode (`--features demo`), the server automatically initializes 20 realistic patient records with Indian demographics, encounters, vitals, lab panels (HbA1c with LOINC interpretation), and 10 signed audit events on the first launch. [valid_from: 2026-06-11, recorded: 2026-11-13, source: newloka_server/src/demo.rs]
+- CORS & Security Middleware: Preconfigured with permissive local-network CORS (supporting consultation tablet clients) and tracing middleware via `tower_http`. [valid_from: 2026-06-11, recorded: 2026-11-13, source: newloka_server/src/lib.rs]
+
+## Superseded
+(none)

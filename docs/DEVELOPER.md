@@ -42,6 +42,8 @@ newloka/
     ARCHITECTURE.md
     SECURITY.md
     DEPLOYMENT.md
+    MISSING_COMPONENTS_AND_REQUIREMENTS.md
+    role_ui_matrix.md
 
 ## Building
 

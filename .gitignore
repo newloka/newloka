@@ -26,6 +26,7 @@ backups/
 *.json
 !firebase.json
 !.firebaserc
+!knowledge_graph/graph.json
 
 # Logs
 *.log

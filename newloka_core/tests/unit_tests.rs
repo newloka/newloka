@@ -291,6 +291,79 @@ mod tests {
     }
 
     #[test]
+    fn test_abac_billing_role_clinical_data_control() {
+        let req_condition = abac::PolicyRequest {
+            subject: abac::Subject {
+                user_id: "user-cashier".to_string(),
+                roles: vec![identity::Role::Billing],
+                department_id: Some("finance".to_string()),
+                team_ids: vec![],
+                session_valid: true,
+                emergency_override: false,
+                lab_affiliations: vec![],
+            },
+            resource: abac::Resource {
+                resource_type: "Condition".to_string(),
+                resource_id: "cond-101".to_string(),
+                patient_id: Some("pat-001".to_string()),
+                department_id: Some("dept-a".to_string()),
+                owner_team_ids: vec![],
+                sensitivity: abac::SensitivityLevel::Normal,
+                lab_department: None,
+            },
+            action: abac::Action::Read,
+            context: abac::Context {
+                tier: DeploymentTier::T2_RuralHospital,
+                offline: false,
+                peer_node_id: None,
+                time_of_day: "11:00".to_string(),
+                lab_config: cpoe::LabConfiguration::default(),
+                patient_has_lab_order: false,
+            },
+        };
+        let decision = abac::PolicyEngine::evaluate(&req_condition);
+        match decision {
+            abac::PolicyDecision::Deny { reason } => {
+                assert!(reason.contains("Confidential clinical diagnostic charts are restricted"));
+            }
+            _ => panic!("Billing staff must not have read access to confidential Condition charts"),
+        }
+    }
+
+    #[test]
+    fn test_abac_billing_cannot_prescribe() {
+        let req_med = abac::PolicyRequest {
+            subject: abac::Subject {
+                user_id: "user-cashier".to_string(),
+                roles: vec![identity::Role::Billing],
+                department_id: Some("finance".to_string()),
+                team_ids: vec![],
+                session_valid: true,
+                emergency_override: false,
+                lab_affiliations: vec![],
+            },
+            resource: abac::Resource {
+                resource_type: "MedicationRequest".to_string(),
+                resource_id: "med-rx-001".to_string(),
+                patient_id: Some("pat-001".to_string()),
+                department_id: Some("finance".to_string()),
+                owner_team_ids: vec![],
+                sensitivity: abac::SensitivityLevel::Normal,
+                lab_department: None,
+            },
+            action: abac::Action::Create,
+            context: abac::Context::default(),
+        };
+        let decision = abac::PolicyEngine::evaluate(&req_med);
+        match decision {
+            abac::PolicyDecision::Deny { reason } => {
+                assert!(reason.contains("prescribing"));
+            }
+            _ => panic!("Billing staff must not be permitted to create MedicationRequest"),
+        }
+    }
+
+    #[test]
     fn test_sync_vector_clock() {
         let mut engine = sync::SyncEngine::new("node-a".to_string());
         let vc1 = engine.tick();
@@ -395,5 +468,191 @@ mod tests {
         let json = serde_json::to_string(&resource).unwrap();
         let parsed: fhir::FhirResource = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.id(), "pat-003");
+    }
+
+    #[test]
+    fn test_consent_engine_permit_and_deny() {
+        use newloka_core::consent::{ConsentDirective, ConsentEngine, ConsentDecision};
+        let now = chrono::Utc::now();
+        let directive = ConsentDirective {
+            id: "consent-001".into(),
+            patient_id: "pat-100".into(),
+            status: "active".into(),
+            scope: "research".into(),
+            purpose: "RESEARCH".into(),
+            recipient_node_id: Some("node-research-federation".into()),
+            recipient_name: Some("National Medical Research Grid".into()),
+            data_categories: vec!["Observation".into(), "Condition".into()],
+            valid_from: now - chrono::Duration::days(10),
+            valid_to: now + chrono::Duration::days(355),
+            revoked: false,
+            revocation_reason: None,
+            revoked_at: None,
+            digital_signature: Some("sig-ed25519-valid".into()),
+            consent_notes: Some("Patient agreed to oncology study data sharing".into()),
+        };
+
+        let directives = vec![directive];
+
+        // 1. Matching purpose & recipient -> Permit
+        let decision = ConsentEngine::check_consent(
+            &directives,
+            "pat-100",
+            "node-research-federation",
+            "RESEARCH",
+            "Observation",
+            now,
+        );
+        assert!(matches!(decision, ConsentDecision::Permit { .. }));
+
+        // 2. Mismatched purpose -> Deny
+        let deny_purpose = ConsentEngine::check_consent(
+            &directives,
+            "pat-100",
+            "node-research-federation",
+            "COMMERCIAL_MARKETING",
+            "Observation",
+            now,
+        );
+        assert!(matches!(deny_purpose, ConsentDecision::Deny { .. }));
+
+        // 3. Mismatched recipient -> Deny
+        let deny_recipient = ConsentEngine::check_consent(
+            &directives,
+            "pat-100",
+            "unauthorized-node",
+            "RESEARCH",
+            "Observation",
+            now,
+        );
+        assert!(matches!(deny_recipient, ConsentDecision::Deny { .. }));
+
+        // 4. Data category not consented (e.g. MedicationRequest) -> Deny
+        let deny_category = ConsentEngine::check_consent(
+            &directives,
+            "pat-100",
+            "node-research-federation",
+            "RESEARCH",
+            "MedicationRequest",
+            now,
+        );
+        assert!(matches!(deny_category, ConsentDecision::Deny { .. }));
+    }
+
+    #[test]
+    fn test_differential_privacy_and_deidentification() {
+        use newloka_core::federation::DifferentialPrivacyEngine;
+
+        // k-anonymity: < 5 suppressed
+        assert_eq!(DifferentialPrivacyEngine::apply_k_anonymity(3, 5), None);
+        assert_eq!(DifferentialPrivacyEngine::apply_k_anonymity(5, 5), Some(5));
+        assert_eq!(DifferentialPrivacyEngine::apply_k_anonymity(120, 5), Some(120));
+
+        // Laplace perturbation
+        let raw_val = 50.0;
+        let perturbed = DifferentialPrivacyEngine::add_laplace_noise(raw_val, 1.0, 0.5, Some(0.1));
+        assert!(perturbed > 0.0);
+        assert_ne!(perturbed, raw_val);
+
+        // De-identification
+        let meta = fhir::Meta::new("node-1".to_string(), "user-a".to_string());
+        let patient = fhir::Patient {
+            id: "pat-secret-123".to_string(),
+            meta,
+            identifier: vec![],
+            active: true,
+            name: vec![fhir::HumanName {
+                use_field: None,
+                family: "Sharma".to_string(),
+                given: vec!["Ramesh".to_string()],
+                prefix: vec![],
+            }],
+            telecom: vec![],
+            gender: "male".to_string(),
+            birth_date: "1968-07-15".to_string(),
+            address: vec![],
+            marital_status: None,
+            general_practitioner: vec![],
+            managing_organization: None,
+            deceased_boolean: None,
+            deceased_date_time: None,
+        };
+
+        let deid = DifferentialPrivacyEngine::deidentify_patient(
+            &patient,
+            vec!["E11 - Type 2 Diabetes".into()],
+            vec!["Metformin 500mg".into()],
+            vec!["HbA1c 7.8%".into()],
+            "institutional-salt-42",
+        );
+
+        // Verify direct identifiers are absent and age bracket is computed
+        assert!(deid.pseudo_id.starts_with("SUBJ-"));
+        assert!(!deid.pseudo_id.contains("pat-secret-123"));
+        assert_eq!(deid.gender, "male");
+        assert_eq!(deid.conditions.len(), 1);
+        assert_eq!(deid.medications.len(), 1);
+    }
+
+    #[test]
+    fn test_department_defaults_and_transfers() {
+        use newloka_core::department::{default_departments, DepartmentTransferRequest, TransferStatus};
+
+        let depts = default_departments();
+        assert!(depts.len() >= 8);
+        assert!(depts.iter().any(|d| d.code == "CARD"));
+        assert!(depts.iter().any(|d| d.code == "EMERG"));
+        assert!(depts.iter().any(|d| d.code == "ICU"));
+
+        let transfer = DepartmentTransferRequest {
+            id: "tr-001".into(),
+            patient_id: "pat-500".into(),
+            patient_name: "Anita Deshmukh".into(),
+            mrn: Some("MRN-7821".into()),
+            source_department: "dept-emerg".into(),
+            target_department: "dept-cardio".into(),
+            requesting_clinician_id: "user-er-doc".into(),
+            requesting_clinician_name: "Dr. ER Attending".into(),
+            accepting_clinician_id: None,
+            accepting_clinician_name: None,
+            assigned_bed: None,
+            urgency: "urgent".into(),
+            reason: "Non-ST Elevation Myocardial Infarction".into(),
+            clinical_handover_notes: "SBAR: 54F presenting with crushing substernal chest pain. Trop I positive.".into(),
+            active_medications_summary: vec!["Aspirin 325mg stat".into(), "Clopidogrel 300mg stat".into()],
+            pending_orders_summary: vec!["Urgent Echo".into()],
+            allergies_summary: vec!["Penicillin (Severe)".into()],
+            status: TransferStatus::Requested,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+            handover_signed_by: Some("Dr. ER Attending".into()),
+        };
+
+        assert_eq!(transfer.status, TransferStatus::Requested);
+        assert_eq!(transfer.status.as_str(), "requested");
+    }
+
+    #[test]
+    fn test_enterprise_directory_ldap_auth() {
+        use newloka_core::identity::EnterpriseDirectoryConfig;
+
+        let mut config = EnterpriseDirectoryConfig::default();
+        config.enabled = true;
+
+        // Valid doctor authentication
+        let auth_doc = config.authenticate("dr.sharma@hospital.local", "securepassword123").unwrap();
+        assert!(auth_doc.authenticated);
+        assert!(auth_doc.roles.contains(&newloka_core::identity::Role::Clinician));
+
+        // Valid admin authentication
+        let auth_admin = config.authenticate("admin-sys@hospital.local", "adminpass").unwrap();
+        assert!(auth_admin.roles.contains(&newloka_core::identity::Role::Administrator));
+
+        // Valid cardio specialist authentication
+        let auth_cardio = config.authenticate("cardio.lead@hospital.local", "docpass").unwrap();
+        assert_eq!(auth_cardio.department_id, Some("dept-cardio".into()));
+
+        // Empty password should fail
+        assert!(config.authenticate("dr.sharma@hospital.local", "").is_none());
     }
 }

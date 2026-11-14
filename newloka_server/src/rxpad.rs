@@ -486,7 +486,12 @@ pub async fn list_prescriptions(
     State(state): State<Arc<RwLock<AppState>>>,
 ) -> (StatusCode, Json<Vec<RxPadPrescriptionSummary>>) {
     let state = state.read().await;
+    let summaries = get_prescription_summaries(&state).await;
+    (StatusCode::OK, Json(summaries))
+}
 
+/// Helper to fetch all prescription summaries from storage.
+pub async fn get_prescription_summaries(state: &AppState) -> Vec<RxPadPrescriptionSummary> {
     let docs = state
         .storage
         .search_json("DocumentReference", None)
@@ -626,8 +631,8 @@ pub async fn list_prescriptions(
         }
     }
 
-    summaries.sort_by(|a, b| b.serial.cmp(&a.serial));
-    (StatusCode::OK, Json(summaries))
+    summaries.sort_by_key(|b| std::cmp::Reverse(b.serial));
+    summaries
 }
 
 /// Retrieve full details of a specific prescription.

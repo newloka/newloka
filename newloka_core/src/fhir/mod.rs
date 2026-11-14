@@ -66,6 +66,7 @@ pub enum FhirResource {
     AuditEvent(AuditEvent),
     Provenance(Provenance),
     Bundle(Bundle),
+    Consent(Consent),
 }
 
 impl FhirResource {
@@ -92,6 +93,7 @@ impl FhirResource {
             FhirResource::AuditEvent(r) => &r.id,
             FhirResource::Provenance(r) => &r.id,
             FhirResource::Bundle(r) => &r.id,
+            FhirResource::Consent(r) => &r.id,
         }
     }
 
@@ -118,6 +120,7 @@ impl FhirResource {
             FhirResource::AuditEvent(r) => &r.meta,
             FhirResource::Provenance(r) => &r.meta,
             FhirResource::Bundle(r) => &r.meta,
+            FhirResource::Consent(r) => &r.meta,
         }
     }
 
@@ -144,6 +147,7 @@ impl FhirResource {
             FhirResource::AuditEvent(_) => "AuditEvent",
             FhirResource::Provenance(_) => "Provenance",
             FhirResource::Bundle(_) => "Bundle",
+            FhirResource::Consent(_) => "Consent",
         }
     }
 }
@@ -962,4 +966,40 @@ pub struct DocumentReference {
 pub struct DocumentReferenceContent {
     pub attachment: Option<Attachment>,
     pub format: Option<Coding>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Consent {
+    pub id: String,
+    pub meta: Meta,
+    pub status: String,
+    pub scope: CodeableConcept,
+    #[serde(default)]
+    pub category: Vec<CodeableConcept>,
+    pub patient: Option<Reference>,
+    pub date_time: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub performer: Vec<Reference>,
+    #[serde(default)]
+    pub organization: Vec<Reference>,
+    pub policy_rule: Option<CodeableConcept>,
+    pub provision: Option<ConsentProvision>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ConsentProvision {
+    pub type_: Option<String>,
+    pub period: Option<Period>,
+    #[serde(default)]
+    pub actor: Vec<Reference>,
+    #[serde(default)]
+    pub action: Vec<CodeableConcept>,
+    #[serde(default)]
+    pub security_label: Vec<Coding>,
+    #[serde(default)]
+    pub purpose: Vec<Coding>,
+    #[serde(default)]
+    pub data_type: Vec<Coding>,
 }

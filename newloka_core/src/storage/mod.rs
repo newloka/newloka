@@ -75,7 +75,7 @@ impl StorageEngine {
             #[cfg(windows)]
             let file_path = if file_path.len() >= 3
                 && (file_path.starts_with('/') || file_path.starts_with('\\'))
-                && file_path.chars().nth(1).map_or(false, |c| c.is_ascii_alphabetic())
+                && file_path.chars().nth(1).is_some_and(|c| c.is_ascii_alphabetic())
                 && file_path.chars().nth(2) == Some(':')
             {
                 &file_path[1..]

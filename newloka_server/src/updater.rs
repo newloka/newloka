@@ -443,18 +443,8 @@ fn find_matching_asset<'a>(
     current_os: &str,
     current_arch: &str,
 ) -> Option<&'a GitHubAsset> {
-    let os_kw = match current_os {
-        "windows" => "windows",
-        "linux" => "linux",
-        "macos" => "macos",
-        _ => current_os,
-    };
-
-    let arch_kw = match current_arch {
-        "x86_64" => "x86_64",
-        "aarch64" => "aarch64",
-        _ => current_arch,
-    };
+    let os_kw = current_os;
+    let arch_kw = current_arch;
 
     // First try: both OS and arch in filename
     for a in assets {

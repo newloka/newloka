@@ -19,6 +19,7 @@ function url(path) {
 function headers() {
     const h = { 'Content-Type': 'application/fhir+json' };
     if (_cfg.token) h['Authorization'] = `Bearer ${_cfg.token}`;
+    if (_cfg.sessionUserRole) h['x-user-role'] = _cfg.sessionUserRole;
     return h;
 }
 
@@ -671,6 +672,306 @@ export async function updateRxPadFormulary(items) {
     if (!res.ok) {
         throw new Error(`Failed to update formulary (${res.status})`);
     }
+    return res.json();
+}
+
+export async function syncRxPadPrescription(payload) {
+    const res = await fetchWithRetry(url('/api/rxpad/sync'), {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            ...(headers())
+        },
+        body: JSON.stringify(payload)
+    }, 1, 15000);
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Failed to sync prescription (${res.status})`);
+    }
+    return res.json();
+}
+
+export async function getSystemConfig() {
+    const res = await fetchWithRetry(url('/api/config'), {
+        method: 'GET',
+        headers: headers()
+    }, 2, 8000);
+    if (!res.ok) throw new Error(`Failed to fetch system config (${res.status})`);
+    return res.json();
+}
+
+export async function saveSystemConfig(cfg) {
+    const res = await fetchWithRetry(url('/api/config'), {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            ...(headers())
+        },
+        body: JSON.stringify(cfg)
+    }, 1, 10000);
+    if (!res.ok) throw new Error(`Failed to save system config (${res.status})`);
+    return res.json();
+}
+
+export async function getPrescriberProfile() {
+    const res = await fetchWithRetry(url('/api/prescriber/profile'), {
+        method: 'GET',
+        headers: headers()
+    }, 2, 8000);
+    if (!res.ok) throw new Error(`Failed to fetch prescriber profile (${res.status})`);
+    return res.json();
+}
+
+export async function savePrescriberProfile(profile) {
+    const res = await fetchWithRetry(url('/api/prescriber/profile'), {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            ...(headers())
+        },
+        body: JSON.stringify(profile)
+    }, 1, 10000);
+    if (!res.ok) throw new Error(`Failed to save prescriber profile (${res.status})`);
+    return res.json();
+}
+
+export async function getInpatientCensus() {
+    const res = await fetchWithRetry(url('/api/inpatient/census'), {
+        method: 'GET',
+        headers: headers()
+    }, 2, 8000);
+    if (!res.ok) throw new Error(`Failed to fetch inpatient census (${res.status})`);
+    return res.json();
+}
+
+export async function saveInpatientCensus(census) {
+    const res = await fetchWithRetry(url('/api/inpatient/census'), {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            ...(headers())
+        },
+        body: JSON.stringify(census)
+    }, 1, 10000);
+    if (!res.ok) throw new Error(`Failed to save inpatient census (${res.status})`);
+    return res.json();
+}
+
+export async function getBillingInvoices() {
+    const res = await fetchWithRetry(url('/api/billing/invoices'), {
+        method: 'GET',
+        headers: headers()
+    }, 2, 8000);
+    if (!res.ok) throw new Error(`Failed to fetch billing invoices (${res.status})`);
+    return res.json();
+}
+
+export async function createBillingInvoice(inv) {
+    const res = await fetchWithRetry(url('/api/billing/invoices'), {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            ...(headers())
+        },
+        body: JSON.stringify(inv)
+    }, 1, 10000);
+    if (!res.ok) throw new Error(`Failed to create invoice (${res.status})`);
+    return res.json();
+}
+
+export async function payBillingInvoice(id, paymentInfo = {}) {
+    const res = await fetchWithRetry(url(`/api/billing/invoices/${encodeURIComponent(id)}/pay`), {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            ...(headers())
+        },
+        body: JSON.stringify(paymentInfo)
+    }, 1, 10000);
+    if (!res.ok) throw new Error(`Failed to record payment (${res.status})`);
+    return res.json();
+}
+
+export async function getPharmacySummary() {
+    const res = await fetchWithRetry(url('/api/pharmacy/summary'), {
+        method: 'GET',
+        headers: headers()
+    }, 2, 8000);
+    if (!res.ok) throw new Error(`Failed to fetch pharmacy summary (${res.status})`);
+    return res.json();
+}
+
+/* ------------------------------------------------------------------ */
+/* Tier T3: Departments & Inter-Department Patient Transfers          */
+/* ------------------------------------------------------------------ */
+
+export async function getDepartments() {
+    const res = await fetchWithRetry(url('/api/departments'), { method: 'GET', headers: headers() }, 2, 8000);
+    if (!res.ok) throw new Error(`Failed to fetch departments (${res.status})`);
+    return res.json();
+}
+
+export async function saveDepartment(dept) {
+    const res = await fetchWithRetry(url('/api/departments'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers() },
+        body: JSON.stringify(dept)
+    }, 1, 10000);
+    if (!res.ok) throw new Error(`Failed to save department (${res.status})`);
+    return res.json();
+}
+
+export async function getTransfers() {
+    const res = await fetchWithRetry(url('/api/departments/transfers'), { method: 'GET', headers: headers() }, 2, 8000);
+    if (!res.ok) throw new Error(`Failed to fetch transfers (${res.status})`);
+    return res.json();
+}
+
+export async function createTransfer(transfer) {
+    const res = await fetchWithRetry(url('/api/departments/transfers'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers() },
+        body: JSON.stringify(transfer)
+    }, 1, 10000);
+    if (!res.ok) throw new Error(`Failed to create transfer (${res.status})`);
+    return res.json();
+}
+
+export async function acceptTransfer(id, payload) {
+    const res = await fetchWithRetry(url(`/api/departments/transfers/${encodeURIComponent(id)}/accept`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers() },
+        body: JSON.stringify(payload)
+    }, 1, 10000);
+    if (!res.ok) throw new Error(`Failed to accept transfer (${res.status})`);
+    return res.json();
+}
+
+export async function rejectTransfer(id, payload) {
+    const res = await fetchWithRetry(url(`/api/departments/transfers/${encodeURIComponent(id)}/reject`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers() },
+        body: JSON.stringify(payload)
+    }, 1, 10000);
+    if (!res.ok) throw new Error(`Failed to reject transfer (${res.status})`);
+    return res.json();
+}
+
+export async function getHospitalReports() {
+    const res = await fetchWithRetry(url('/api/reports/overview'), { method: 'GET', headers: headers() }, 2, 8000);
+    if (!res.ok) throw new Error(`Failed to fetch hospital reports (${res.status})`);
+    return res.json();
+}
+
+/* ------------------------------------------------------------------ */
+/* Tier T4: Research Federation & Differential Privacy                */
+/* ------------------------------------------------------------------ */
+
+export async function getFederationNodes() {
+    const res = await fetchWithRetry(url('/api/federation/nodes'), { method: 'GET', headers: headers() }, 2, 8000);
+    if (!res.ok) throw new Error(`Failed to fetch federation nodes (${res.status})`);
+    return res.json();
+}
+
+export async function registerFederationNode(node) {
+    const res = await fetchWithRetry(url('/api/federation/nodes'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers() },
+        body: JSON.stringify(node)
+    }, 1, 10000);
+    if (!res.ok) throw new Error(`Failed to register federation node (${res.status})`);
+    return res.json();
+}
+
+export async function pingFederationNode(peerUrl) {
+    const res = await fetchWithRetry(url('/api/federation/ping'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers() },
+        body: JSON.stringify({ peer_url: peerUrl })
+    }, 1, 6000);
+    if (!res.ok) throw new Error(`Failed to ping node (${res.status})`);
+    return res.json();
+}
+
+export async function executeResearchQuery(query) {
+    const res = await fetchWithRetry(url('/api/research/query'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers() },
+        body: JSON.stringify(query)
+    }, 1, 10000);
+    if (!res.ok) throw new Error(`Failed to execute research query (${res.status})`);
+    return res.json();
+}
+
+export async function getResearchCohorts() {
+    const res = await fetchWithRetry(url('/api/research/cohorts'), { method: 'GET', headers: headers() }, 2, 8000);
+    if (!res.ok) throw new Error(`Failed to fetch research cohorts (${res.status})`);
+    return res.json();
+}
+
+export async function createResearchCohort(cohort) {
+    const res = await fetchWithRetry(url('/api/research/cohorts'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers() },
+        body: JSON.stringify(cohort)
+    }, 1, 10000);
+    if (!res.ok) throw new Error(`Failed to create research cohort (${res.status})`);
+    return res.json();
+}
+
+export async function exportResearchBundle(query = {}) {
+    const res = await fetchWithRetry(url('/api/research/export'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers() },
+        body: JSON.stringify(query)
+    }, 1, 15000);
+    if (!res.ok) throw new Error(`Failed to export research bundle (${res.status})`);
+    return res.json();
+}
+
+/* ------------------------------------------------------------------ */
+/* Tier T4: Patient Consent Directives & Dynamic Verification         */
+/* ------------------------------------------------------------------ */
+
+export async function getConsentDirectives(patientId = null) {
+    const path = patientId ? `/api/consent/directives?patient_id=${encodeURIComponent(patientId)}` : '/api/consent/directives';
+    const res = await fetchWithRetry(url(path), { method: 'GET', headers: headers() }, 2, 8000);
+    if (!res.ok) throw new Error(`Failed to fetch consent directives (${res.status})`);
+    return res.json();
+}
+
+export async function createConsentDirective(directive) {
+    const res = await fetchWithRetry(url('/api/consent/directives'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers() },
+        body: JSON.stringify(directive)
+    }, 1, 10000);
+    if (!res.ok) throw new Error(`Failed to create consent directive (${res.status})`);
+    return res.json();
+}
+
+export async function revokeConsentDirective(id, reason = "Patient requested opt-out") {
+    const res = await fetchWithRetry(url(`/api/consent/directives/${encodeURIComponent(id)}/revoke`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers() },
+        body: JSON.stringify({ reason })
+    }, 1, 10000);
+    if (!res.ok) throw new Error(`Failed to revoke consent directive (${res.status})`);
+    return res.json();
+}
+
+export async function verifyConsent(patientId, recipientNodeId, purpose, resourceType) {
+    const res = await fetchWithRetry(url('/api/consent/verify'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers() },
+        body: JSON.stringify({
+            patient_id: patientId,
+            recipient_node_id: recipientNodeId,
+            purpose,
+            resource_type: resourceType
+        })
+    }, 1, 6000);
+    if (!res.ok) throw new Error(`Failed to verify consent (${res.status})`);
     return res.json();
 }
 
