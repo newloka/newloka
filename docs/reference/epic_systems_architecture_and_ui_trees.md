@@ -16,7 +16,7 @@ Epic Hyperspace structures the user interface into four concentric, context-pres
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
-│ [Epic ▼] [In Basket (4)] [Schedule: Dr. Kulkarni] [Pt: Ramesh Sharma] [Pt: Anita D.]   │
+│ [Epic ▼] [In Basket (4)] [Schedule: Dr. Mercer] [Pt: Ramesh Sharma] [Pt: Anita D.]   │
 ├──────────────┬─────────────────────────────────────────────────────────────────────────┤
 │ STORYBOARD   │ ACTIVITY TABS: [Chart Review] [SnapShot] [Flowsheets] [Notes] [Orders]  │
 │ (220-250px)  ├─────────────────────────────────────────────────────────────────────────┤

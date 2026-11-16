@@ -11,9 +11,10 @@ path = "src/main.rs"
 
 [features]
 default = ["demo"]
-demo = []
+demo = ["dep:newloka_demo"]
 
 [dependencies]
+newloka_demo = { path = "../newloka_demo", optional = true }
 clap = { workspace = true }
 rand = { workspace = true }
 newloka_core = { path = "../newloka_core" }

@@ -27,6 +27,10 @@ backups/
 !firebase.json
 !.firebaserc
 !knowledge_graph/graph.json
+!newloka_demo/fixtures/manifest.json
+
+# Build & Dev Targets
+/target_dev
 
 # Logs
 *.log

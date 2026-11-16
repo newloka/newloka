@@ -1,0 +1,2272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E-Prescription Pad Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="html2pdf.bundle.min.js"></script>
+    <script>
+        if (typeof html2pdf === 'undefined') {
+            document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"><\/script>');
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        input, textarea {
+            background-color: #f8fafc;
+            border: 1px dashed #cbd5e1;
+            border-radius: 4px;
+            padding: 4px 8px;
+            transition: all 0.2s;
+            width: 100%;
+        }
+
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: #3b82f6;
+            background-color: #ffffff;
+        }
+
+        textarea { resize: vertical; }
+
+        select.rx-dd {
+            width: 100%;
+            padding: 4px 8px;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            background-color: #f8fafc;
+            font-size: 0.875rem;
+        }
+
+        @media print {
+            @page {
+                size: A4 portrait;
+                margin: 0;
+            }
+            body {
+                background-color: #f8f9f9 !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+            .no-print, #statusBar, .modal-bg, .toast {
+                display: none !important;
+            }
+            /* Strip borders and backgrounds from inputs for a clean printed look */
+            input, textarea, select {
+                border: none !important;
+                background-color: transparent !important;
+                padding: 0 !important;
+                border-radius: 0 !important;
+                resize: none !important;
+                box-shadow: none !important;
+                color: #111827 !important;
+            }
+            input::placeholder, textarea::placeholder {
+                color: transparent !important;
+            }
+            .shadow-xl {
+                box-shadow: none !important;
+            }
+            .min-h-screen {
+                min-height: auto !important;
+                padding: 0 !important;
+            }
+            .page-container {
+                width: 100% !important;
+                max-width: 100% !important;
+                margin: 0 !important;
+                padding: 1.5cm !important; /* Standard print margin */
+                background-color: #f8f9f9 !important;
+                box-shadow: none !important;
+                box-sizing: border-box !important;
+            }
+            select {
+                appearance: none;
+                -webkit-appearance: none;
+            }
+            .ac-list {
+                display: none !important;
+            }
+            .signature-image {
+                display: block !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                max-height: 4rem !important;
+                object-fit: contain !important;
+                mix-blend-mode: normal !important;
+                filter: none !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+            header, section, main, footer, .med-row {
+                break-inside: avoid;
+                page-break-inside: avoid;
+            }
+            textarea#diagnosis {
+                overflow: visible !important;
+                height: auto !important;
+                min-height: 4rem;
+            }
+        }
+
+        .signature-image {
+            display: block;
+            max-height: 4rem;
+            object-fit: contain;
+        }
+
+        .rx-symbol { font-size: 2.5rem; font-weight: 700; line-height: 1; font-family: serif; }
+
+        
+        /* Direct PDF Export Styling (Clean rendering without dashed lines or UI controls) */
+        .exporting-pdf {
+            background-color: #f8f9f9 !important;
+            box-shadow: none !important;
+        }
+        .exporting-pdf .no-print {
+            display: none !important;
+        }
+        .exporting-pdf input,
+        .exporting-pdf textarea,
+        .exporting-pdf select {
+            border: none !important;
+            background-color: transparent !important;
+            padding: 0 !important;
+            border-radius: 0 !important;
+            resize: none !important;
+            box-shadow: none !important;
+            color: #111827 !important;
+        }
+        .exporting-pdf input::placeholder,
+        .exporting-pdf textarea::placeholder {
+            color: transparent !important;
+        }
+        .exporting-pdf .signature-image {
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            mix-blend-mode: normal !important;
+            filter: none !important;
+        }
+
+        /* Autocomplete */
+        .ac-wrap { position: relative; }
+        .ac-list {
+            position: absolute; z-index: 60; left: 0; right: 0; top: 100%;
+            background: #fff; border: 1px solid #cbd5e1; border-radius: 6px;
+            max-height: 220px; overflow-y: auto; box-shadow: 0 8px 24px rgba(0,0,0,.12);
+            display: none;
+        }
+        .ac-item { padding: 6px 10px; font-size: 0.85rem; cursor: pointer; }
+        .ac-item:hover, .ac-item.active { background: #eff6ff; }
+        .ac-item small { color: #6b7280; }
+
+        /* Modal */
+        .modal-bg {
+            position: fixed; inset: 0; background: rgba(15,23,42,.45); z-index: 90;
+            display: none; align-items: center; justify-content: center;
+        }
+        .modal-bg.open { display: flex; }
+
+        .toast {
+            position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+            background: #1e293b; color: #fff; padding: 10px 20px; border-radius: 8px;
+            font-size: 0.9rem; z-index: 100; display: none; box-shadow: 0 8px 24px rgba(0,0,0,.25);
+        }
+    </style>
+</head>
+<body class="min-h-screen py-8 flex flex-col items-center">
+
+    <!-- Toolbar (Hidden on Print) -->
+    <div class="no-print fixed top-4 right-4 flex gap-2.5 z-50">
+        <button onclick="newPrescription()" title="Clear pad for next patient" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg shadow-lg font-semibold flex items-center gap-2 transition-colors">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+            ➕ New Rx
+        </button>
+        <button onclick="openLoad()" class="bg-gray-700 hover:bg-gray-800 text-white px-4 py-2 rounded-lg shadow-lg font-semibold flex items-center gap-2 transition-colors">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
+            📂 Load
+        </button>
+        <button id="savePdfBtn" onclick="savePrescriptionPdf()" title="Direct Save PDF to Clinic folder &amp; downloads (no Microsoft Print to PDF dialog)" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow-lg font-semibold flex items-center gap-2 transition-colors">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+            💾 Save PDF
+        </button>
+        <button id="printBtn" onclick="printPrescriptionNative()" title="Print to physical printer (Ctrl+P)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg shadow-lg font-semibold flex items-center gap-2 transition-colors">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+            🖨️ Print
+        </button>
+        <button onclick="openTemplateModal()" title="Customise Pad Template &amp; Box Bindings" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-lg shadow-lg font-semibold flex items-center gap-1.5 transition-colors">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+            ⚙️ Template
+        </button>
+        <button onclick="openFsi()" title="Formulary / order defaults" class="bg-white hover:bg-gray-100 text-gray-800 border border-gray-300 px-4 py-2 rounded-lg shadow font-semibold transition-colors">⚙ Formulary</button>
+    </div>
+
+    <!-- Main A4 Canvas -->
+    <div class="page-container w-[210mm] min-h-[297mm] bg-[#f8f9f9] shadow-xl relative text-gray-800 p-10 flex flex-col">
+
+        <!-- HEADER -->
+        <header id="wrapHeader" class="flex justify-between items-start border-b-2 border-gray-800 pb-6 mb-6">
+            <div class="w-1/3" id="wrapClinicLogo">
+                <img id="clinicLogoImg" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjAiIGhlaWdodD0iMTIwIiB2aWV3Qm94PSIwIDAgMTIwIDEyMCI+PHJlY3Qgd2lkdGg9IjEyMCIgaGVpZ2h0PSIxMjAiIHJ4PSIyNCIgZmlsbD0iIzBmNzY2ZSIvPjxwYXRoIGQ9Ik0gNjAgMjUgTCA2MCA5NSBNIDI1IDYwIEwgOTUgNjAiIHN0cm9rZT0iI2ZmZmZmZiIgc3Ryb2tlLXdpZHRoPSIxNCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+PGNpcmNsZSBjeD0iNjAiIGN5PSI2MCIgcj0iMTQiIGZpbGw9IiMxNGI4YTYiLz48L3N2Zz4=" alt="Clinic Logo" class="h-24 object-contain">
+            </div>
+            <div class="w-2/3 text-right" id="wrapDoctorHeader">
+                <div id="wrapClinicName" class="mb-1">
+                    <input type="text" class="text-xl font-bold text-gray-900 text-right" value="New Loka Clinic" id="clinicName" placeholder="Clinic / Entity Name">
+                </div>
+                <div id="wrapClinicSub" class="mb-1">
+                    <input type="text" class="text-sm text-gray-600 text-right" value="" id="clinicSubtitle" placeholder="Subtitle / Specialty Focus">
+                </div>
+                <div id="wrapDocName" class="mb-1">
+                    <input type="text" class="text-3xl font-bold text-gray-900 text-right" value="Dr. Alex Mercer" id="doctorName" placeholder="Doctor Name">
+                </div>
+                <div id="wrapDocQual" class="mb-1">
+                    <input type="text" class="text-lg font-semibold text-gray-700 text-right" value="MBBS, MD" id="doctorQual" placeholder="Qualifications">
+                </div>
+                <div id="wrapDocReg" class="mb-1">
+                    <input type="text" class="text-sm text-gray-600 text-right" value="Reg No: NL-DOC-2026-001" id="doctorReg" placeholder="Registration Number">
+                </div>
+                <div id="wrapDocDept" style="display: none;" class="mb-1">
+                    <input type="text" class="text-sm text-gray-600 text-right" value="" id="doctorDept" placeholder="Department">
+                </div>
+                <div id="wrapClinicContact">
+                    <textarea class="text-sm text-gray-500 text-right h-12" id="clinicContact" placeholder="Clinic Address / Contact Info">2020100, Murbad Road, Kalyan, Thane, MH&#13;&#10;Phone: +91-7738090349 | Email: yashkulkarni2020100@gmail.com</textarea>
+                </div>
+            </div>
+        </header>
+
+        <!-- PATIENT DETAILS -->
+        <section id="wrapPatientSection" class="grid grid-cols-4 gap-4 mb-6 text-sm">
+            <div class="col-span-2" id="wrapPatientName">
+                <label class="font-semibold text-gray-700">Patient Name:</label>
+                <div class="ac-wrap">
+                    <input type="text" id="patientName" placeholder="Enter Patient Name" class="mt-1 text-base font-medium" autocomplete="off">
+                    <div class="ac-list" id="patientAcList"></div>
+                </div>
+            </div>
+            <div id="wrapAgeSex">
+                <label class="font-semibold text-gray-700">Age / Sex:</label>
+                <input type="text" id="ageSex" placeholder="e.g. 34 Y / M" class="mt-1">
+            </div>
+            <div id="wrapDate">
+                <label class="font-semibold text-gray-700">Date:</label>
+                <input type="text" id="currentDate" placeholder="DD/MM/YYYY" class="mt-1">
+            </div>
+            <div class="col-span-2" id="wrapPatientContact">
+                <label class="font-semibold text-gray-700">Address / Contact:</label>
+                <input type="text" id="patientContact" placeholder="Enter Contact Details" class="mt-1">
+            </div>
+            <div id="wrapWeight" style="display: none;">
+                <label class="font-semibold text-gray-700">Weight (kg):</label>
+                <input type="text" id="weight" placeholder="--" class="mt-1">
+            </div>
+            <div id="wrapBp" style="display: none;">
+                <label class="font-semibold text-gray-700">BP / Vitals:</label>
+                <input type="text" id="bp" placeholder="120/80 mmHg" class="mt-1">
+            </div>
+        </section>
+
+        <div class="w-full border-t border-gray-300 mb-6"></div>
+
+        <!-- MAIN BODY: 2 Columns -->
+        <main class="flex-grow flex gap-8" id="wrapMainBody">
+
+            <!-- LEFT COLUMN -->
+            <div class="w-1/3 flex flex-col gap-6" id="wrapLeftCol">
+                <div id="wrapDiagnosis">
+                    <h3 class="font-bold text-gray-800 border-b border-gray-300 pb-1 mb-2">Provisional Diagnosis</h3>
+                    <textarea id="diagnosis" class="text-sm h-16 w-full" placeholder="Enter diagnosis or chief complaints..."></textarea>
+                </div>
+
+                <div class="flex-grow" id="wrapAdvisedLabs">
+                    <div class="flex justify-between items-end border-b border-gray-300 pb-1 mb-2">
+                        <h3 class="font-bold text-gray-800">Advised (Labs/Tests)</h3>
+                        <button onclick="addLabRow()" class="no-print text-xs bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded text-gray-700 font-semibold">+ Add Lab</button>
+                    </div>
+                    <ul id="labList" class="list-decimal pl-4 text-sm space-y-2">
+                        <li class="relative group" data-lab-row>
+                            <span class="ac-wrap block w-[90%]">
+                                <input type="text" placeholder="e.g. CBC, LFT" data-lab-input>
+                                <div class="ac-list"></div>
+                            </span>
+                            <button onclick="this.closest('li').remove()" class="no-print absolute right-0 top-0 text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 px-1">&times;</button>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- RIGHT COLUMN: Medications -->
+            <div class="w-2/3 border-l border-gray-200 pl-8" id="wrapMedCol">
+                <div class="flex justify-between items-start mb-4">
+                    <div class="rx-symbol text-gray-900">Rx</div>
+                    <button onclick="addMedRow()" class="no-print text-xs bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1 rounded font-semibold flex items-center gap-1">
+                        <span>+</span> Add Medicine
+                    </button>
+                </div>
+
+                <div id="medList" class="space-y-6"></div>
+            </div>
+        </main>
+
+        <!-- FOOTER -->
+        <footer class="mt-8 pt-6 border-t-2 border-gray-800 flex justify-between items-end" id="wrapFooter">
+            <div id="wrapFollowUp">
+                <label class="font-semibold text-gray-700 text-sm">Follow up on / after:</label>
+                <input type="text" id="followUp" placeholder="e.g., 5 Days / PRN" class="block mt-1 w-48 text-sm">
+            </div>
+
+            <div class="text-center flex flex-col items-center" id="wrapSignature">
+                <img id="doctorSigImg" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iOTAiIHZpZXdCb3g9IjAgMCAzMDAgOTAiPjxwYXRoIGQ9Ik0gMzAgNTUgQyA1MCAzMCwgNjAgMjAsIDc1IDQ1IEMgODUgNjAsIDk1IDM1LCAxMTAgNTAgQyAxMjAgNjAsIDEzMCA0NSwgMTQ1IDUyIEMgMTYwIDU4LCAxNzUgNDAsIDE5MCA1MCBDIDIwNSA2MCwgMjIwIDMwLCAyNDAgNTUgTSA2NSA2NSBMIDI2MCA1MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMWUzYThhIiBzdHJva2Utd2lkdGg9IjIuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+PHRleHQgeD0iMTgwIiB5PSI4MCIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTEiIGZpbGw9IiM0NzU1NjkiPkRyLiBBbGV4IE1lcmNlcjwvdGV4dD48L3N2Zz4=" alt="Doctor Signature" class="h-16 object-contain mb-[-5px] z-10 signature-image">
+                <input type="text" class="font-bold text-center text-sm w-48 z-0 relative" id="doctorSignName" value="Dr. Alex Mercer">
+                <input type="text" class="text-xs text-center text-gray-600 w-48 mt-1" id="doctorSignReg" value="Reg No: NL-DOC-2026-001">
+            </div>
+        </footer>
+
+    </div>
+
+    <!-- ============ LOAD MODAL ============ -->
+    <div id="loadModal" class="modal-bg no-print" onclick="if(event.target===this)closeModal('loadModal')">
+        <div class="bg-white rounded-xl shadow-2xl w-[560px] max-h-[80vh] flex flex-col overflow-hidden">
+            <div class="px-5 py-4 border-b flex justify-between items-center">
+                <h3 class="font-bold text-lg">Load Prescription</h3>
+                <button onclick="closeModal('loadModal')" class="text-gray-400 hover:text-gray-700 text-2xl leading-none">&times;</button>
+            </div>
+            <div class="px-5 pt-4">
+                <input id="loadSearch" oninput="renderLoadList()" placeholder="Search patient or file..." class="mb-3">
+            </div>
+            <div id="loadList" class="overflow-y-auto px-3 pb-4 flex-1"></div>
+        </div>
+    </div>
+
+    <!-- ============ FORMULARY MODAL ============ -->
+    <div id="fsiModal" class="modal-bg no-print" onclick="if(event.target===this)closeModal('fsiModal')">
+        <div class="bg-white rounded-xl shadow-2xl w-[640px] max-h-[85vh] flex flex-col overflow-hidden">
+            <div class="px-5 py-4 border-b flex justify-between items-center">
+                <h3 class="font-bold text-lg">Formulary — medicine &amp; order defaults</h3>
+                <button onclick="closeModal('fsiModal')" class="text-gray-700 text-2xl leading-none">&times;</button>
+            </div>
+            <div class="px-5 py-3 border-b bg-blue-50 text-xs text-gray-600">
+                When you pick a medicine from the Rx dropdown, its default Dose / Frequency / Duration / Instructions are autofilled (still editable).
+                Selecting an entry also <b>saves it to your formulary</b> automatically. Edit or remove entries below.
+            </div>
+            <div class="px-5 py-3 grid grid-cols-5 gap-2 items-end border-b">
+                <div class="col-span-2">
+                    <label class="text-xs font-semibold text-gray-600">Drug</label>
+                    <input id="fsiDrug" placeholder="e.g. NITROFURANTOIN 100MG" class="text-sm mt-1">
+                </div>
+                <div><label class="text-xs font-semibold text-gray-600">Dose</label><input id="fsiDose" class="text-sm mt-1" placeholder="1 Tab"></div>
+                <div><label class="text-xs font-semibold text-gray-600">Freq</label><input id="fsiFreq" class="text-sm mt-1" placeholder="BD"></div>
+                <div><label class="text-xs font-semibold text-gray-600">Dur</label><input id="fsiDur" class="text-sm mt-1" placeholder="5d"></div>
+                <div class="col-span-4"><label class="text-xs font-semibold text-gray-600">Instructions</label><input id="fsiInstr" class="text-sm mt-1" placeholder="After breakfast and dinner"></div>
+                <button onclick="fsiAdd()" class="bg-blue-600 text-white rounded px-3 py-2 text-sm font-semibold">Add</button>
+            </div>
+            <div id="fsiList" class="overflow-y-auto px-5 py-3 flex-1 text-sm"></div>
+        </div>
+    </div>
+
+    <!-- ============ TEMPLATE CONFIGURATOR MODAL ============ -->
+    <div id="tplModal" class="modal-bg no-print" onclick="if(event.target===this)closeModal('tplModal')">
+        <div class="bg-white rounded-xl shadow-2xl w-[720px] max-h-[90vh] flex flex-col overflow-hidden">
+            <div class="px-5 py-4 border-b flex justify-between items-center bg-gray-50">
+                <div>
+                    <h3 class="font-bold text-lg text-gray-900">Customise Prescription Pad Template</h3>
+                    <p class="text-xs text-gray-500">Configure letterhead credentials, box visibility &amp; binding behaviors (persist, fetch, db_sync)</p>
+                </div>
+                <button onclick="closeModal('tplModal')" class="text-gray-400 hover:text-gray-700 text-2xl leading-none">&times;</button>
+            </div>
+            
+            <!-- Modal Body -->
+            <div class="overflow-y-auto px-5 py-4 flex-1 space-y-5 text-sm">
+                <!-- Preset Bar -->
+                <div class="p-3 bg-indigo-50 border border-indigo-200 rounded-lg flex items-center justify-between">
+                    <div>
+                        <span class="text-xs font-bold text-indigo-900 uppercase tracking-wide">Template Preset:</span>
+                        <select id="tplModalPreset" onchange="applyPresetInModal(this.value)" class="ml-2 text-xs border border-indigo-300 rounded px-2 py-1 bg-white font-medium">
+                            <option value="2020100-benchmark">2020100 Clinical Benchmark (Standard OPD)</option>
+                            <option value="minimalist-opd">Minimalist OPD Letterhead</option>
+                            <option value="inpatient-discharge">Inpatient / Discharge Summary Pad</option>
+                        </select>
+                    </div>
+                    <span class="text-[11px] text-indigo-700 font-medium">Strict Authentic Alignment</span>
+                </div>
+
+                <!-- Section 1: Prescriber Credentials & Letterhead -->
+                <div class="border border-gray-200 rounded-lg p-3.5 space-y-3">
+                    <h4 class="font-bold text-xs uppercase tracking-wider text-gray-700 border-b pb-1.5 flex items-center justify-between">
+                        <span>1. Letterhead &amp; Prescriber Credentials</span>
+                        <span class="text-[10px] text-gray-500 font-normal">Unconfigured/empty non-critical fields will be hidden</span>
+                    </h4>
+                    
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <div class="flex items-center justify-between mb-0.5">
+                                <label class="text-xs font-semibold text-gray-700">Clinic / Entity Name</label>
+                                <label class="text-[11px] text-gray-500 flex items-center gap-1 cursor-pointer">
+                                    <input type="checkbox" id="tplVis_clinicName" checked class="rounded"> Show on Pad
+                                </label>
+                            </div>
+                            <input type="text" id="tplVal_clinicName" value="New Loka Clinic" class="text-xs">
+                        </div>
+
+                        <div>
+                            <div class="flex items-center justify-between mb-0.5">
+                                <label class="text-xs font-semibold text-gray-700">Subtitle / Practice Focus</label>
+                                <label class="text-[11px] text-gray-500 flex items-center gap-1 cursor-pointer">
+                                    <input type="checkbox" id="tplVis_clinicSubtitle" checked class="rounded"> Show on Pad
+                                </label>
+                            </div>
+                            <input type="text" id="tplVal_clinicSubtitle" value="Open-Source Community Health" placeholder="Optional subtitle (hidden if empty)" class="text-xs">
+                        </div>
+
+                        <div>
+                            <div class="flex items-center justify-between mb-0.5">
+                                <label class="text-xs font-semibold text-gray-700">Doctor Name</label>
+                                <label class="text-[11px] text-gray-500 flex items-center gap-1 cursor-pointer">
+                                    <input type="checkbox" id="tplVis_doctorName" checked class="rounded"> Show on Pad
+                                </label>
+                            </div>
+                            <input type="text" id="tplVal_doctorName" value="Dr. Alex Mercer" class="text-xs">
+                        </div>
+
+                        <div>
+                            <div class="flex items-center justify-between mb-0.5">
+                                <label class="text-xs font-semibold text-gray-700">Qualifications</label>
+                                <label class="text-[11px] text-gray-500 flex items-center gap-1 cursor-pointer">
+                                    <input type="checkbox" id="tplVis_doctorQual" checked class="rounded"> Show on Pad
+                                </label>
+                            </div>
+                            <input type="text" id="tplVal_doctorQual" value="MBBS, MD" class="text-xs">
+                        </div>
+
+                        <div>
+                            <div class="flex items-center justify-between mb-0.5">
+                                <label class="text-xs font-semibold text-gray-700">Registration Number</label>
+                                <label class="text-[11px] text-gray-500 flex items-center gap-1 cursor-pointer">
+                                    <input type="checkbox" id="tplVis_doctorReg" checked class="rounded"> Show on Pad
+                                </label>
+                            </div>
+                            <input type="text" id="tplVal_doctorReg" value="NL-DOC-2026-001" class="text-xs">
+                        </div>
+
+                        <div>
+                            <div class="flex items-center justify-between mb-0.5">
+                                <label class="text-xs font-semibold text-gray-700">Department</label>
+                                <label class="text-[11px] text-gray-500 flex items-center gap-1 cursor-pointer">
+                                    <input type="checkbox" id="tplVis_doctorDept" class="rounded"> Show on Pad
+                                </label>
+                            </div>
+                            <input type="text" id="tplVal_doctorDept" value="" placeholder="Optional (hidden if empty)" class="text-xs">
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="flex items-center justify-between mb-0.5">
+                            <label class="text-xs font-semibold text-gray-700">Address &amp; Contact Information</label>
+                            <label class="text-[11px] text-gray-500 flex items-center gap-1 cursor-pointer">
+                                <input type="checkbox" id="tplVis_clinicContact" checked class="rounded"> Show on Pad
+                            </label>
+                        </div>
+                        <textarea id="tplVal_clinicContact" class="text-xs h-12">2020100, Murbad Road, Kalyan, Thane, MH&#13;&#10;Phone: +91-7738090349 | Email: yashkulkarni2020100@gmail.com</textarea>
+                    </div>
+                </div>
+
+                <!-- Section 2: Box Behaviors & Visibility Matrix -->
+                <div class="border border-gray-200 rounded-lg p-3.5 space-y-2.5">
+                    <h4 class="font-bold text-xs uppercase tracking-wider text-gray-700 border-b pb-1.5 flex items-center justify-between">
+                        <span>2. Box Behaviors &amp; Data Binding Matrix</span>
+                        <span class="text-[10px] text-gray-500 font-normal">persist = fixed profile | fetch = runtime context | db_sync = clinic.db sync</span>
+                    </h4>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead>
+                                <tr class="border-b bg-gray-50 text-gray-600">
+                                    <th class="py-1.5 px-2">Element / Input Box</th>
+                                    <th class="py-1.5 px-2 text-center">Visible</th>
+                                    <th class="py-1.5 px-2">Binding Mode</th>
+                                    <th class="py-1.5 px-2">Description</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100 text-gray-700" id="tplModalElementsTbody">
+                                <!-- Populated dynamically by renderTemplateModal() -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="px-5 py-3 border-t bg-gray-50 flex items-center justify-between">
+                <button onclick="closeModal('tplModal')" class="text-xs text-gray-600 hover:text-gray-800 font-semibold px-3 py-1.5 rounded border border-gray-300 bg-white">Cancel</button>
+                <div class="flex items-center gap-2">
+                    <button onclick="resetTemplateTo2020100()" class="text-xs text-gray-600 hover:text-gray-900 px-2 py-1">Reset Defaults</button>
+                    <button onclick="saveTemplateFromModal()" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded shadow">Save &amp; Apply Template</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script>
+    /* =====================================================================
+       E-Prescription Pad Pro — single-file, no server.
+
+       Storage: localStorage (survives restarts, per-browser+profile).
+         - rxpad.formulary : [{drug, dose, freq, dur, instr}]
+         - rxpad.lastRx    : full snapshot of last state (crash recovery)
+       Saving: window.print() → user chooses "Save as PDF" with the
+       destination already set to D:\Medical\Clinic.
+       Naming: DDMMYY_NNNN_PatientName.pdf — next serial shown live.
+       ===================================================================== */
+
+    /* ---------- template & box behavior engine ---------- */
+    const TEMPLATE_PRESETS = {
+        'newloka-demo': {
+            templateId: 'newloka-demo',
+            name: 'New Loka Clinic Demo',
+            header: {
+                clinicName: 'New Loka Clinic',
+                subtitle: 'Open-Source Community Health',
+                doctorName: 'Dr. Alex Mercer',
+                qualifications: 'MBBS, MD',
+                regNo: 'NL-DOC-2026-001',
+                department: 'General Medicine',
+                address: '100 Innovation Way, Suite 400',
+                phone: '+1 (555) 019-2834',
+                email: 'clinic@newloka.org',
+                contact: '100 Innovation Way, Suite 400\nPhone: +1 (555) 019-2834 | Email: clinic@newloka.org'
+            },
+            elements: {
+                clinicLogo: { visible: true, mode: 'persist', description: 'Clinic logo' },
+                clinicName: { visible: true, mode: 'persist', description: 'Clinic entity name (New Loka Clinic)' },
+                clinicSubtitle: { visible: true, mode: 'persist', description: 'Practice focus/subtitle' },
+                doctorName: { visible: true, mode: 'persist', description: 'Prescriber name (Dr. Alex Mercer)' },
+                doctorQual: { visible: true, mode: 'persist', description: 'Prescriber qualifications (MBBS, MD)' },
+                doctorReg: { visible: true, mode: 'persist', description: 'Registration number (NL-DOC-2026-001)' },
+                doctorDept: { visible: false, mode: 'persist', description: 'Department (hidden if empty)' },
+                clinicContact: { visible: true, mode: 'persist', description: 'Clinic address & contact details' },
+                patientName: { visible: true, mode: 'db_sync', description: 'Patient name & clinic.db search' },
+                ageSex: { visible: true, mode: 'fetch', description: 'Age and sex from patient record' },
+                currentDate: { visible: true, mode: 'fetch', description: 'Prescription date (auto-today)' },
+                patientContact: { visible: true, mode: 'fetch', description: 'Patient phone/address' },
+                weight: { visible: false, mode: 'fetch', description: 'Patient weight in kg' },
+                bp: { visible: false, mode: 'fetch', description: 'Blood pressure / vitals' },
+                diagnosis: { visible: true, mode: 'fetch', description: 'Provisional clinical diagnosis' },
+                advisedLabs: { visible: true, mode: 'db_sync', description: 'Diagnostic test orders & formulary tests' },
+                medications: { visible: true, mode: 'db_sync', description: 'Medications table with pharmacopoeia auto-complete' },
+                followUp: { visible: true, mode: 'fetch', description: 'Follow up review timeline' },
+                signature: { visible: true, mode: 'persist', description: 'Prescriber signature' }
+            }
+        },
+        '2020100-benchmark': {
+            templateId: '2020100-benchmark',
+            name: '2020100 Clinical Benchmark',
+            header: {
+                clinicName: '2020100',
+                subtitle: '',
+                doctorName: 'Dr. Yash Kulkarni',
+                qualifications: 'MBBS',
+                regNo: 'MMC-20260608539',
+                department: '',
+                address: '2020100, Murbad Road, Kalyan, Thane, MH',
+                phone: '+91-7738090349',
+                email: 'yashkulkarni2020100@gmail.com',
+                contact: '2020100, Murbad Road, Kalyan, Thane, MH\nPhone: +91-7738090349 | Email: yashkulkarni2020100@gmail.com',
+                signature: 'data:image/png;base64,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'
+            },
+            elements: {
+                clinicLogo: { visible: true, mode: 'persist', description: 'Authentic scanned clinic logo' },
+                clinicName: { visible: false, mode: 'persist', description: 'Clinic entity name (2020100)' },
+                clinicSubtitle: { visible: false, mode: 'persist', description: 'Optional practice focus/subtitle' },
+                doctorName: { visible: true, mode: 'persist', description: 'Prescriber name (Dr. Yash Kulkarni)' },
+                doctorQual: { visible: true, mode: 'persist', description: 'Prescriber qualifications (MBBS)' },
+                doctorReg: { visible: true, mode: 'persist', description: 'Registration number (MMC-20260608539)' },
+                doctorDept: { visible: false, mode: 'persist', description: 'Department (hidden if empty)' },
+                clinicContact: { visible: true, mode: 'persist', description: 'Clinic address & contact details' },
+                patientName: { visible: true, mode: 'db_sync', description: 'Patient name & clinic.db search' },
+                ageSex: { visible: true, mode: 'fetch', description: 'Age and sex from patient record' },
+                currentDate: { visible: true, mode: 'fetch', description: 'Prescription date (auto-today)' },
+                patientContact: { visible: true, mode: 'fetch', description: 'Patient phone/address' },
+                weight: { visible: false, mode: 'fetch', description: 'Patient weight in kg' },
+                bp: { visible: false, mode: 'fetch', description: 'Blood pressure / vitals' },
+                diagnosis: { visible: true, mode: 'fetch', description: 'Provisional clinical diagnosis' },
+                advisedLabs: { visible: true, mode: 'db_sync', description: 'Diagnostic test orders & formulary tests' },
+                medications: { visible: true, mode: 'db_sync', description: 'Medications table with pharmacopoeia auto-complete' },
+                followUp: { visible: true, mode: 'fetch', description: 'Follow up review timeline' },
+                signature: { visible: true, mode: 'persist', description: 'Authentic prescriber scanned signature' }
+            }
+        },
+        'minimalist-opd': {
+            templateId: 'minimalist-opd',
+            name: 'Minimalist OPD Letterhead',
+            header: {
+                clinicName: '',
+                subtitle: '',
+                doctorName: 'Dr. Alex Mercer',
+                qualifications: 'MBBS, MD',
+                regNo: 'NL-DOC-2026-001',
+                department: '',
+                address: '100 Innovation Way, Suite 400',
+                phone: '+1 (555) 019-2834',
+                email: 'clinic@newloka.org',
+                contact: 'Phone: +1 (555) 019-2834 | Email: clinic@newloka.org'
+            },
+            elements: {
+                clinicLogo: { visible: false, mode: 'persist', description: 'Authentic scanned clinic logo' },
+                clinicName: { visible: false, mode: 'persist', description: 'Clinic entity name' },
+                clinicSubtitle: { visible: false, mode: 'persist', description: 'Optional practice focus/subtitle' },
+                doctorName: { visible: true, mode: 'persist', description: 'Prescriber name' },
+                doctorQual: { visible: true, mode: 'persist', description: 'Qualifications' },
+                doctorReg: { visible: true, mode: 'persist', description: 'Registration number' },
+                doctorDept: { visible: false, mode: 'persist', description: 'Department' },
+                clinicContact: { visible: true, mode: 'persist', description: 'Contact info' },
+                patientName: { visible: true, mode: 'db_sync', description: 'Patient name' },
+                ageSex: { visible: true, mode: 'fetch', description: 'Age and sex' },
+                currentDate: { visible: true, mode: 'fetch', description: 'Prescription date' },
+                patientContact: { visible: false, mode: 'fetch', description: 'Patient phone/address' },
+                weight: { visible: false, mode: 'fetch', description: 'Patient weight' },
+                bp: { visible: false, mode: 'fetch', description: 'BP / vitals' },
+                diagnosis: { visible: true, mode: 'fetch', description: 'Provisional diagnosis' },
+                advisedLabs: { visible: false, mode: 'db_sync', description: 'Advised labs' },
+                medications: { visible: true, mode: 'db_sync', description: 'Medications table' },
+                followUp: { visible: true, mode: 'fetch', description: 'Follow up date' },
+                signature: { visible: true, mode: 'persist', description: 'Doctor signature' }
+            }
+        },
+        'inpatient-discharge': {
+            templateId: 'inpatient-discharge',
+            name: 'Inpatient / Discharge Summary Pad',
+            header: {
+                clinicName: 'New Loka Clinic',
+                subtitle: 'Open-Source Community Health',
+                doctorName: 'Dr. Alex Mercer',
+                qualifications: 'MBBS, MD',
+                regNo: 'NL-DOC-2026-001',
+                department: 'General Medicine',
+                address: '100 Innovation Way, Suite 400',
+                phone: '+1 (555) 019-2834',
+                email: 'clinic@newloka.org',
+                contact: '100 Innovation Way, Suite 400\nPhone: +1 (555) 019-2834 | Email: clinic@newloka.org'
+            },
+            elements: {
+                clinicLogo: { visible: true, mode: 'persist', description: 'Authentic scanned clinic logo' },
+                clinicName: { visible: true, mode: 'persist', description: 'Clinic entity name' },
+                clinicSubtitle: { visible: false, mode: 'persist', description: 'Optional practice focus/subtitle' },
+                doctorName: { visible: true, mode: 'persist', description: 'Doctor name' },
+                doctorQual: { visible: true, mode: 'persist', description: 'Qualifications' },
+                doctorReg: { visible: true, mode: 'persist', description: 'Registration number' },
+                doctorDept: { visible: false, mode: 'persist', description: 'Department' },
+                clinicContact: { visible: true, mode: 'persist', description: 'Contact info' },
+                patientName: { visible: true, mode: 'db_sync', description: 'Patient name' },
+                ageSex: { visible: true, mode: 'fetch', description: 'Age and sex' },
+                currentDate: { visible: true, mode: 'fetch', description: 'Prescription date' },
+                patientContact: { visible: true, mode: 'fetch', description: 'Patient phone/address' },
+                weight: { visible: true, mode: 'fetch', description: 'Patient weight (kg)' },
+                bp: { visible: true, mode: 'fetch', description: 'Blood pressure / vitals' },
+                diagnosis: { visible: true, mode: 'fetch', description: 'Diagnosis / discharge notes' },
+                advisedLabs: { visible: true, mode: 'db_sync', description: 'Advised labs & tests' },
+                medications: { visible: true, mode: 'db_sync', description: 'Discharge medications' },
+                followUp: { visible: true, mode: 'fetch', description: 'Review appointment' },
+                signature: { visible: true, mode: 'persist', description: 'Doctor signature' }
+            }
+        }
+    };
+
+    function applyTemplate(tpl) {
+        if (!tpl) return;
+        window._currentTemplate = tpl;
+
+        // 1. Header Credentials
+        const h = tpl.header || {};
+        if (h.clinicName !== undefined) {
+            const el = document.getElementById('clinicName');
+            if (el) el.value = h.clinicName;
+        }
+        if (h.subtitle !== undefined) {
+            const el = document.getElementById('clinicSubtitle');
+            if (el) el.value = h.subtitle;
+        }
+        if (h.doctorName !== undefined) {
+            const el = document.getElementById('doctorName');
+            if (el) el.value = h.doctorName;
+            const signEl = document.getElementById('doctorSignName');
+            if (signEl) signEl.value = h.doctorName;
+        }
+        if (h.qualifications !== undefined) {
+            const el = document.getElementById('doctorQual');
+            if (el) el.value = h.qualifications;
+        }
+        if (h.regNo !== undefined) {
+            const regStr = h.regNo.startsWith('Reg') ? h.regNo : 'Reg No: ' + h.regNo;
+            const el = document.getElementById('doctorReg');
+            if (el) el.value = regStr;
+            const signEl = document.getElementById('doctorSignReg');
+            if (signEl) signEl.value = regStr;
+        }
+        if (h.department !== undefined) {
+            const el = document.getElementById('doctorDept');
+            if (el) el.value = h.department;
+        }
+        if (h.contact !== undefined || h.address || h.phone || h.email) {
+            const el = document.getElementById('clinicContact');
+            if (el) {
+                if (h.contact) {
+                    el.value = h.contact;
+                } else {
+                    let lines = [];
+                    if (h.address) lines.push(h.address);
+                    let cLine = [];
+                    if (h.phone) cLine.push('Phone: ' + h.phone);
+                    if (h.email) cLine.push('Email: ' + h.email);
+                    if (cLine.length) lines.push(cLine.join(' | '));
+                    if (lines.length) el.value = lines.join('\n');
+                }
+            }
+        }
+        if (h.logo && h.logo.startsWith('data:image')) {
+            const el = document.getElementById('clinicLogoImg');
+            if (el) el.src = h.logo;
+        }
+        if (h.signature && h.signature.startsWith('data:image')) {
+            const el = document.getElementById('doctorSigImg');
+            if (el) { el.src = h.signature; makeSignatureTransparent(el); }
+        }
+
+        // 2. Element Visibility Toggles & Bindings
+        const elems = tpl.elements || {};
+        const toggle = (id, show) => {
+            const wrap = document.getElementById(id);
+            if (wrap) wrap.style.display = show ? '' : 'none';
+        };
+
+        // Header elements (hide if unchecked OR empty)
+        const hasClinicName = !!(h.clinicName && h.clinicName.trim());
+        toggle('wrapClinicName', (elems.clinicName ? elems.clinicName.visible : false) && hasClinicName);
+
+        const hasSub = !!(h.subtitle && h.subtitle.trim());
+        toggle('wrapClinicSub', (elems.clinicSubtitle ? elems.clinicSubtitle.visible : false) && hasSub);
+
+        const hasDept = !!(h.department && h.department.trim());
+        toggle('wrapDocDept', (elems.doctorDept ? elems.doctorDept.visible : false) && hasDept);
+
+        toggle('wrapClinicLogo', elems.clinicLogo ? elems.clinicLogo.visible !== false : true);
+        toggle('wrapDocName', elems.doctorName ? elems.doctorName.visible !== false : true);
+        toggle('wrapDocQual', elems.doctorQual ? elems.doctorQual.visible !== false : true);
+        toggle('wrapDocReg', elems.doctorReg ? elems.doctorReg.visible !== false : true);
+        toggle('wrapClinicContact', elems.clinicContact ? elems.clinicContact.visible !== false : true);
+
+        // Patient details
+        toggle('wrapPatientName', elems.patientName ? elems.patientName.visible !== false : true);
+        toggle('wrapAgeSex', elems.ageSex ? elems.ageSex.visible !== false : true);
+        toggle('wrapDate', elems.currentDate ? elems.currentDate.visible !== false : true);
+        toggle('wrapPatientContact', elems.patientContact ? elems.patientContact.visible !== false : true);
+        toggle('wrapWeight', elems.weight ? elems.weight.visible === true : false);
+        toggle('wrapBp', elems.bp ? elems.bp.visible === true : false);
+
+        // Main body & footer
+        toggle('wrapDiagnosis', elems.diagnosis ? elems.diagnosis.visible !== false : true);
+        toggle('wrapAdvisedLabs', elems.advisedLabs ? elems.advisedLabs.visible !== false : true);
+        toggle('wrapMedCol', elems.medications ? elems.medications.visible !== false : true);
+        toggle('wrapFollowUp', elems.followUp ? elems.followUp.visible !== false : true);
+        toggle('wrapSignature', elems.signature ? elems.signature.visible !== false : true);
+
+        // Set binding mode datasets
+        Object.keys(elems).forEach(k => {
+            const cfg = elems[k];
+            const el = document.getElementById(k);
+            if (el && cfg && cfg.mode) {
+                el.dataset.bindingMode = cfg.mode;
+            }
+        });
+    }
+
+    function openTemplateModal() {
+        if (window.parent && window.parent !== window) {
+            try {
+                window.parent.postMessage({ action: 'openRxPadConfigurator' }, '*');
+                return;
+            } catch (e) {}
+        }
+        renderTemplateModal();
+        document.getElementById('tplModal').classList.add('open');
+    }
+
+    function renderTemplateModal() {
+        let tpl = window._currentTemplate;
+        if (!tpl) {
+            const raw = localStorage.getItem('rxpad.template');
+            if (raw) {
+                try { tpl = JSON.parse(raw); } catch (e) {}
+            }
+        }
+        if (!tpl) tpl = TEMPLATE_PRESETS['newloka-demo'];
+        window._currentTemplate = tpl;
+
+        const h = tpl.header || {};
+        const elems = tpl.elements || {};
+
+        // Populate header fields
+        const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+        const setChk = (id, chk) => { const el = document.getElementById(id); if (el) el.checked = !!chk; };
+
+        setVal('tplVal_clinicName', h.clinicName || 'New Loka Clinic');
+        setChk('tplVis_clinicName', elems.clinicName ? elems.clinicName.visible : false);
+
+        setVal('tplVal_clinicSubtitle', h.subtitle || '');
+        setChk('tplVis_clinicSubtitle', elems.clinicSubtitle ? elems.clinicSubtitle.visible : false);
+
+        setVal('tplVal_doctorName', h.doctorName || 'Dr. Alex Mercer');
+        setChk('tplVis_doctorName', elems.doctorName ? elems.doctorName.visible !== false : true);
+
+        setVal('tplVal_doctorQual', h.qualifications || 'MBBS, MD');
+        setChk('tplVis_doctorQual', elems.doctorQual ? elems.doctorQual.visible !== false : true);
+
+        setVal('tplVal_doctorReg', (h.regNo || 'MMC-20260608539').replace(/^Reg\s*No:\s*/i, ''));
+        setChk('tplVis_doctorReg', elems.doctorReg ? elems.doctorReg.visible !== false : true);
+
+        setVal('tplVal_doctorDept', h.department || '');
+        setChk('tplVis_doctorDept', elems.doctorDept ? elems.doctorDept.visible : false);
+
+        setVal('tplVal_clinicContact', h.contact || '2020100, Murbad Road, Kalyan, Thane, MH\nPhone: +91-7738090349 | Email: yashkulkarni2020100@gmail.com');
+        setChk('tplVis_clinicContact', elems.clinicContact ? elems.clinicContact.visible !== false : true);
+
+        // Populate elements table
+        const elementList = [
+            { key: 'clinicLogo', label: 'Clinic Logo', desc: 'Authentic clinic emblem' },
+            { key: 'patientName', label: 'Patient Name', desc: 'Patient name & clinic.db search' },
+            { key: 'ageSex', label: 'Age / Sex', desc: 'Age and sex from chart or entry' },
+            { key: 'currentDate', label: 'Date', desc: 'Prescription date (auto-today)' },
+            { key: 'patientContact', label: 'Address / Contact', desc: 'Patient phone or address' },
+            { key: 'weight', label: 'Weight (kg)', desc: 'Vitals: Weight (hidden by default)' },
+            { key: 'bp', label: 'BP / Vitals', desc: 'Vitals: Blood pressure (hidden by default)' },
+            { key: 'diagnosis', label: 'Provisional Diagnosis', desc: 'Chief complaints / diagnosis' },
+            { key: 'advisedLabs', label: 'Advised (Labs/Tests)', desc: 'Lab orders synced to clinic.db' },
+            { key: 'medications', label: 'Medications Table', desc: 'Pharmacopoeia autocomplete & formulary' },
+            { key: 'followUp', label: 'Follow Up', desc: 'Follow-up timeline or date' },
+            { key: 'signature', label: 'Doctor Signature', desc: 'Scanned signature on file' }
+        ];
+
+        const tbody = document.getElementById('tplModalElementsTbody');
+        if (tbody) {
+            tbody.innerHTML = elementList.map(item => {
+                const cfg = elems[item.key] || { visible: true, mode: 'fetch' };
+                const isChecked = cfg.visible !== false;
+                const mode = cfg.mode || 'fetch';
+                return `
+                    <tr class="hover:bg-gray-50 transition-colors">
+                        <td class="py-2 px-2 font-semibold text-gray-800">${escHtml(item.label)}</td>
+                        <td class="py-2 px-2 text-center">
+                            <input type="checkbox" data-elem-key="${item.key}" data-field="visible" ${isChecked ? 'checked' : ''} class="rounded text-indigo-600">
+                        </td>
+                        <td class="py-2 px-2">
+                            <select data-elem-key="${item.key}" data-field="mode" class="text-xs border border-gray-300 rounded px-2 py-1 bg-white">
+                                <option value="persist" ${mode === 'persist' ? 'selected' : ''}>persist (static)</option>
+                                <option value="fetch" ${mode === 'fetch' ? 'selected' : ''}>fetch (runtime)</option>
+                                <option value="db_sync" ${mode === 'db_sync' ? 'selected' : ''}>db_sync (2-way db)</option>
+                            </select>
+                        </td>
+                        <td class="py-2 px-2 text-gray-500 text-[11px]">${escHtml(item.desc)}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+    }
+
+    function applyPresetInModal(presetKey) {
+        const preset = TEMPLATE_PRESETS[presetKey];
+        if (!preset) return;
+        window._currentTemplate = JSON.parse(JSON.stringify(preset));
+        renderTemplateModal();
+    }
+
+    function resetTemplateTo2020100() {
+        applyPresetInModal('2020100-benchmark');
+    }
+
+    async function saveTemplateFromModal() {
+        const getVal = id => { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
+        const getChk = id => { const el = document.getElementById(id); return el ? el.checked : false; };
+
+        const cName = getVal('tplVal_clinicName') || 'New Loka Clinic';
+        const cSub = getVal('tplVal_clinicSubtitle');
+        const dName = getVal('tplVal_doctorName') || 'Dr. Alex Mercer';
+        const dQual = getVal('tplVal_doctorQual') || 'MBBS';
+        const dReg = getVal('tplVal_doctorReg') || 'MMC-20260608539';
+        const dDept = getVal('tplVal_doctorDept');
+        const cContact = getVal('tplVal_clinicContact');
+
+        const elements = {};
+        elements.clinicName = { visible: getChk('tplVis_clinicName'), mode: 'persist', description: 'Clinic entity name' };
+        elements.clinicSubtitle = { visible: getChk('tplVis_clinicSubtitle'), mode: 'persist', description: 'Practice subtitle' };
+        elements.doctorName = { visible: getChk('tplVis_doctorName'), mode: 'persist', description: 'Doctor name' };
+        elements.doctorQual = { visible: getChk('tplVis_doctorQual'), mode: 'persist', description: 'Doctor qualifications' };
+        elements.doctorReg = { visible: getChk('tplVis_doctorReg'), mode: 'persist', description: 'Registration number' };
+        elements.doctorDept = { visible: getChk('tplVis_doctorDept'), mode: 'persist', description: 'Department' };
+        elements.clinicContact = { visible: getChk('tplVis_clinicContact'), mode: 'persist', description: 'Clinic contact info' };
+
+        document.querySelectorAll('#tplModalElementsTbody tr').forEach(row => {
+            const chk = row.querySelector('[data-field="visible"]');
+            const sel = row.querySelector('[data-field="mode"]');
+            if (chk && sel) {
+                const key = chk.dataset.elemKey;
+                elements[key] = {
+                    visible: chk.checked,
+                    mode: sel.value
+                };
+            }
+        });
+
+        const tpl = {
+            templateId: 'custom-template',
+            name: 'Customised Clinic Template',
+            header: {
+                clinicName: cName,
+                subtitle: cSub,
+                doctorName: dName,
+                qualifications: dQual,
+                regNo: dReg,
+                department: dDept,
+                contact: cContact
+            },
+            elements
+        };
+
+        localStorage.setItem('rxpad.template', JSON.stringify(tpl));
+        applyTemplate(tpl);
+
+        if (isServerOnline) {
+            try {
+                await fetch(`${serverUrl}/api/rxpad/template`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(tpl),
+                    mode: 'cors'
+                });
+            } catch (e) {}
+        }
+
+        closeModal('tplModal');
+        toast('Prescription pad template saved and applied');
+    }
+
+    /* ---------- date helpers ---------- */
+    function ddmmyy(d) {
+        const dd = String(d.getDate()).padStart(2, '0');
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        return dd + mm + String(d.getFullYear()).slice(-2);
+    }
+    function ddmmyyyy(d) {
+        const dd = String(d.getDate()).padStart(2, '0');
+        const mm = String(d.getMonth() + 1).padStart(2, 0);
+        return dd + '/' + mm + '/' + d.getFullYear();
+    }
+    function today() { return new Date(); }
+
+    /* ---------- formulary (drug defaults) ---------- */
+    const FSI_KEY = 'rxpad.formulary';
+    function getFormulary() {
+        try { return JSON.parse(localStorage.getItem(FSI_KEY)) || []; }
+        catch (e) { return []; }
+    }
+    function setFormulary(list) {
+        localStorage.setItem(FSI_KEY, JSON.stringify(list));
+    }
+
+    /* ---------- med rows ---------- */
+    let medCount = 0;
+    function addMedRow(sel = {}) {
+        medCount++;
+        const medList = document.getElementById('medList');
+        const row = document.createElement('div');
+        row.className = 'med-row relative group pb-4 border-b border-gray-100 border-dashed';
+        row.innerHTML = `
+            <div class="flex gap-2">
+                <span class="font-bold mt-1 med-num">${medCount}.</span>
+                <div class="flex-grow">
+                    <div class="flex gap-2 items-center">
+                        <div class="ac-wrap flex-grow">
+                            <input type="text" class="font-bold text-base w-full uppercase" placeholder="DRUG NAME (BRAND NAME) - DOSAGE FORM" data-drug value="${escAttr(sel.drug || '')}">
+                            <div class="ac-list"></div>
+                        </div>
+                        <button type="button" class="no-print text-xs bg-gray-100 border border-gray-300 rounded px-2 py-1 text-gray-600 hover:bg-gray-200" onclick="openFsi()" title="Open formulary / order defaults">⚙</button>
+                        <button type="button" class="no-print text-xs bg-gray-100 border border-gray-300 rounded px-2 py-1 text-gray-600 hover:bg-gray-200" onclick="fsiFromRow(this)" title="Save this drug's defaults to formulary">💾</button>
+                    </div>
+                    <div class="flex gap-4 mt-1">
+                        <input type="text" class="text-sm w-1/3" placeholder="Dose (e.g., 1 Tab)" data-dose value="${escAttr(sel.dose || '')}">
+                        <input type="text" class="text-sm w-1/3" placeholder="Frequency (e.g., 1-0-1)" data-freq value="${escAttr(sel.freq || '')}">
+                        <input type="text" class="text-sm w-1/3" placeholder="Duration (e.g., 5 Days)" data-dur value="${escAttr(sel.dur || '')}">
+                    </div>
+                    <input type="text" class="text-sm italic text-gray-600 mt-1" placeholder="Instructions (e.g., After meals)" data-instr value="${escAttr(sel.instr || '')}">
+                </div>
+            </div>
+            <button onclick="removeMedRow(this)" class="no-print absolute top-1 right-0 text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 p-1 bg-white rounded-full shadow-sm" title="Remove Medicine">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+            </button>
+        `;
+        medList.appendChild(row);
+        attachAutocomplete(row.querySelector('[data-drug]'), 'drug');
+    }
+    function renumberMeds() {
+        document.querySelectorAll('#medList .med-row').forEach((r, i) => {
+            r.querySelector('.med-num').textContent = (i + 1) + '.';
+        });
+    }
+    function removeMedRow(btn) {
+        btn.closest('.med-row').remove();
+        renumberMeds();
+    }
+
+    /* ---------- lab rows ---------- */
+    function addLabRow(val = '') {
+        const labList = document.getElementById('labList');
+        const li = document.createElement('li');
+        li.className = 'relative group';
+        li.innerHTML = `
+            <span class="ac-wrap block w-[90%]">
+                <input type="text" placeholder="e.g. CBC, LFT" data-lab-input value="${escAttr(val)}">
+                <div class="ac-list"></div>
+            </span>
+            <button onclick="this.closest('li').remove()" class="no-print absolute right-0 top-0 text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 px-1">&times;</button>
+        `;
+        labList.appendChild(li);
+        attachAutocomplete(li.querySelector('[data-lab-input]'), 'lab');
+    }
+
+    /* ---------- formulary modal ---------- */
+    function openFsi() { renderFsi(); document.getElementById('fsiModal').classList.add('open'); }
+    function fsiAdd() {
+        const drug = val('fsiDrug').trim();
+        if (!drug) { toast('Enter a drug name first'); return; }
+        const entry = {
+            drug: drug,
+            dose: val('fsiDose').trim(), freq: val('fsiFreq').trim(),
+            dur: val('fsiDur').trim(), instr: val('fsiInstr').trim()
+        };
+        const list = getFormulary().filter(x => x.drug.toLowerCase() !== drug.toLowerCase());
+        list.push(entry);
+        setFormulary(list);
+        ['fsiDrug','fsiDose','fsiFreq','fsiDur','fsiInstr'].forEach(id => document.getElementById(id).value = '');
+        renderFsi();
+        toast('Saved to formulary: ' + drug);
+    }
+    function fsiRemove(drug) {
+        setFormulary(getFormulary().filter(x => x.drug !== drug));
+        renderFsi();
+    }
+    function fsiFromRow(btn) {
+        const row = btn.closest('.med-row');
+        const drug = row.querySelector('[data-drug]').value.trim();
+        if (!drug) { toast('Type a drug name first'); return; }
+        const entry = {
+            drug,
+            dose: row.querySelector('[data-dose]').value.trim(),
+            freq: row.querySelector('[data-freq]').value.trim(),
+            dur: row.querySelector('[data-dur]').value.trim(),
+            instr: row.querySelector('[data-instr]').value.trim()
+        };
+        const list = getFormulary().filter(x => x.drug.toLowerCase() !== drug.toLowerCase());
+        list.push(entry);
+        setFormulary(list);
+        toast('Saved to formulary: ' + drug);
+    }
+    function renderFsi() {
+        const el = document.getElementById('fsiList');
+        const list = getFormulary();
+        if (!list.length) { el.innerHTML = '<div class="text-gray-500">Formulary is empty — pick drugs on the pad (💾 button) or add above.</div>'; return; }
+        el.innerHTML = list.map(x => `
+            <div class="flex items-center justify-between border rounded-lg px-3 py-2 mb-2">
+                <div>
+                    <div class="font-semibold">${escHtml(x.drug)}</div>
+                    <div class="text-xs text-gray-600">${escHtml([x.dose, x.freq, x.dur].filter(Boolean).join(' · '))}${x.instr ? ' — <i>' + escHtml(x.instr) + '</i>' : ''}</div>
+                </div>
+                <button onclick="fsiRemove('${escAttr(x.drug)}')" class="text-red-500 hover:text-red-700 text-xs font-semibold">Remove</button>
+            </div>
+        `).join('');
+    }
+
+    /* ---------- autocomplete ---------- */
+    function labSuggestions() {
+        const s = new Set();
+        try {
+            const savedLabs = JSON.parse(localStorage.getItem('rxpad.labs') || '[]');
+            if (Array.isArray(savedLabs)) savedLabs.forEach(l => { if (l && l.trim()) s.add(l.trim()); });
+        } catch (e) {}
+        getFormulary().forEach(f => (f.labs || []).forEach(l => s.add(l)));
+        document.querySelectorAll('[data-lab-input]').forEach(i => { if (i.value.trim()) s.add(i.value.trim()); });
+        return [...s];
+    }
+    function attachAutocomplete(input, kind) {
+        const wrap = input.closest('.ac-wrap');
+        const box = wrap.querySelector('.ac-list');
+        let items = [];
+        function show() {
+            const q = input.value.trim().toLowerCase();
+            let pool = [];
+            if (kind === 'drug') pool = getFormulary().map(f => ({ v: f.drug, sub: [f.dose, f.freq, f.dur].filter(Boolean).join(' · ') }));
+            else pool = labSuggestions().map(v => ({ v, sub: '' }));
+            items = pool.filter(p => !q || p.v.toLowerCase().includes(q));
+            if (!items.length) { box.style.display = 'none'; return; }
+            box.innerHTML = items.map((p, i) =>
+                `<div class="ac-item${i === 0 ? ' active' : ''}" data-v="${escAttr(p.v)}">${escHtml(p.v)}${p.sub ? ' <small>' + escHtml(p.sub) + '</small>' : ''}</div>`).join('');
+            box.style.display = 'block';
+        }
+        function pick(v) {
+            input.value = v;
+            box.style.display = 'none';
+            if (kind === 'drug') {
+                const f = getFormulary().find(x => x.drug.toLowerCase() === v.toLowerCase());
+                if (f) {
+                    const row = input.closest('.med-row');
+                    if (f.dose) row.querySelector('[data-dose]').value = f.dose;
+                    if (f.freq) row.querySelector('[data-freq]').value = f.freq;
+                    if (f.dur) row.querySelector('[data-dur]').value = f.dur;
+                    if (f.instr) row.querySelector('[data-instr]').value = f.instr;
+                }
+            } else {
+                // labs chosen → remember it in the most recent formulary entry? no — labs list is per-drug; store separately
+                saveLabs();
+            }
+            input.dispatchEvent(new Event('rx:state'));
+        }
+        input.addEventListener('input', show);
+        input.addEventListener('focus', show);
+        input.addEventListener('blur', () => setTimeout(() => { box.style.display = 'none'; }, 150));
+        input.addEventListener('keydown', e => {
+            if (box.style.display === 'none') return;
+            const els = [...box.querySelectorAll('.ac-item')];
+            let idx = Math.max(0, els.findIndex(e2 => e2.classList.contains('active')));
+            if (e.key === 'ArrowDown') { e.preventDefault(); els[idx]?.classList.remove('active'); els[Math.min(idx + 1, els.length - 1)]?.classList.add('active'); }
+            else if (e.key === 'ArrowUp') { e.preventDefault(); els[idx]?.classList.remove('active'); els[Math.max(idx - 1, 0)]?.classList.add('active'); }
+            else if (e.key === 'Enter') { e.preventDefault(); const act = box.querySelector('.ac-item.active') || els[0]; if (act) pick(act.dataset.v); }
+            else if (e.key === 'Escape') { box.style.display = 'none'; }
+        });
+        box.addEventListener('mousedown', e => {
+            const it = e.target.closest('.ac-item');
+            if (it) { e.preventDefault(); pick(it.dataset.v); }
+        });
+    }
+
+    /* ---------- labs persistence (simple list, formulary-adjacent) ---------- */
+    function saveLabs() {
+        const labs = [...document.querySelectorAll('[data-lab-input]')].map(i => i.value.trim()).filter(Boolean);
+        localStorage.setItem('rxpad.labs', JSON.stringify(labs));
+    }
+
+    /* ---------- New Loka EMR Server Bridge ---------- */
+    const DEFAULT_SERVER_URL = window.location.origin && window.location.origin.startsWith('http') ? window.location.origin : 'http://127.0.0.1:8080';
+    let serverUrl = localStorage.getItem('rxpad.serverUrl') || DEFAULT_SERVER_URL;
+    let isServerOnline = false;
+    window._activePatientId = null;
+
+    /* ---------- offline queue & db mirror ---------- */
+    const QUEUE_KEY = 'rxpad.pendingSync';
+    const MIRROR_KEY = 'rxpad.db_mirror';
+
+    function getPendingQueue() {
+        try {
+            return JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]');
+        } catch {
+            return [];
+        }
+    }
+
+    function queuePendingSync(payload) {
+        const q = getPendingQueue();
+        const existingIdx = q.findIndex(x => x.serial === payload.serial);
+        if (existingIdx >= 0) {
+            q[existingIdx] = payload;
+        } else {
+            q.push(payload);
+        }
+        localStorage.setItem(QUEUE_KEY, JSON.stringify(q));
+        updateServerBadge(isServerOnline);
+    }
+
+    async function flushPendingSync() {
+        if (!isServerOnline) return;
+        const q = getPendingQueue();
+        if (!q.length) return;
+
+        let flushed = 0;
+        const remaining = [];
+        for (const item of q) {
+            try {
+                const resp = await fetch(`${serverUrl}/api/rxpad/sync`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(item),
+                    mode: 'cors'
+                });
+                if (resp.ok) {
+                    flushed++;
+                } else {
+                    remaining.push(item);
+                }
+            } catch {
+                remaining.push(item);
+            }
+        }
+        localStorage.setItem(QUEUE_KEY, JSON.stringify(remaining));
+        if (flushed > 0) {
+            toast(`✅ Automatically synced ${flushed} pending prescription(s) to clinic.db`);
+            await fetchClinicDbMirror();
+        }
+        updateServerBadge(isServerOnline);
+    }
+
+    async function fetchClinicDbMirror() {
+        if (!isServerOnline) return;
+        try {
+            const resp = await fetch(`${serverUrl}/api/rxpad/prescriptions`, { mode: 'cors' });
+            if (resp.ok) {
+                const list = await resp.json();
+                localStorage.setItem(MIRROR_KEY, JSON.stringify(list));
+            }
+        } catch {}
+    }
+
+    /* ---------- server connection & status ---------- */
+    async function checkServer(showToast = false) {
+        const badge = document.getElementById('serverBadge');
+        if (badge) badge.textContent = '⏳ Checking...';
+        try {
+            const resp = await fetch(`${serverUrl}/api/rxpad/next-serial`, { method: 'GET', mode: 'cors' });
+            if (resp.ok) {
+                const data = await resp.json();
+                isServerOnline = true;
+                const nextS = data.next_serial || data.nextSerial;
+                if (nextS) {
+                    const localSerial = parseInt(localStorage.getItem('rxpad.serial') || '0', 10);
+                    if (nextS > localSerial + 1) {
+                        localStorage.setItem('rxpad.serial', String(nextS - 1));
+                        setSerialBadge();
+                    }
+                }
+                updateServerBadge(true);
+                await flushPendingSync();
+                await fetchClinicDbMirror();
+                if (showToast) toast('Connected to clinic.db');
+                return true;
+            }
+        } catch (e) {
+            // Server offline or unreachable
+        }
+        isServerOnline = false;
+        updateServerBadge(false);
+        if (showToast) toast('Running in Standalone Mode (clinic.db offline)');
+        return false;
+    }
+
+    function updateServerBadge(online) {
+        const b = document.getElementById('serverBadge');
+        if (!b) return;
+        const pendingCount = getPendingQueue().length;
+        if (online) {
+            b.className = 'bg-emerald-50 border border-emerald-300 text-emerald-800 hover:bg-emerald-100 shadow rounded-lg px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer';
+            b.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Clinic DB: Connected';
+            b.title = `Connected to ${serverUrl}\nPrescriptions read & write directly to clinic.db. Click to re-check.`;
+        } else {
+            b.className = 'bg-amber-50 border border-amber-300 text-amber-900 hover:bg-amber-100 shadow rounded-lg px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer';
+            const extra = pendingCount > 0 ? ` (${pendingCount} to sync)` : '';
+            b.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-500"></span> Standalone Mode${extra}`;
+            b.title = `clinic.db daemon not detected at ${serverUrl}\nPrescriptions saved locally and will auto-sync when daemon starts. Click to reconnect.`;
+        }
+    }
+
+    /* ---------- periodic background sync worker ---------- */
+    function startSyncWorker() {
+        setInterval(async () => {
+            await checkServer(false);
+        }, 2500);
+    }
+
+    /* ---------- state capture / restore ---------- */
+    function collectState() {
+        return {
+            patientId: window._activePatientId || null,
+            patientName: val('patientName'), ageSex: val('ageSex'), date: val('currentDate'),
+            contact: val('patientContact'), weight: val('weight'), bp: val('bp') || val('bpVitals'),
+            diagnosis: val('diagnosis'), followUp: val('followUp'),
+            meds: [...document.querySelectorAll('#medList .med-row')].map(r => ({
+                drug: r.querySelector('[data-drug]').value,
+                dose: r.querySelector('[data-dose]').value,
+                freq: r.querySelector('[data-freq]').value,
+                dur: r.querySelector('[data-dur]').value,
+                instr: r.querySelector('[data-instr]').value
+            })),
+            labs: [...document.querySelectorAll('[data-lab-input]')].map(i => i.value)
+        };
+    }
+    function applyState(s) {
+        window._activePatientId = s.patientId || null;
+        set('patientName', s.patientName); set('ageSex', s.ageSex); set('currentDate', s.date);
+        set('patientContact', s.contact); set('weight', s.weight);
+        set('bp', s.bp); set('bpVitals', s.bp);
+        set('diagnosis', s.diagnosis); set('followUp', s.followUp);
+        const ml = document.getElementById('medList'); ml.innerHTML = ''; medCount = 0;
+        (s.meds && s.meds.length ? s.meds : [{}]).forEach(m => addMedRow(m));
+        const ll = document.getElementById('labList'); ll.innerHTML = '';
+        (s.labs && s.labs.length ? s.labs : ['']).forEach(v => addLabRow(v));
+    }
+    const val = id => (document.getElementById(id) || {}).value || '';
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
+    function escHtml(s) { return String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+    function escAttr(s) { return escHtml(s); }
+    function toast(msg) {
+        const t = document.getElementById('toast');
+        t.textContent = msg; t.style.display = 'block';
+        clearTimeout(t._h); t._h = setTimeout(() => t.style.display = 'none', 3200);
+    }
+
+    /* ---------- serial number ---------- */
+    function nextSerialHint() {
+        let n = parseInt(localStorage.getItem('rxpad.serial') || '0', 10);
+        return n + 1;
+    }
+    function bumpSerial() {
+        const n = nextSerialHint();
+        localStorage.setItem('rxpad.serial', String(n));
+    }
+    function setSerialBadge() {
+        const b = document.getElementById('serialBadge');
+        if (b) b.textContent = 'Rx #: ' + String(nextSerialHint()).padStart(4, '0');
+    }
+
+    /* ---------- patient privacy & form reset ---------- */
+    function clearPatientForm() {
+        window._activePatientId = null;
+        set('patientName', '');
+        set('ageSex', '');
+        set('patientContact', '');
+        set('weight', '');
+        set('bp', '');
+        set('bpVitals', '');
+        set('diagnosis', '');
+        set('followUp', '');
+        const dEl = document.getElementById('currentDate');
+        if (dEl) dEl.value = ddmmyyyy(today());
+
+        const ml = document.getElementById('medList');
+        if (ml) { ml.innerHTML = ''; medCount = 0; addMedRow(); }
+
+        const ll = document.getElementById('labList');
+        if (ll) { ll.innerHTML = ''; addLabRow(); }
+
+        localStorage.removeItem('rxpad.lastRx');
+        localStorage.removeItem('rxpad.activeDraft');
+        setSerialBadge();
+    }
+
+    function newPrescription() {
+        const hasData = val('patientName').trim() || val('diagnosis').trim() ||
+            [...document.querySelectorAll('#medList .med-row')].some(r => r.querySelector('[data-drug]')?.value.trim());
+
+        if (hasData && !confirm('Start a new prescription? Unsaved patient data on the pad will be cleared.')) {
+            return;
+        }
+
+        clearPatientForm();
+        const pInput = document.getElementById('patientName');
+        if (pInput) pInput.focus();
+        toast('Clean prescription pad ready for new patient');
+    }
+
+    
+    /* ---------- signature background transparentizer ---------- */
+    function makeSignatureTransparent(imgEl) {
+        if (!imgEl || !imgEl.src) return;
+        const src = imgEl.src;
+        if (!src.startsWith('data:image/png') && !src.startsWith('data:image/jpeg') && !src.startsWith('data:image/webp')) {
+            return;
+        }
+        const tempImg = new Image();
+        tempImg.crossOrigin = 'anonymous';
+        tempImg.onload = function() {
+            try {
+                const canvas = document.createElement('canvas');
+                canvas.width = tempImg.naturalWidth || tempImg.width;
+                canvas.height = tempImg.naturalHeight || tempImg.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(tempImg, 0, 0);
+                const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const d = imgData.data;
+                let modified = false;
+                for (let i = 0; i < d.length; i += 4) {
+                    const r = d[i], g = d[i+1], b = d[i+2];
+                    const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+                    if (lum >= 238) {
+                        if (d[i+3] !== 0) { d[i+3] = 0; modified = true; }
+                    } else if (lum <= 130) {
+                        d[i] = Math.min(r, 20);
+                        d[i+1] = Math.min(g, 30);
+                        d[i+2] = Math.min(b, 50);
+                        d[i+3] = 255;
+                        modified = true;
+                    } else {
+                        const a = Math.round(((238 - lum) / (238 - 130)) * 255);
+                        d[i] = Math.min(r, 20);
+                        d[i+1] = Math.min(g, 30);
+                        d[i+2] = Math.min(b, 50);
+                        d[i+3] = a;
+                        modified = true;
+                    }
+                }
+                if (modified) {
+                    ctx.putImageData(imgData, 0, 0);
+                    imgEl.src = canvas.toDataURL('image/png');
+                }
+            } catch (e) {
+                console.warn('Signature transparentizer error:', e);
+            }
+        };
+        tempImg.src = src;
+    }
+
+    function getRxFilename(patientName, serialNum) {
+        const rawName = (patientName || '').trim() || 'Patient';
+        // Match historical naming format: DDMMYY_NNNN_PatientName.pdf (no spaces, e.g. 050926_0003_YashBhilawade.pdf)
+        const cleanName = rawName.replace(/[^a-zA-Z0-9_-]/g, '') || 'Patient';
+        const serialStr = String(serialNum).padStart(4, '0');
+        return `${ddmmyy(today())}_${serialStr}_${cleanName}.pdf`;
+    }
+
+    function updateFormularyAndLabs(state) {
+        const curFormulary = getFormulary();
+        let formularyChanged = false;
+        (state.meds || []).forEach(m => {
+            const drugName = (m.drug || '').trim();
+            if (!drugName) return;
+            const idx = curFormulary.findIndex(f => f.drug.toLowerCase() === drugName.toLowerCase());
+            const entry = {
+                drug: drugName,
+                dose: (m.dose || '').trim(),
+                freq: (m.freq || '').trim(),
+                dur: (m.dur || '').trim(),
+                instr: (m.instr || '').trim()
+            };
+            if (idx >= 0) {
+                curFormulary[idx] = {
+                    drug: curFormulary[idx].drug,
+                    dose: entry.dose || curFormulary[idx].dose || '',
+                    freq: entry.freq || curFormulary[idx].freq || '',
+                    dur: entry.dur || curFormulary[idx].dur || '',
+                    instr: entry.instr || curFormulary[idx].instr || ''
+                };
+            } else {
+                curFormulary.push(entry);
+            }
+            formularyChanged = true;
+        });
+        if (formularyChanged) {
+            setFormulary(curFormulary);
+        }
+
+        try {
+            const curLabs = JSON.parse(localStorage.getItem('rxpad.labs') || '[]');
+            let labsChanged = false;
+            (state.labs || []).forEach(l => {
+                const labName = (l || '').trim();
+                if (labName && !curLabs.some(x => x.toLowerCase() === labName.toLowerCase())) {
+                    curLabs.push(labName);
+                    labsChanged = true;
+                }
+            });
+            if (labsChanged) {
+                localStorage.setItem('rxpad.labs', JSON.stringify(curLabs));
+            }
+        } catch (e) {}
+    }
+
+    async function syncWithServer(state, serialNum, filename, pdfBase64) {
+        const payload = {
+            serial: serialNum,
+            filename: filename,
+            patientId: window._activePatientId || null,
+            patientName: state.patientName,
+            ageSex: state.ageSex,
+            date: state.date,
+            contact: state.contact,
+            weight: state.weight,
+            bp: state.bp,
+            diagnosis: state.diagnosis,
+            followUp: state.followUp,
+            meds: state.meds,
+            labs: state.labs,
+            rawSnapshot: JSON.stringify(state),
+            pdfBase64: pdfBase64 || null
+        };
+
+        try {
+            const resp = await fetch(`${serverUrl}/api/rxpad/sync`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+                mode: 'cors'
+            });
+            if (resp.ok) {
+                isServerOnline = true;
+                updateServerBadge(true);
+                fetchClinicDbMirror().catch(() => {});
+            } else {
+                queuePendingSync(payload);
+            }
+        } catch (err) {
+            console.warn('New Loka server sync queued (offline):', err);
+            queuePendingSync(payload);
+        }
+    }
+
+    /* ---------- Save PDF Directly (No Microsoft Print to PDF Dialog) ---------- */
+    async function savePrescriptionPdf() {
+        const name = (val('patientName') || '').trim() || 'Unnamed';
+        const serialNum = nextSerialHint();
+        const serialStr = String(serialNum).padStart(4, '0');
+        const filename = getRxFilename(name, serialNum);
+
+        const saveBtn = document.getElementById('savePdfBtn');
+        const origHtml = saveBtn ? saveBtn.innerHTML : '';
+        if (saveBtn) {
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<span class="animate-spin inline-block mr-1">⏳</span> Saving PDF...';
+        }
+
+        const state = collectState();
+        state.filename = filename;
+        state.serial = serialNum;
+        state.savedAt = Date.now();
+
+        // 1. Persist locally first (standalone guarantee for Load modal)
+        localStorage.setItem('rxpad.lastFilename', filename);
+        localStorage.setItem('rxpad.rx.' + serialStr, JSON.stringify(state));
+        localStorage.setItem('rxpad.lastRx', JSON.stringify(state));
+        bumpSerial();
+        setSerialBadge();
+
+        // 2. Track formulary & labs
+        updateFormularyAndLabs(state);
+
+        // 3. Direct PDF Generation via html2pdf
+        let pdfBase64 = null;
+        const container = document.querySelector('.page-container');
+        try {
+            container.classList.add('exporting-pdf');
+
+            // Reflect form values into DOM attributes so html2canvas renders them
+            container.querySelectorAll('input').forEach(inp => inp.setAttribute('value', inp.value));
+            container.querySelectorAll('textarea').forEach(txt => { txt.textContent = txt.value; });
+
+            const opt = {
+                margin: [8, 8, 8, 8],
+                filename: filename,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true, logging: false },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+
+            if (typeof html2pdf !== 'undefined') {
+                const worker = html2pdf().set(opt).from(container);
+
+                // Output base64 so New Loka server directly writes the PDF into Clinic folder
+                try {
+                    const dataUri = await worker.outputPdf('datauristring');
+                    if (dataUri && dataUri.includes(',')) {
+                        pdfBase64 = dataUri.split(',')[1];
+                    }
+                } catch (bErr) {
+                    console.warn('PDF base64 output error:', bErr);
+                }
+
+                // Trigger direct file download with exact naming scheme (no printer dialog!)
+                await worker.save();
+            } else {
+                // Fallback to native print if html2pdf is unavailable
+                document.title = filename.replace(/\.pdf$/i, '');
+                window.print();
+            }
+        } catch (pdfErr) {
+            console.error('Direct PDF export error:', pdfErr);
+            document.title = filename.replace(/\.pdf$/i, '');
+            window.print();
+        } finally {
+            container.classList.remove('exporting-pdf');
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = origHtml;
+            }
+        }
+
+        // 4. Synchronize with New Loka server & clinic.db (writes PDF directly to D:\Medical\Clinic)
+        syncWithServer(state, serialNum, filename, pdfBase64);
+
+        if (window.parent && window.parent !== window) {
+            try {
+                window.parent.postMessage({
+                    action: 'prescriptionSaved',
+                    serial: serialNum,
+                    filename: filename,
+                    patientName: state.patientName
+                }, '*');
+            } catch (e) {}
+        }
+
+        toast(`✅ Prescription saved: ${filename}`);
+    }
+
+    /* ---------- Native Physical Printer Print (Ctrl+P) ---------- */
+    function printPrescriptionNative() {
+        const name = (val('patientName') || '').trim() || 'Unnamed';
+        const serialNum = nextSerialHint();
+        const serialStr = String(serialNum).padStart(4, '0');
+        const filename = getRxFilename(name, serialNum);
+
+        const state = collectState();
+        state.filename = filename;
+        state.serial = serialNum;
+        state.savedAt = Date.now();
+
+        // Persist locally
+        localStorage.setItem('rxpad.lastFilename', filename);
+        localStorage.setItem('rxpad.rx.' + serialStr, JSON.stringify(state));
+        localStorage.setItem('rxpad.lastRx', JSON.stringify(state));
+        bumpSerial();
+        setSerialBadge();
+
+        updateFormularyAndLabs(state);
+        syncWithServer(state, serialNum, filename, null);
+
+        // Set document title so print dialog uses the exact naming format
+        const oldTitle = document.title;
+        document.title = filename.replace(/\.pdf$/i, '');
+
+        const restoreTitle = () => {
+            document.title = oldTitle;
+            window.removeEventListener('afterprint', restoreTitle);
+        };
+        window.addEventListener('afterprint', restoreTitle);
+        setTimeout(restoreTitle, 30000);
+
+        if (window.parent && window.parent !== window) {
+            try {
+                window.parent.postMessage({
+                    action: 'prescriptionPrinted',
+                    serial: serialNum,
+                    filename: filename,
+                    patientName: state.patientName
+                }, '*');
+            } catch (e) {}
+        }
+
+        toast(`Printing prescription #${serialStr}...`);
+        window.print();
+    }
+
+    // Alias for backward compatibility
+    function savePrescription() {
+        return savePrescriptionPdf();
+    }
+
+    function printPrescription() {
+        return printPrescriptionNative();
+    }
+
+
+    // Ctrl+P / Cmd+P shortcut listener
+    window.addEventListener('keydown', e => {
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'p') {
+            e.preventDefault();
+            printPrescriptionNative();
+        }
+    });
+
+
+    /* ---------- patient autocomplete bridge ---------- */
+    function attachPatientAutocomplete() {
+        const input = document.getElementById('patientName');
+        const box = document.getElementById('patientAcList');
+        if (!input || !box) return;
+
+        let debounceTimer = null;
+        async function search(q) {
+            let matches = [];
+            // Match from local storage prescriptions first
+            for (let i = 0; i < localStorage.length; i++) {
+                const k = localStorage.key(i);
+                if (k && k.startsWith('rxpad.rx.')) {
+                    try {
+                        const s = JSON.parse(localStorage.getItem(k));
+                        if (s && s.patientName && (!q || s.patientName.toLowerCase().includes(q))) {
+                            if (!matches.some(m => m.name.toLowerCase() === s.patientName.toLowerCase())) {
+                                matches.push({
+                                    id: s.patientId || null,
+                                    name: s.patientName,
+                                    ageSex: s.ageSex || '',
+                                    phone: s.contact || '',
+                                    source: 'Local Rx'
+                                });
+                            }
+                        }
+                    } catch {}
+                }
+            }
+
+            // Fetch from New Loka server if reachable
+            if (isServerOnline || q.length >= 2) {
+                try {
+                    const resp = await fetch(`${serverUrl}/api/rxpad/patients?q=${encodeURIComponent(q)}`, { mode: 'cors' });
+                    if (resp.ok) {
+                        const serverPts = await resp.json();
+                        serverPts.forEach(sp => {
+                            const idx = matches.findIndex(m => m.name.toLowerCase() === sp.name.toLowerCase());
+                            if (idx >= 0) {
+                                matches[idx].id = sp.id;
+                                matches[idx].source = 'clinic.db';
+                                if (sp.phone) matches[idx].phone = sp.phone;
+                                if (sp.age_sex) matches[idx].ageSex = sp.age_sex;
+                            } else {
+                                matches.unshift({
+                                    id: sp.id,
+                                    name: sp.name,
+                                    ageSex: sp.age_sex || '',
+                                    phone: sp.phone || '',
+                                    source: 'clinic.db'
+                                });
+                            }
+                        });
+                    }
+                } catch {}
+            }
+
+            if (!matches.length) { box.style.display = 'none'; return; }
+
+            box.innerHTML = matches.slice(0, 8).map((p, i) => `
+                <div class="ac-item${i === 0 ? ' active' : ''}" data-idx="${i}">
+                    <div class="font-semibold flex justify-between">
+                        <span>${escHtml(p.name)}</span>
+                        <span class="text-xs ${p.source === 'clinic.db' ? 'text-emerald-700 bg-emerald-50' : 'text-gray-500 bg-gray-50'} px-1.5 py-0.5 rounded">${p.source}</span>
+                    </div>
+                    <small class="text-gray-500">${escHtml([p.ageSex, p.phone].filter(Boolean).join(' · '))}</small>
+                </div>
+            `).join('');
+            box.style.display = 'block';
+
+            box.querySelectorAll('.ac-item').forEach((item, idx) => {
+                item.onmousedown = (e) => {
+                    e.preventDefault();
+                    pickPatient(matches[idx]);
+                };
+            });
+        }
+
+        function pickPatient(p) {
+            window._activePatientId = p.id || null;
+            input.value = p.name;
+            if (p.ageSex) set('ageSex', p.ageSex);
+            if (p.phone) set('patientContact', p.phone);
+            box.style.display = 'none';
+            toast('Pre-filled demographics for ' + p.name);
+        }
+
+        input.addEventListener('input', () => {
+            clearTimeout(debounceTimer);
+            const q = input.value.trim().toLowerCase();
+            debounceTimer = setTimeout(() => search(q), 180);
+        });
+        input.addEventListener('focus', () => {
+            const q = input.value.trim().toLowerCase();
+            search(q);
+        });
+        input.addEventListener('blur', () => setTimeout(() => { box.style.display = 'none'; }, 200));
+        input.addEventListener('keydown', e => {
+            if (box.style.display === 'none') return;
+            const els = [...box.querySelectorAll('.ac-item')];
+            let idx = els.findIndex(el => el.classList.contains('active'));
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                els[idx]?.classList.remove('active');
+                els[Math.min(idx + 1, els.length - 1)]?.classList.add('active');
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                els[idx]?.classList.remove('active');
+                els[Math.max(idx - 1, 0)]?.classList.add('active');
+            } else if (e.key === 'Enter') {
+                const active = box.querySelector('.ac-item.active');
+                if (active) {
+                    e.preventDefault();
+                    const i = parseInt(active.dataset.idx, 10);
+                    active.dispatchEvent(new MouseEvent('mousedown'));
+                }
+            } else if (e.key === 'Escape') {
+                box.style.display = 'none';
+            }
+        });
+    }
+
+    /* ---------- load modal ---------- */
+    let lastSnapshots = [];
+    async function openLoad() {
+        document.getElementById('loadModal').classList.add('open');
+        await renderLoadList();
+    }
+    function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+    async function renderLoadList() {
+        const q = (document.getElementById('loadSearch').value || '').toLowerCase();
+        const listContainer = listEl();
+        listContainer.innerHTML = '<div class="text-gray-500 text-center py-6">Loading prescriptions...</div>';
+
+        lastSnapshots = [];
+        // 1. Gather local snapshots
+        for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k && k.startsWith('rxpad.rx.')) {
+                try {
+                    const s = JSON.parse(localStorage.getItem(k));
+                    s._source = 'local';
+                    lastSnapshots.push(s);
+                } catch {}
+            }
+        }
+
+        // 1b. Gather cached mirror from clinic.db (available offline)
+        const mirrorRaw = localStorage.getItem(MIRROR_KEY);
+        if (mirrorRaw) {
+            try {
+                const mirrorList = JSON.parse(mirrorRaw);
+                mirrorList.forEach(sp => {
+                    const snap = sp.snapshot || {};
+                    const existingIdx = lastSnapshots.findIndex(x => (x.serial && x.serial === sp.serial) || (x.filename && x.filename === sp.filename));
+                    const mapped = {
+                        patientId: sp.patient_id || snap.patientId || null,
+                        patientName: sp.patient_name || snap.patientName || 'Unnamed',
+                        ageSex: sp.age_sex || snap.ageSex || '',
+                        contact: sp.contact || snap.contact || '',
+                        date: sp.date || snap.date || '',
+                        weight: sp.weight || snap.weight || '',
+                        bp: sp.bp || snap.bp || '',
+                        diagnosis: sp.diagnosis || snap.diagnosis || '',
+                        followUp: sp.follow_up || snap.followUp || snap.follow_up || '',
+                        meds: (sp.meds && sp.meds.length) ? sp.meds : (snap.meds || []),
+                        labs: (sp.labs && sp.labs.length) ? sp.labs : (snap.labs || []),
+                        filename: sp.filename || snap.filename || '',
+                        serial: sp.serial || snap.serial || 0,
+                        dispenseStatus: sp.dispense_status || snap.dispenseStatus || 'prescribed',
+                        _source: 'clinic.db',
+                        savedAt: snap.savedAt || (sp.created_at ? new Date(sp.created_at).getTime() : Date.now())
+                    };
+                    if (existingIdx >= 0) {
+                        lastSnapshots[existingIdx] = { ...lastSnapshots[existingIdx], ...mapped };
+                    } else {
+                        lastSnapshots.push(mapped);
+                    }
+                });
+            } catch {}
+        }
+
+        // 2. Fetch from New Loka server if connected
+        try {
+            const resp = await fetch(`${serverUrl}/api/rxpad/prescriptions`, { mode: 'cors' });
+            if (resp.ok) {
+                const serverList = await resp.json();
+                localStorage.setItem(MIRROR_KEY, JSON.stringify(serverList));
+                serverList.forEach(sp => {
+                    const snap = sp.snapshot || {};
+                    const existingIdx = lastSnapshots.findIndex(x => (x.serial && x.serial === sp.serial) || (x.filename && x.filename === sp.filename));
+                    const mapped = {
+                        patientId: sp.patient_id || snap.patientId || null,
+                        patientName: sp.patient_name || snap.patientName || 'Unnamed',
+                        ageSex: sp.age_sex || snap.ageSex || '',
+                        contact: sp.contact || snap.contact || '',
+                        date: sp.date || snap.date || '',
+                        weight: sp.weight || snap.weight || '',
+                        bp: sp.bp || snap.bp || '',
+                        diagnosis: sp.diagnosis || snap.diagnosis || '',
+                        followUp: sp.follow_up || snap.followUp || snap.follow_up || '',
+                        meds: (sp.meds && sp.meds.length) ? sp.meds : (snap.meds || []),
+                        labs: (sp.labs && sp.labs.length) ? sp.labs : (snap.labs || []),
+                        filename: sp.filename || snap.filename || '',
+                        serial: sp.serial || snap.serial || 0,
+                        dispenseStatus: sp.dispense_status || snap.dispenseStatus || 'prescribed',
+                        _source: 'clinic.db',
+                        savedAt: snap.savedAt || (sp.created_at ? new Date(sp.created_at).getTime() : Date.now())
+                    };
+                    if (existingIdx >= 0) {
+                        lastSnapshots[existingIdx] = { ...lastSnapshots[existingIdx], ...mapped };
+                    } else {
+                        lastSnapshots.push(mapped);
+                    }
+                });
+            }
+        } catch (e) {
+            // server offline, using local drafts
+        }
+
+        lastSnapshots.sort((a, b) => (b.serial || 0) - (a.serial || 0) || (b.savedAt || 0) - (a.savedAt || 0));
+
+        const filtered = lastSnapshots.filter(s =>
+            !q ||
+            (s.patientName || '').toLowerCase().includes(q) ||
+            (s.filename || '').toLowerCase().includes(q) ||
+            (s.diagnosis || '').toLowerCase().includes(q) ||
+            (s.meds && s.meds.some(m => (m.drug || '').toLowerCase().includes(q)))
+        );
+
+        listContainer.innerHTML = filtered.map((s, i) => {
+            const isDispensed = s.dispenseStatus === 'dispensed';
+            const statusBadge = isDispensed
+                ? '<span class="text-xs bg-emerald-100 text-emerald-800 font-semibold px-2 py-0.5 rounded">💊 Dispensed</span>'
+                : '<span class="text-xs bg-amber-100 text-amber-800 font-semibold px-2 py-0.5 rounded">Prescribed</span>';
+            const sourceBadge = s._source === 'clinic.db'
+                ? '<span class="text-[10px] bg-blue-50 text-blue-700 border border-blue-200 px-1 rounded">clinic.db</span>'
+                : '<span class="text-[10px] bg-gray-100 text-gray-600 px-1 rounded">Local</span>';
+
+            return `
+            <div class="border rounded-lg px-4 py-3 mb-2 hover:bg-blue-50 cursor-pointer transition-colors" onclick="loadSnapshot(${i})">
+                <div class="flex justify-between items-center">
+                    <div class="font-semibold text-gray-900 flex items-center gap-2">
+                        <span>${escHtml(s.patientName || 'Unnamed')}</span>
+                        ${sourceBadge}
+                    </div>
+                    <div class="flex items-center gap-2">
+                        ${statusBadge}
+                        <span class="text-xs text-gray-500">${escHtml(s.date || '')}</span>
+                    </div>
+                </div>
+                <div class="text-xs text-gray-600 mt-1">
+                    <span class="font-mono text-gray-500">Rx #${String(s.serial || 0).padStart(4, '0')}</span> &bull;
+                    ${s.filename ? escHtml(s.filename) + ' &bull; ' : ''}
+                    ${s.meds ? s.meds.filter(m => m.drug).length : 0} medicine(s)
+                    ${s.labs && s.labs.length ? ` &bull; ${s.labs.length} lab(s)` : ''}
+                </div>
+                ${s.diagnosis ? `<div class="text-xs text-gray-500 italic mt-0.5 line-clamp-1">${escHtml(s.diagnosis)}</div>` : ''}
+            </div>
+            `;
+        }).join('') || '<div class="text-gray-500 text-center py-8">No saved prescriptions found.</div>';
+    }
+    function listEl() { return document.getElementById('loadList'); }
+    function loadSnapshot(i) {
+        const s = lastSnapshots[i];
+        if (!s) return;
+        applyState(s);
+        if (s.date) {
+            document.getElementById('currentDate').value = s.date;
+        } else {
+            document.getElementById('currentDate').value = ddmmyyyy(today());
+        }
+        closeModal('loadModal');
+        toast('Loaded Rx #' + String(s.serial || 0).padStart(4, '0') + ' (' + (s.patientName || 'prescription') + ')');
+    }
+
+    /* ---------- boot ---------- */
+    (async function boot() {
+        document.getElementById('currentDate').value = ddmmyyyy(today());
+
+        // Seed formulary from standard prescriptions if empty
+        if (!localStorage.getItem(FSI_KEY)) {
+            setFormulary([
+                { drug: 'NITROFURANTOIN 100MG', dose: '1 Tab', freq: 'BD', dur: '5d', instr: 'After breakfast and dinner' },
+                { drug: 'ZINCOVIT (VIT C) 500MG', dose: '1 Tab', freq: 'OD', dur: '15d', instr: 'After lunch' }
+            ]);
+        }
+
+        // Purge legacy personal test items from localStorage if present
+        if (localStorage.getItem('rxpad.rx.0003') || localStorage.getItem('rxpad.rx.0010')) {
+            localStorage.removeItem('rxpad.rx.0001');
+            localStorage.removeItem('rxpad.rx.0002');
+            localStorage.removeItem('rxpad.rx.0003');
+            localStorage.removeItem('rxpad.rx.0010');
+            const ad = localStorage.getItem('rxpad.activeDraft');
+            if (ad && (ad.includes('Yash Bhilawade') || ad.includes('Punarnava Shastry'))) {
+                localStorage.removeItem('rxpad.activeDraft');
+            }
+        }
+
+        // Seed clean demo prescription for Ramesh Patel
+        const demoRx1State = {
+            serial: 1,
+            patientId: 'demo-pt-001',
+            patientName: 'Ramesh Patel',
+            ageSex: '54y / M',
+            date: ddmmyyyy(today()),
+            contact: '+1 (555) 234-5678',
+            weight: '74',
+            bp: '138/86',
+            diagnosis: 'Type 2 Diabetes Mellitus, Essential Hypertension (Stage 1)',
+            followUp: 'after 30 days',
+            meds: [
+                { drug: 'METFORMIN 500MG', dose: '1 Tab', freq: 'BD', dur: '30d', instr: 'After breakfast and dinner' },
+                { drug: 'TELMISARTAN 40MG', dose: '1 Tab', freq: 'OD', dur: '30d', instr: 'After breakfast' }
+            ],
+            labs: ['BSL (F+PP) + HbA1c', 'Serum Creatinine', 'Lipid Profile'],
+            filename: '010126_0001_RameshPatel.pdf',
+            savedAt: Date.now()
+        };
+        if (!localStorage.getItem('rxpad.rx.0001')) {
+            localStorage.setItem('rxpad.rx.0001', JSON.stringify(demoRx1State));
+        }
+
+        const curSerial = parseInt(localStorage.getItem('rxpad.serial') || '0', 10);
+        if (curSerial < 1) {
+            localStorage.setItem('rxpad.serial', '1');
+        }
+
+        // Initialize clean pad structure
+        clearPatientForm();
+
+        // Check URL parameters for pre-filling or loading specific prescription
+        const params = new URLSearchParams(window.location.search);
+        let loadedFromParam = false;
+
+        if (params.has('serial') || params.has('loadSerial')) {
+            const sNum = parseInt(params.get('serial') || params.get('loadSerial'), 10);
+            const sKey = 'rxpad.rx.' + String(sNum).padStart(4, '0');
+            const raw = localStorage.getItem(sKey);
+            if (raw) {
+                try {
+                    const s = JSON.parse(raw);
+                    applyState(s);
+                    loadedFromParam = true;
+                    toast('Loaded Rx #' + String(sNum).padStart(4, '0') + ' (' + (s.patientName || 'prescription') + ')');
+                } catch(e) {}
+            }
+        }
+
+        if (params.has('draft')) {
+            try {
+                const s = JSON.parse(decodeURIComponent(params.get('draft')));
+                applyState(s);
+                loadedFromParam = true;
+                toast('Prescription ready for review');
+            } catch(e) {}
+        }
+
+        if (params.has('patientId') || params.has('name') || params.has('patientName')) {
+            if (params.get('patientId')) window._activePatientId = params.get('patientId');
+            if (params.get('name') || params.get('patientName')) set('patientName', params.get('name') || params.get('patientName'));
+            if (params.get('ageSex')) set('ageSex', params.get('ageSex'));
+            if (params.get('phone') || params.get('contact')) set('patientContact', params.get('phone') || params.get('contact'));
+            if (params.get('bp')) { set('bp', params.get('bp')); set('bpVitals', params.get('bp')); }
+            if (params.get('weight')) set('weight', params.get('weight'));
+            if (params.get('diagnosis')) set('diagnosis', params.get('diagnosis'));
+            if (params.get('followUp')) set('followUp', params.get('followUp'));
+            if (params.get('meds')) {
+                try {
+                    const parsedMeds = JSON.parse(params.get('meds'));
+                    if (Array.isArray(parsedMeds) && parsedMeds.length) {
+                        const ml = document.getElementById('medList');
+                        ml.innerHTML = '';
+                        medCount = 0;
+                        parsedMeds.forEach(m => addMedRow(m));
+                    }
+                } catch(e) {}
+            }
+            if (params.get('labs')) {
+                try {
+                    const parsedLabs = JSON.parse(params.get('labs'));
+                    if (Array.isArray(parsedLabs) && parsedLabs.length) {
+                        const ll = document.getElementById('labList');
+                        ll.innerHTML = '';
+                        parsedLabs.forEach(l => addLabRow(l));
+                    }
+                } catch(e) {}
+            }
+            loadedFromParam = true;
+            toast('Prescription ready for review');
+        }
+
+        // If no explicit URL parameters and not an explicit new request, load active draft (Demo: Ramesh Patel)
+        if (!loadedFromParam && !params.has('new')) {
+            const activeDraft = localStorage.getItem('rxpad.activeDraft');
+            if (activeDraft) {
+                try {
+                    applyState(JSON.parse(activeDraft));
+                    toast('Prescription ready for review');
+                } catch(e) {}
+            } else {
+                localStorage.setItem('rxpad.activeDraft', JSON.stringify(demoRx1State));
+                applyState(demoRx1State);
+                toast('Demo prescription for Ramesh Patel loaded and ready for review');
+            }
+        }
+
+        // Add top-left status bar with Next Rx # and Server status
+        const topBar = document.createElement('div');
+        topBar.id = 'statusBar';
+        topBar.className = 'no-print fixed top-4 left-4 flex items-center gap-2 z-50';
+        topBar.innerHTML = `
+            <div id="serialBadge" class="bg-white border border-gray-300 shadow rounded-lg px-3 py-1.5 text-sm font-semibold text-gray-700"></div>
+            <button id="serverBadge" onclick="checkServer(true)" class="bg-white border border-gray-300 shadow rounded-lg px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 flex items-center gap-1.5 transition-colors"></button>
+        `;
+        document.body.appendChild(topBar);
+        setSerialBadge();
+
+        attachPatientAutocomplete();
+        makeSignatureTransparent(document.getElementById('doctorSigImg'));
+        await checkServer(false);
+        startSyncWorker();
+
+        // Load RxPad Template
+        try {
+            let tpl = null;
+            const localTpl = localStorage.getItem('rxpad.template');
+            if (localTpl) {
+                try { tpl = JSON.parse(localTpl); } catch (e) {}
+            }
+            if (!tpl && isServerOnline) {
+                try {
+                    const tResp = await fetch(`${serverUrl}/api/rxpad/template`, { mode: 'cors' });
+                    if (tResp.ok) {
+                        tpl = await tResp.json();
+                        localStorage.setItem('rxpad.template', JSON.stringify(tpl));
+                    }
+                } catch (e) {}
+            }
+            if (tpl) {
+                applyTemplate(tpl);
+            } else {
+                applyTemplate(TEMPLATE_PRESETS['newloka-demo']);
+            }
+        } catch (e) {
+            console.warn('Template init error:', e);
+            applyTemplate(TEMPLATE_PRESETS['newloka-demo']);
+        }
+
+        await loadPrescriberProfileFromEMR();
+        /* ---------- New Loka Dynamic Prescriber & Mesh Synchronization ---------- */
+        async function loadPrescriberProfileFromEMR() {
+            try {
+                const resp = await fetch(`${serverUrl}/api/prescriber/profile`, { mode: 'cors' });
+                if (resp.ok) {
+                    const prof = await resp.json();
+                    if (prof) {
+                        const cName = prof.clinicianName || prof.clinician_name;
+                        const qual = prof.qualifications;
+                        const reg = prof.regNo || prof.registration_no;
+                        const sig = prof.signatureBase64 || prof.signature_data_url;
+                        const logo = prof.logoBase64 || prof.logo_data_url || prof.clinicHeader?.logoBase64;
+                        const header = prof.clinicHeader || {};
+
+                        if (cName) {
+                            const dn = document.getElementById('doctorName');
+                            if (dn) dn.value = cName;
+                            const dsn = document.getElementById('doctorSignName');
+                            if (dsn) dsn.value = cName;
+                        }
+                        if (qual) {
+                            const dq = document.getElementById('doctorQual');
+                            if (dq) dq.value = qual;
+                        }
+                        if (reg) {
+                            const regStr = reg.startsWith('Reg') ? reg : 'Reg No: ' + reg;
+                            const dr = document.getElementById('doctorReg');
+                            if (dr) dr.value = regStr;
+                            const dsr = document.getElementById('doctorSignReg');
+                            if (dsr) dsr.value = regStr;
+                        }
+                        if (sig && sig.startsWith('data:image')) {
+                            const sImg = document.getElementById('doctorSigImg');
+                            if (sImg) { sImg.src = sig; makeSignatureTransparent(sImg); }
+                        }
+                        if (logo && logo.startsWith('data:image')) {
+                            const lImg = document.getElementById('clinicLogoImg');
+                            if (lImg) lImg.src = logo;
+                        }
+                        if (header.address || header.phone || header.email) {
+                            const cc = document.getElementById('clinicContact');
+                            if (cc) {
+                                let lines = [];
+                                if (header.address) lines.push(header.address);
+                                let contactLine = [];
+                                if (header.phone) contactLine.push('Phone: ' + header.phone);
+                                if (header.email) contactLine.push('Email: ' + header.email);
+                                if (contactLine.length) lines.push(contactLine.join(' | '));
+                                if (lines.length) cc.value = lines.join('\n');
+                            }
+                        }
+                    }
+                }
+            } catch (e) {
+                // Standalone offline mode: uses authentic embedded defaults
+            }
+        }
+
+        // Parent SPA bidirectional communication
+        window.addEventListener('message', (e) => {
+            if (!e.data || typeof e.data !== 'object') return;
+            if (e.data.action === 'loadPatient') {
+                const p = e.data.patient;
+                if (p) {
+                    if (p.id) window._activePatientId = p.id;
+                    if (p.name) set('patientName', p.name);
+                    if (p.ageSex) set('ageSex', p.ageSex);
+                    if (p.contact) set('patientContact', p.contact);
+                    if (p.bp) { set('bp', p.bp); set('bpVitals', p.bp); }
+                    if (p.weight) set('weight', p.weight);
+                    if (p.diagnosis) set('diagnosis', p.diagnosis);
+                    if (p.followUp) set('followUp', p.followUp);
+                    toast('Prescription ready for ' + (p.name || 'patient'));
+                }
+            } else if (e.data.action === 'newRx') {
+                newPrescription();
+            } else if (e.data.action === 'loadPrescription') {
+                if (e.data.snapshot) {
+                    applyState(e.data.snapshot);
+                    toast('Prescription loaded into pad');
+                }
+            } else if (e.data.action === 'applyTemplate') {
+                if (e.data.template) {
+                    localStorage.setItem('rxpad.template', JSON.stringify(e.data.template));
+                    applyTemplate(e.data.template);
+                    toast('Prescription pad template updated');
+                }
+            }
+        });
+
+
+        if (isServerOnline) {
+            // Fetch centralized formulary from clinic.db and merge
+            try {
+                const fResp = await fetch(`${serverUrl}/api/rxpad/formulary`, { mode: 'cors' });
+                if (fResp.ok) {
+                    const serverItems = await fResp.json();
+                    if (Array.isArray(serverItems) && serverItems.length) {
+                        const localFsi = getFormulary();
+                        serverItems.forEach(si => {
+                            const idx = localFsi.findIndex(x => x.drug.toLowerCase() === si.drug.toLowerCase());
+                            if (idx >= 0) {
+                                localFsi[idx] = { ...localFsi[idx], ...si };
+                            } else {
+                                localFsi.push(si);
+                            }
+                        });
+                        setFormulary(localFsi);
+                    }
+                }
+            } catch (e) {}
+
+            // Also check next continuous serial from server
+            try {
+                const sResp = await fetch(`${serverUrl}/api/rxpad/next-serial`, { mode: 'cors' });
+                if (sResp.ok) {
+                    const sData = await sResp.json();
+                    if (sData.next_serial && sData.next_serial > nextSerialHint()) {
+                        localStorage.setItem('rxpad.serial', String(sData.next_serial - 1));
+                        setSerialBadge();
+                    }
+                }
+            } catch (e) {}
+        }
+    })();
+    </script>
+</body>
+</html>

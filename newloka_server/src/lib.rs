@@ -21,7 +21,8 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tower_http::cors::CorsLayer;
 
-pub mod demo;
+#[cfg(feature = "demo")]
+pub use newloka_demo as demo;
 pub mod updater;
 pub mod rxpad;
 
@@ -211,7 +212,7 @@ async fn embedded_static_handler(
 /// Build the Axum router for the given application state.
 pub fn app(state: Arc<RwLock<AppState>>) -> Router {
     Router::new()
-        .route("/", get(|| async { Redirect::temporary("/static/index.html") }))
+        .route("/", get(|| async { Redirect::temporary("/static/index.html#rxpad") }))
         .route("/health", get(health_handler))
         .route("/api/health", get(health_handler))
         .route("/metadata", get(capability_statement))
@@ -310,12 +311,21 @@ pub fn app(state: Arc<RwLock<AppState>>) -> Router {
         .route("/api/rxpad/patients", get(rxpad::search_patients))
         .route("/api/rxpad/formulary", get(rxpad::get_formulary).post(rxpad::update_formulary))
         .route("/api/rxpad/events", get(rxpad::rxpad_events_handler))
+        .route("/api/rxpad/template", get(rxpad::get_template).post(rxpad::save_template))
         .route("/rxpad", get(rxpad::serve_rxpad))
         /* Instance Configuration & Prescriber Profile */
         .route("/api/config", get(get_config_handler).post(save_config_handler))
         .route("/api/prescriber/profile", get(get_prescriber_profile_handler).post(save_prescriber_profile_handler))
         /* Inpatient Census */
         .route("/api/inpatient/census", get(get_inpatient_census_handler).post(save_inpatient_census_handler))
+        /* Pharmacopoeia & Clinical Order Sets */
+        .route("/api/pharmacopoeia/info", get(pharmacopoeia_info_handler))
+        .route("/api/pharmacopoeia/search", get(pharmacopoeia_search_handler))
+        .route("/api/pharmacopoeia/entry/:id", get(pharmacopoeia_get_entry_handler))
+        .route("/api/pharmacopoeia/categories", get(pharmacopoeia_categories_handler))
+        .route("/api/pharmacopoeia/order-sets", get(pharmacopoeia_list_order_sets_handler))
+        .route("/api/pharmacopoeia/order-sets/:id", get(pharmacopoeia_get_order_set_handler))
+        .route("/api/pharmacopoeia/check-safety", post(pharmacopoeia_check_safety_handler))
         /* Billing & Cashier with ABAC */
         .route("/api/billing/invoices", get(get_billing_invoices_handler).post(create_billing_invoice_handler))
         .route("/api/billing/invoices/:id/pay", post(pay_billing_invoice_handler))
@@ -362,11 +372,13 @@ pub async fn run(bind: &str) -> anyhow::Result<()> {
     let dmk = resolve_master_key()?;
     let storage =
         newloka_core::storage::StorageEngine::open(&db_path, node_id.clone(), dmk).await?;
-    if storage.is_empty().await.unwrap_or(false) {
-        tracing::info!("Database empty -- seeding demo dataset");
-        demo::seed_demo_data(&storage, &node_id).await?;
+    #[cfg(feature = "demo")]
+    {
+        if storage.is_empty().await.unwrap_or(false) {
+            tracing::info!("Database empty -- importing encrypted demo dataset fixtures");
+            demo::seed_demo_data(&storage, &node_id).await?;
+        }
     }
-    seed_demo_users(&storage).await?;
     let storage = std::sync::Arc::new(storage);
     let tier_str = std::env::var("NEWLOKA_TIER").unwrap_or_else(|_| "T1".to_string());
     let is_t0 = tier_str.eq_ignore_ascii_case("T0");
@@ -2034,80 +2046,6 @@ fn parse_tier(s: &str) -> newloka_core::DeploymentTier {
     }
 }
 
-async fn seed_demo_users(storage: &newloka_core::storage::StorageEngine) -> anyhow::Result<()> {
-    let existing = storage.get_user_by_username("admin").await.ok().flatten();
-    if existing.is_some() {
-        return Ok(());
-    }
-    let users = vec![
-        (
-            "admin",
-            "New Loka Admin",
-            vec!["administrator"],
-            None,
-            vec![],
-            vec![],
-        ),
-        (
-            "pathlab",
-            "Pathology Lab",
-            vec!["lab_technician"],
-            Some("Pathology".to_string()),
-            vec!["path-team".to_string()],
-            vec!["pathology"],
-        ),
-        (
-            "imaging",
-            "Imaging Tech",
-            vec!["imaging_technician"],
-            Some("Radiology".to_string()),
-            vec!["radio-team".to_string()],
-            vec!["radiology"],
-        ),
-        (
-            "resident",
-            "Resident Doctor",
-            vec!["resident_doctor"],
-            Some("Internal Medicine".to_string()),
-            vec!["team-alpha".to_string()],
-            vec![],
-        ),
-        (
-            "depthead",
-            "Department Head",
-            vec!["department_head"],
-            Some("Internal Medicine".to_string()),
-            vec!["team-alpha".to_string(), "mgmt-team".to_string()],
-            vec![],
-        ),
-    ];
-    for (username, display_name, roles, dept, teams, labs) in users {
-        let (salt, hash) = newloka_core::identity::Authenticator::hash_password(username)?;
-        let parsed_roles: Vec<newloka_core::identity::Role> =
-            roles.iter().filter_map(|r| r.parse().ok()).collect();
-        let parsed_labs: Vec<newloka_core::cpoe::LabDepartment> =
-            labs.iter().filter_map(|l| l.parse().ok()).collect();
-        let user = newloka_core::identity::User {
-            id: uuid::Uuid::new_v4().to_string(),
-            username: username.to_string(),
-            display_name: display_name.to_string(),
-            roles: parsed_roles,
-            department_id: dept,
-            team_ids: teams,
-            lab_affiliations: parsed_labs,
-            active: true,
-            created_at: chrono::Utc::now(),
-            password_hash: hash,
-            salt,
-            totp_secret: None,
-            last_login: None,
-        };
-        storage.store_user(&user).await?;
-    }
-    tracing::info!("Seeded demo users");
-    Ok(())
-}
-
 /* ------------------------------------------------------------------ */
 /* System & In-App Updater Handlers                                    */
 /* ------------------------------------------------------------------ */
@@ -2207,6 +2145,9 @@ async fn get_config_handler(
     if let Ok(Some(cfg)) = state.storage.get_json(CONFIG_DOC_ID).await {
         return Json(cfg);
     }
+    if let Ok(Some(cfg)) = state.storage.get_json("config-default").await {
+        return Json(cfg);
+    }
     Json(serde_json::json!({
         "tier": "T0",
         "clinicProfile": "solo",
@@ -2228,14 +2169,7 @@ async fn get_config_handler(
             "departments", "reports", "research", "consent", "federation",
             "audit", "settings"
         ],
-        "clinic": {
-            "name": "New Loka Health Center",
-            "subtitle": "Polymorphic Local-First Clinic",
-            "regNo": "NL-CLINIC-2026-001",
-            "address": "Medical Enclave, Suite 4",
-            "phone": "+91 98765 43210",
-            "email": "contact@newloka.org"
-        },
+        "clinic": null,
         "sync": {
             "meshPeers": [],
             "centralHospitalUrl": "",
@@ -2263,23 +2197,44 @@ async fn get_prescriber_profile_handler(
     State(state): State<Arc<RwLock<AppState>>>,
 ) -> Json<serde_json::Value> {
     let state = state.read().await;
-    if let Ok(Some(profile)) = state.storage.get_json(PRESCRIBER_DOC_ID).await {
+    if let Ok(Some(mut profile)) = state.storage.get_json(PRESCRIBER_DOC_ID).await {
+        if profile.get("logoBase64").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+            if let Some(logo) = profile.get("clinicHeader").and_then(|h| h.get("logoBase64")).cloned() {
+                if let Some(obj) = profile.as_object_mut() {
+                    obj.insert("logoBase64".to_string(), logo.clone());
+                    obj.insert("logo_data_url".to_string(), logo);
+                }
+            }
+        }
+        return Json(profile);
+    }
+    if let Ok(Some(mut profile)) = state.storage.get_json("prescriber-profile-default").await {
+        if profile.get("logoBase64").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+            if let Some(logo) = profile.get("clinicHeader").and_then(|h| h.get("logoBase64")).cloned() {
+                if let Some(obj) = profile.as_object_mut() {
+                    obj.insert("logoBase64".to_string(), logo.clone());
+                    obj.insert("logo_data_url".to_string(), logo);
+                }
+            }
+        }
         return Json(profile);
     }
     Json(serde_json::json!({
-        "clinicianName": "Dr. Clinician",
-        "qualifications": "MBBS, MD (Internal Medicine)",
-        "regNo": "MCI-78219/2020",
-        "specialty": "General & Internal Medicine",
+        "clinicianName": "",
+        "clinician_name": "",
+        "qualifications": "",
+        "regNo": "",
+        "registration_no": "",
+        "specialty": "",
+        "department": "",
         "isLegalPrescriber": true,
+        "is_legal_prescriber": true,
         "signatureBase64": "",
-        "clinicHeader": {
-            "clinicName": "New Loka Health Center",
-            "tagline": "Family Medicine & Ambulatory Care",
-            "address": "123 Medical Enclave, Civil Lines",
-            "phone": "+91 98765 43210",
-            "regNo": "CLI-2026-9901"
-        }
+        "signature_data_url": "",
+        "signature": "",
+        "logoBase64": "",
+        "logo_data_url": "",
+        "clinicHeader": null
     }))
 }
 
@@ -2304,72 +2259,7 @@ async fn get_inpatient_census_handler(
     if let Ok(Some(census)) = state.storage.get_json(INPATIENT_CENSUS_DOC_ID).await {
         return Json(census);
     }
-    Json(serde_json::json!([
-        {
-            "id": "inp-001",
-            "patientName": "Rahul Sharma",
-            "ageSex": "42y / M",
-            "mrn": "IP-8821",
-            "ward": "Ward 2A (General Medicine)",
-            "bed": "Bed 01",
-            "admitDate": "12/11/2026",
-            "daysAdmitted": 2,
-            "diagnosis": "Acute Gastroenteritis with moderate dehydration & hypokalemia",
-            "acuity": "Stable",
-            "news2": 1,
-            "attending": "Dr. A. Sen (Senior Resident)",
-            "diet": "Soft diet, ORS fluids",
-            "status": "Admitted"
-        },
-        {
-            "id": "inp-002",
-            "patientName": "Sunita Rao",
-            "ageSex": "58y / F",
-            "mrn": "IP-8834",
-            "ward": "Ward 2A (General Medicine)",
-            "bed": "Bed 04",
-            "admitDate": "10/11/2026",
-            "daysAdmitted": 4,
-            "diagnosis": "Community Acquired Pneumonia (Right Middle Lobe) with Type 2 Diabetes",
-            "acuity": "Guarded",
-            "news2": 3,
-            "attending": "Dr. A. Sen (Senior Resident)",
-            "diet": "Diabetic diet",
-            "status": "Admitted"
-        },
-        {
-            "id": "inp-003",
-            "patientName": "Michael Fernandes",
-            "ageSex": "67y / M",
-            "mrn": "IP-8812",
-            "ward": "ICU (Intensive Care)",
-            "bed": "Bed 02",
-            "admitDate": "13/11/2026",
-            "daysAdmitted": 1,
-            "diagnosis": "NSTEMI / Acute Coronary Syndrome with elevated Troponin-I",
-            "acuity": "Critical",
-            "news2": 7,
-            "attending": "Dr. Clinician (Cardiology Attending)",
-            "diet": "Low salt cardiac diet",
-            "status": "Admitted"
-        },
-        {
-            "id": "inp-004",
-            "patientName": "Deepa Nair",
-            "ageSex": "34y / F",
-            "mrn": "IP-8840",
-            "ward": "Ward 3B (Surgical)",
-            "bed": "Bed 08",
-            "admitDate": "14/11/2026",
-            "daysAdmitted": 1,
-            "diagnosis": "Post-Op Day 1: Laparoscopic Appendectomy for Acute Appendicitis",
-            "acuity": "Stable",
-            "news2": 0,
-            "attending": "Dr. R. Verma (Consultant Surgeon)",
-            "diet": "Clear liquids progressing to light diet",
-            "status": "Admitted"
-        }
-    ]))
+    Json(serde_json::json!([]))
 }
 
 async fn save_inpatient_census_handler(
@@ -2400,65 +2290,7 @@ async fn get_billing_invoices_handler(
     let invoices: serde_json::Value = if let Ok(Some(inv)) = state.storage.get_json(BILLING_INVOICES_DOC_ID).await {
         inv
     } else {
-        serde_json::json!([
-            {
-                "id": "INV-2026-0041",
-                "date": "14/11/2026",
-                "patientName": "Anita Desai",
-                "ageSex": "45y / F",
-                "contact": "+91 98450 11223",
-                "diagnosis": "Essential Hypertension & Chronic Bronchitis",
-                "items": [
-                    { "name": "General Physician Consultation", "qty": 1, "rate": 500.0, "amount": 500.0 },
-                    { "name": "Prescription Pharmacy (Amlodipine 5mg, Azithromycin 500mg)", "qty": 1, "rate": 420.0, "amount": 420.0 },
-                    { "name": "Complete Blood Count (CBC)", "qty": 1, "rate": 350.0, "amount": 350.0 }
-                ],
-                "totalAmount": 1270.0,
-                "discount": 70.0,
-                "netAmount": 1200.0,
-                "paidAmount": 1200.0,
-                "status": "Paid",
-                "paymentMethod": "UPI / Digital"
-            },
-            {
-                "id": "INV-2026-0042",
-                "date": "14/11/2026",
-                "patientName": "Punarnava Shastry",
-                "ageSex": "51y / F",
-                "contact": "+91 98112 33445",
-                "diagnosis": "Type 2 Diabetes Mellitus with Peripheral Neuropathy",
-                "items": [
-                    { "name": "Specialist Consultation (Endocrinology)", "qty": 1, "rate": 800.0, "amount": 800.0 },
-                    { "name": "Prescription Pharmacy (Metformin 500mg, Pregabalin 75mg)", "qty": 1, "rate": 650.0, "amount": 650.0 },
-                    { "name": "HbA1c & Fasting Blood Sugar", "qty": 1, "rate": 550.0, "amount": 550.0 }
-                ],
-                "totalAmount": 2000.0,
-                "discount": 0.0,
-                "netAmount": 2000.0,
-                "paidAmount": 0.0,
-                "status": "Unpaid",
-                "paymentMethod": "Pending"
-            },
-            {
-                "id": "INV-2026-0043",
-                "date": "13/11/2026",
-                "patientName": "Michael Fernandes",
-                "ageSex": "67y / M",
-                "contact": "+91 97234 55667",
-                "diagnosis": "NSTEMI / Acute Coronary Syndrome",
-                "items": [
-                    { "name": "Emergency Resuscitation & Triage Fee", "qty": 1, "rate": 2500.0, "amount": 2500.0 },
-                    { "name": "ICU Bed Charge (Day 1)", "qty": 1, "rate": 4500.0, "amount": 4500.0 },
-                    { "name": "Stat Cardiac Troponin & Blood Gases", "qty": 1, "rate": 1800.0, "amount": 1800.0 }
-                ],
-                "totalAmount": 8800.0,
-                "discount": 300.0,
-                "netAmount": 8500.0,
-                "paidAmount": 5000.0,
-                "status": "Partial",
-                "paymentMethod": "Insurance TPA Approval"
-            }
-        ])
+        serde_json::json!([])
     };
 
     if is_billing_role {
@@ -2594,10 +2426,7 @@ async fn list_departments_handler(
     if let Ok(Some(depts)) = state.storage.get_json(DEPARTMENTS_DOC_ID).await {
         return Json(depts);
     }
-    let defaults = newloka_core::department::default_departments();
-    let val = serde_json::to_value(&defaults).unwrap_or(serde_json::json!([]));
-    let _ = state.storage.store_json("Department", DEPARTMENTS_DOC_ID, &val, None, None).await;
-    Json(val)
+    Json(serde_json::json!([]))
 }
 
 async fn save_department_handler(
@@ -2618,34 +2447,7 @@ async fn list_transfers_handler(
     if let Ok(Some(transfers)) = state.storage.get_json(TRANSFERS_DOC_ID).await {
         return Json(transfers);
     }
-    let sample = vec![
-        serde_json::json!({
-            "id": "tr-001",
-            "patient_id": "demo-pat-003",
-            "patient_name": "Michael Fernandes",
-            "mrn": "IP-8812",
-            "source_department": "Emergency & Trauma",
-            "target_department": "Cardiology & Cath Lab",
-            "requesting_clinician_id": "doc_emergency",
-            "requesting_clinician_name": "Dr. Acute Resuscitation",
-            "accepting_clinician_id": "doc_attending",
-            "accepting_clinician_name": "Dr. Cardio Attending",
-            "assigned_bed": "CCU Bed 02",
-            "urgency": "urgent",
-            "reason": "Acute Coronary Syndrome / NSTEMI with elevated Troponin-I",
-            "clinical_handover_notes": "SBAR: 67M presented with 2h severe substernal crushing pain. ECG shows ST depression in V4-V6. Given loading dose Aspirin 325mg + Ticagrelor 180mg. Urgent coronary angiography requested.",
-            "active_medications_summary": ["Aspirin 325mg stat", "Ticagrelor 180mg stat", "Atorvastatin 80mg stat", "Sublingual Nitroglycerin"],
-            "pending_orders_summary": ["Emergency Echocardiogram", "Repeat Troponin-I in 3h", "Serum Potassium"],
-            "allergies_summary": ["No known drug allergies"],
-            "status": "accepted",
-            "created_at": "2026-11-13T10:30:00Z",
-            "updated_at": "2026-11-13T11:00:00Z",
-            "handover_signed_by": "Dr. Cardio Attending"
-        })
-    ];
-    let val = serde_json::Value::Array(sample);
-    let _ = state.storage.store_json("Transfer", TRANSFERS_DOC_ID, &val, None, None).await;
-    Json(val)
+    Json(serde_json::json!([]))
 }
 
 async fn create_transfer_handler(
@@ -2913,41 +2715,7 @@ async fn list_federation_nodes_handler(
     if let Ok(Some(nodes)) = state.storage.get_json(FEDERATION_NODES_DOC_ID).await {
         return Json(nodes);
     }
-    let default_nodes = vec![
-        newloka_core::federation::FederationNode {
-            node_id: "node-aiims-delhi".into(),
-            institution_name: "All India Institute of Medical Sciences (AIIMS Delhi)".into(),
-            endpoint_url: "https://federation.aiims.edu/newloka".into(),
-            public_key: vec![1, 2, 3, 4],
-            trust_tier: "T4_Federation_Hub".into(),
-            status: "active".into(),
-            last_heartbeat: chrono::Utc::now().timestamp(),
-            supported_studies: vec!["STUDY-ONCO-GERO-2026".into(), "STUDY-DIAB-CARDIAC-01".into()],
-        },
-        newloka_core::federation::FederationNode {
-            node_id: "node-tmh-mumbai".into(),
-            institution_name: "Tata Memorial Centre & ACTREC Cancer Research".into(),
-            endpoint_url: "https://mesh.actrec.gov.in/newloka".into(),
-            public_key: vec![5, 6, 7, 8],
-            trust_tier: "Academic_Medical_Center".into(),
-            status: "active".into(),
-            last_heartbeat: chrono::Utc::now().timestamp() - 120,
-            supported_studies: vec!["STUDY-ONCO-GERO-2026".into()],
-        },
-        newloka_core::federation::FederationNode {
-            node_id: "node-pgimer-chd".into(),
-            institution_name: "PGIMER Department of Clinical Pharmacology".into(),
-            endpoint_url: "https://research.pgimer.edu.in/newloka".into(),
-            public_key: vec![9, 10, 11, 12],
-            trust_tier: "T3_Partner".into(),
-            status: "active".into(),
-            last_heartbeat: chrono::Utc::now().timestamp() - 360,
-            supported_studies: vec!["STUDY-DIAB-CARDIAC-01".into()],
-        },
-    ];
-    let val = serde_json::to_value(&default_nodes).unwrap_or(serde_json::json!([]));
-    let _ = state.storage.store_json("FederationNode", FEDERATION_NODES_DOC_ID, &val, None, None).await;
-    Json(val)
+    Json(serde_json::json!([]))
 }
 
 async fn register_federation_node_handler(
@@ -3042,33 +2810,7 @@ async fn list_research_cohorts_handler(
     if let Ok(Some(cohorts)) = state.storage.get_json(RESEARCH_COHORTS_DOC_ID).await {
         return Json(cohorts);
     }
-    let default_cohorts = vec![
-        serde_json::json!({
-            "id": "cohort-001",
-            "title": "T2D Inpatients with HbA1c > 8.0% on Metformin",
-            "description": "Cross-sectional cohort examining glycemic control and macrovascular events in elderly diabetics",
-            "inclusion_conditions": ["E11", "Type 2 Diabetes"],
-            "min_age": 45,
-            "max_age": 85,
-            "gender": null,
-            "sample_size": 18,
-            "created_at": "2026-11-10T12:00:00Z"
-        }),
-        serde_json::json!({
-            "id": "cohort-002",
-            "title": "Acute NSTEMI Cardiac Registry 2026",
-            "description": "Longitudinal registry of acute coronary syndrome admissions receiving dual antiplatelet therapy",
-            "inclusion_conditions": ["I21.4", "NSTEMI", "Acute Coronary Syndrome"],
-            "min_age": 40,
-            "max_age": 90,
-            "gender": null,
-            "sample_size": 24,
-            "created_at": "2026-11-12T14:30:00Z"
-        })
-    ];
-    let val = serde_json::Value::Array(default_cohorts);
-    let _ = state.storage.store_json("Cohort", RESEARCH_COHORTS_DOC_ID, &val, None, None).await;
-    Json(val)
+    Json(serde_json::json!([]))
 }
 
 async fn create_research_cohort_handler(
@@ -3184,48 +2926,7 @@ async fn list_consent_directives_handler(
     let state = state.read().await;
     let directives_val = match state.storage.get_json(CONSENT_DIRECTIVES_DOC_ID).await {
         Ok(Some(val)) => val,
-        _ => {
-            let now = chrono::Utc::now();
-            let sample = vec![
-                newloka_core::consent::ConsentDirective {
-                    id: "consent-dir-001".into(),
-                    patient_id: "demo-pat-001".into(),
-                    status: "active".into(),
-                    scope: "research".into(),
-                    purpose: "RESEARCH".into(),
-                    recipient_node_id: Some("node-aiims-delhi".into()),
-                    recipient_name: Some("AIIMS Oncology & Geroscience Collaborative Grid".into()),
-                    data_categories: vec!["Observation".into(), "Condition".into(), "DiagnosticReport".into()],
-                    valid_from: now - chrono::Duration::days(15),
-                    valid_to: now + chrono::Duration::days(350),
-                    revoked: false,
-                    revocation_reason: None,
-                    revoked_at: None,
-                    digital_signature: Some("ed25519-sig-valid-9981".into()),
-                    consent_notes: Some("Patient provided signed digital consent for multi-center diabetes research".into()),
-                },
-                newloka_core::consent::ConsentDirective {
-                    id: "consent-dir-002".into(),
-                    patient_id: "demo-pat-003".into(),
-                    status: "active".into(),
-                    scope: "treatment-transfer".into(),
-                    purpose: "TREATMENT_TRANSFER".into(),
-                    recipient_node_id: Some("node-tmh-mumbai".into()),
-                    recipient_name: Some("Tata Memorial Centre".into()),
-                    data_categories: vec!["ALL".into()],
-                    valid_from: now - chrono::Duration::days(2),
-                    valid_to: now + chrono::Duration::days(90),
-                    revoked: false,
-                    revocation_reason: None,
-                    revoked_at: None,
-                    digital_signature: Some("ed25519-sig-valid-4412".into()),
-                    consent_notes: Some("Consent granted for inter-hospital cardiac transfer and consultation".into()),
-                }
-            ];
-            let v = serde_json::to_value(&sample).unwrap_or(serde_json::json!([]));
-            let _ = state.storage.store_json("ConsentDirective", CONSENT_DIRECTIVES_DOC_ID, &v, None, None).await;
-            v
-        }
+        _ => serde_json::json!([]),
     };
 
     if let Some(target_pat) = params.patient_id {
@@ -3341,4 +3042,119 @@ async fn verify_consent_handler(
         }
     }
 }
+
+/* ------------------------------------------------------------------ */
+/* Pharmacopoeia Handlers                                              */
+/* ------------------------------------------------------------------ */
+
+#[derive(Debug, Deserialize)]
+pub struct PharmacopoeiaSearchQuery {
+    #[serde(default)]
+    pub q: String,
+    pub category: Option<String>,
+    pub limit: Option<usize>,
+}
+
+pub async fn pharmacopoeia_info_handler(
+    State(state): State<Arc<RwLock<AppState>>>,
+) -> Json<serde_json::Value> {
+    let state = state.read().await;
+    let (version, published_date, reference_standard, monographs_count, ordersets_count) =
+        state.pharmacopoeia.metadata();
+    Json(serde_json::json!({
+        "version": version,
+        "publishedDate": published_date,
+        "referenceStandard": reference_standard,
+        "monographsCount": monographs_count,
+        "orderSetsCount": ordersets_count,
+    }))
+}
+
+pub async fn pharmacopoeia_search_handler(
+    State(state): State<Arc<RwLock<AppState>>>,
+    Query(params): Query<PharmacopoeiaSearchQuery>,
+) -> Json<Vec<newloka_core::pharmacopoeia::PharmacopoeiaSearchResult>> {
+    let state = state.read().await;
+    let limit = params.limit.unwrap_or(25).min(100);
+    let results = state
+        .pharmacopoeia
+        .search(&params.q, params.category.as_deref(), limit);
+    Json(results)
+}
+
+pub async fn pharmacopoeia_get_entry_handler(
+    State(state): State<Arc<RwLock<AppState>>>,
+    Path(id): Path<String>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let state = state.read().await;
+    if let Some(entry) = state.pharmacopoeia.get_entry(&id) {
+        (StatusCode::OK, Json(serde_json::to_value(entry).unwrap()))
+    } else {
+        (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({
+                "error": "Not Found",
+                "message": format!("Pharmacopoeia entry '{}' not found", id)
+            })),
+        )
+    }
+}
+
+pub async fn pharmacopoeia_categories_handler(
+    State(state): State<Arc<RwLock<AppState>>>,
+) -> Json<Vec<newloka_core::pharmacopoeia::CategorySummary>> {
+    let state = state.read().await;
+    Json(state.pharmacopoeia.list_categories())
+}
+
+pub async fn pharmacopoeia_list_order_sets_handler(
+    State(state): State<Arc<RwLock<AppState>>>,
+) -> Json<Vec<newloka_core::pharmacopoeia::ClinicalOrderSet>> {
+    let state = state.read().await;
+    let sets: Vec<newloka_core::pharmacopoeia::ClinicalOrderSet> = state
+        .pharmacopoeia
+        .list_order_sets()
+        .into_iter()
+        .cloned()
+        .collect();
+    Json(sets)
+}
+
+pub async fn pharmacopoeia_get_order_set_handler(
+    State(state): State<Arc<RwLock<AppState>>>,
+    Path(id): Path<String>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let state = state.read().await;
+    if let Some(set) = state.pharmacopoeia.get_order_set(&id) {
+        (StatusCode::OK, Json(serde_json::to_value(set).unwrap()))
+    } else {
+        (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({
+                "error": "Not Found",
+                "message": format!("Order set '{}' not found", id)
+            })),
+        )
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SafetyCheckRequest {
+    #[serde(default)]
+    pub drugs: Vec<String>,
+    #[serde(default)]
+    pub allergies: Vec<String>,
+}
+
+pub async fn pharmacopoeia_check_safety_handler(
+    State(state): State<Arc<RwLock<AppState>>>,
+    Json(body): Json<SafetyCheckRequest>,
+) -> Json<newloka_core::pharmacopoeia::DrugSafetyReport> {
+    let state = state.read().await;
+    let report = state
+        .pharmacopoeia
+        .check_safety(&body.drugs, &body.allergies);
+    Json(report)
+}
+
 

@@ -1,0 +1,1882 @@
+#!/usr/bin/env python3
+"""
+build_pharmacopoeia.py - Comprehensive Indian Pharmacopoeia (IP 2022) & NFI / NLEM Reference Builder
+Generates: newloka_core/src/pharmacopoeia/data/indian_pharmacopoeia.json
+"""
+
+import os
+import json
+import csv
+import io
+import re
+import urllib.request
+from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve().parent.parent
+OUTPUT_FILE = ROOT_DIR / "newloka_core" / "src" / "pharmacopoeia" / "data" / "indian_pharmacopoeia.json"
+
+print(f"[*] Starting Indian Pharmacopoeia dataset builder...")
+OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
+
+# 1. Fetch NRCeS ABDM Medicine Codes ValueSet (SNOMED-CT mapped codes)
+snomed_map = {}
+try:
+    print("[*] Fetching NRCeS ABDM Medicine Codes ValueSet...")
+    url = "https://nrces.in/ndhm/fhir/r4/ValueSet-ndhm-medicine-codes.json"
+    req = urllib.request.Request(url, headers={"User-Agent": "NewLoka-Pharmacopoeia-Builder/1.0"})
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        abdm_data = json.loads(resp.read().decode())
+        concepts = abdm_data.get("compose", {}).get("include", [{}])[0].get("concept", [])
+        for c in concepts:
+            display = c.get("display", "").lower()
+            code = c.get("code")
+            snomed_map[display] = code
+    print(f"[+] Loaded {len(snomed_map)} NRCeS SNOMED concepts")
+except Exception as e:
+    print(f"[-] Warning: NRCeS fetch failed ({e}). Proceeding with internal mapping.")
+
+# 2. Stream brand mappings from Indian-Medicine-Dataset
+brand_map = {}
+try:
+    print("[*] Streaming brand name mappings from Indian-Medicine-Dataset...")
+    url = "https://raw.githubusercontent.com/junioralive/Indian-Medicine-Dataset/master/DATA/indian_medicine_data.csv"
+    req = urllib.request.Request(url, headers={"Range": "bytes=0-5000000", "User-Agent": "NewLoka-Builder/1.0"})
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        content = resp.read().decode("utf-8", errors="ignore")
+        reader = csv.DictReader(io.StringIO(content))
+        for r in reader:
+            bname = (r.get("name") or "").strip()
+            s1 = (r.get("short_composition1") or "").strip()
+            if bname and s1:
+                clean_brand = bname.split()[0] if bname else ""
+                clean_salt = s1.split("(")[0].strip().lower()
+                if clean_salt and clean_brand:
+                    brand_map.setdefault(clean_salt, set()).add(clean_brand)
+    print(f"[+] Mapped brands across {len(brand_map)} salt categories")
+except Exception as e:
+    print(f"[-] Warning: Streaming brands failed ({e}). Proceeding with curated brands.")
+
+# Comprehensive clinical catalog of Indian Pharmacopoeia & National Formulary of India
+# Entries include full clinical details: IP title, schedule, dosage forms, strengths, routes,
+# standard dosing, duration, max daily dose, renal dose adjustments, contraindications, pregnancy categories,
+# NLEM level (P/S/T), SNOMED codes, and popular Indian brand names.
+CLINICAL_MONOGRAPHS = [
+    # =========================================================================
+    # 1. ANALGESICS, ANTIPYRETICS, NSAIDS & OPIOIDS
+    # =========================================================================
+    {
+        "id": "ip-paracetamol",
+        "inn_name": "Paracetamol",
+        "ip_title": "Paracetamol IP / Paracetamol Tablets IP",
+        "schedule": "OTC",
+        "therapeutic_category": "Analgesics, Antipyretics and Anti-inflammatory Agents",
+        "dosage_forms": [
+            {"form": "Tablet", "strengths": ["500 mg", "650 mg"], "route": "Oral"},
+            {"form": "Syrup / Suspension", "strengths": ["120 mg/5 mL", "250 mg/5 mL"], "route": "Oral"},
+            {"form": "IV Infusion", "strengths": ["10 mg/mL (1000 mg/100 mL)"], "route": "Intravenous"},
+            {"form": "Suppository", "strengths": ["80 mg", "170 mg", "250 mg"], "route": "Rectal"}
+        ],
+        "default_dose": "650 mg",
+        "default_frequency": "TDS PRN",
+        "default_duration": "3 days",
+        "default_instructions": "Take after meals with water. Minimum 4-6 hours between doses.",
+        "max_daily_dose": "4000 mg/24h in adults (2000 mg/24h in severe hepatic/chronic alcohol use)",
+        "renal_dose_adjustment": "CrCl 10-50 mL/min: dose q6h; CrCl < 10 mL/min: dose q8h",
+        "contraindications": ["Severe active hepatic impairment or acute liver failure", "Hypersensitivity to paracetamol"],
+        "pregnancy_category": "Safe in recommended therapeutic doses",
+        "nlem_level": ["P", "S", "T"],
+        "snomed_ct_code": "387517004",
+        "common_brands_india": ["Dolo 650", "Calpol", "Crocin", "Pacimol", "Sumo L", "Pyrigesic", "FeveRx"]
+    },
+    {
+        "id": "ip-ibuprofen",
+        "inn_name": "Ibuprofen",
+        "ip_title": "Ibuprofen IP / Ibuprofen Tablets IP",
+        "schedule": "Schedule H",
+        "therapeutic_category": "Analgesics, Antipyretics and Anti-inflammatory Agents",
+        "dosage_forms": [
+            {"form": "Tablet", "strengths": ["200 mg", "400 mg"], "route": "Oral"},
+            {"form": "Suspension", "strengths": ["100 mg/5 mL"], "route": "Oral"}
+        ],
+        "default_dose": "400 mg",
+        "default_frequency": "TDS",
+        "default_duration": "3-5 days",
+        "default_instructions": "Take strictly after meals with water. Do not lie down for 15 minutes after swallowing.",
+        "max_daily_dose": "2400 mg/24h",
+        "renal_dose_adjustment": "Avoid in severe renal impairment (eGFR < 30 mL/min)",
+        "contraindications": ["Active peptic ulcer disease or GI bleeding", "Severe heart failure (NYHA III-IV)", "Severe renal failure", "Third trimester of pregnancy"],
+        "pregnancy_category": "Avoid in 3rd trimester (premature closure of ductus arteriosus)",
+        "nlem_level": ["P", "S", "T"],
+        "snomed_ct_code": "387207008",
+        "common_brands_india": ["Brufen", "Ibugesic", "Combiflam", "Ibuflam"]
+    },
+    {
+        "id": "ip-diclofenac",
+        "inn_name": "Diclofenac",
+        "ip_title": "Diclofenac Sodium IP / Diclofenac Gastro-resistant Tablets IP",
+        "schedule": "Schedule H",
+        "therapeutic_category": "Analgesics, Antipyretics and Anti-inflammatory Agents",
+        "dosage_forms": [
+            {"form": "Tablet", "strengths": ["50 mg", "75 mg SR"], "route": "Oral"},
+            {"form": "Injection", "strengths": ["25 mg/mL (75 mg/3 mL)", "75 mg/1 mL (AQ)"], "route": "Intramuscular / Intravenous"},
+            {"form": "Gel", "strengths": ["1% w/w"], "route": "Topical"}
+        ],
+        "default_dose": "50 mg",
+        "default_frequency": "BD",
+        "default_duration": "3-5 days",
+        "default_instructions": "Take after meals. Inject deep intragluteal if IM.",
+        "max_daily_dose": "150 mg/24h",
+        "renal_dose_adjustment": "Avoid if CrCl < 30 mL/min; use lowest effective dose",
+        "contraindications": ["Ischemic heart disease, peripheral arterial disease, cerebrovascular disease", "Congestive heart failure (NYHA II-IV)", "Active GI ulceration"],
+        "pregnancy_category": "Contraindicated in 3rd trimester",
+        "nlem_level": ["P", "S", "T"],
+        "snomed_ct_code": "372570004",
+        "common_brands_india": ["Voveran", "Dynapar", "Volini", "Jonac", "Diclogesic"]
+    },
+    {
+        "id": "ip-tramadol",
+        "inn_name": "Tramadol",
+        "ip_title": "Tramadol Hydrochloride IP / Tramadol Injection IP",
+        "schedule": "Schedule H1",
+        "therapeutic_category": "Analgesics, Antipyretics and Anti-inflammatory Agents",
+        "dosage_forms": [
+            {"form": "Capsule / Tablet", "strengths": ["50 mg", "100 mg SR"], "route": "Oral"},
+            {"form": "Injection", "strengths": ["50 mg/mL (100 mg/2 mL)"], "route": "Intravenous / Intramuscular"}
+        ],
+        "default_dose": "50 mg",
+        "default_frequency": "BD-TDS",
+        "default_duration": "3-5 days",
+        "default_instructions": "May cause dizziness or drowsiness. Avoid driving. Infuse IV slowly over 2-3 minutes.",
+        "max_daily_dose": "400 mg/24h (300 mg in elderly > 75 yrs)",
+        "renal_dose_adjustment": "CrCl < 30 mL/min: maximum 200 mg/day, dosing interval q12h",
+        "contraindications": ["Concurrent MAO inhibitors (within 14 days)", "Uncontrolled epilepsy", "Acute intoxication with alcohol or sedatives"],
+        "pregnancy_category": "C",
+        "nlem_level": ["S", "T"],
+        "snomed_ct_code": "373529000",
+        "common_brands_india": ["Tramazac", "Ultracet", "Supridol", "Contramal", "Domadol"]
+    },
+    {
+        "id": "ip-morphine",
+        "inn_name": "Morphine",
+        "ip_title": "Morphine Sulphate IP / Morphine Tablets IP / Morphine Injection IP",
+        "schedule": "Narcotic",
+        "therapeutic_category": "Analgesics, Antipyretics and Anti-inflammatory Agents",
+        "dosage_forms": [
+            {"form": "Tablet", "strengths": ["10 mg", "20 mg", "30 mg SR"], "route": "Oral"},
+            {"form": "Injection", "strengths": ["10 mg/mL", "15 mg/mL"], "route": "Intravenous / Subcutaneous / Intramuscular"}
+        ],
+        "default_dose": "5 - 10 mg IV / 10-20 mg PO",
+        "default_frequency": "q4h PRN",
+        "default_duration": "Acute severe pain / Palliative",
+        "default_instructions": "Monitor respiratory rate, sedation score, and pupillary constriction. Co-prescribe laxative (senna/lactulose) for opioid bowel dysfunction.",
+        "max_daily_dose": "Titrated to pain relief and tolerability (no ceiling in cancer palliative care)",
+        "renal_dose_adjustment": "CrCl < 50 mL/min: reduce dose by 25-50% and extend interval (active metabolite M6G accumulates)",
+        "contraindications": ["Severe respiratory depression (RR < 10/min)", "Acute bronchial asthma", "Paralytic ileus", "Raised intracranial pressure"],
+        "pregnancy_category": "C",
+        "nlem_level": ["S", "T"],
+        "snomed_ct_code": "373529000",
+        "common_brands_india": ["Morphitroy", "R-Morph", "Morcontin", "Vermor"]
+    },
+    {
+        "id": "ip-fentanyl",
+        "inn_name": "Fentanyl",
+        "ip_title": "Fentanyl Citrate IP / Fentanyl Injection IP",
+        "schedule": "Narcotic",
+        "therapeutic_category": "Analgesics, Antipyretics and Anti-inflammatory Agents",
+        "dosage_forms": [
+            {"form": "Injection", "strengths": ["50 mcg/mL (2 mL, 10 mL)"], "route": "Intravenous"},
+            {"form": "Transdermal Patch", "strengths": ["25 mcg/hr", "50 mcg/hr"], "route": "Transdermal"}
+        ],
+        "default_dose": "50 - 100 mcg IV (1-2 mcg/kg)",
+        "default_frequency": "q1-2h PRN or continuous infusion",
+        "default_duration": "Intraoperative / Critical care analgesia",
+        "default_instructions": "Potent synthetic opioid (100x morphine). Slow IV injection over 1-2 min (prevents wooden chest / chest wall rigidity).",
+        "max_daily_dose": "Titrated to sedation/analgesia targets under mechanical ventilation",
+        "renal_dose_adjustment": "Safe in renal failure (hepatic metabolism to inactive norfentanyl)",
+        "contraindications": ["Opioid-non-tolerant patients (for transdermal patch)", "Severe respiratory depression"],
+        "pregnancy_category": "C",
+        "nlem_level": ["S", "T"],
+        "snomed_ct_code": "373492002",
+        "common_brands_india": ["Fendrop", "Durogesic", "Fentanyl-Piramal", "Trofentil"]
+    },
+
+    # =========================================================================
+    # 2. ANTIBACTERIALS & ANTIMICROBIALS
+    # =========================================================================
+    {
+        "id": "ip-amoxicillin-clavulanic-acid",
+        "inn_name": "Amoxicillin and Potassium Clavulanate",
+        "ip_title": "Amoxicillin and Potassium Clavulanate Tablets IP",
+        "schedule": "Schedule H1",
+        "therapeutic_category": "Antibacterials",
+        "dosage_forms": [
+            {"form": "Tablet", "strengths": ["375 mg", "625 mg", "1000 mg"], "route": "Oral"},
+            {"form": "Dry Syrup", "strengths": ["228.5 mg/5 mL", "457 mg/5 mL (Duo)"], "route": "Oral"},
+            {"form": "Injection", "strengths": ["1.2 g vial", "600 mg vial"], "route": "Intravenous"}
+        ],
+        "default_dose": "625 mg (500mg Amox + 125mg Clav)",
+        "default_frequency": "BD",
+        "default_duration": "5-7 days",
+        "default_instructions": "Take at the start of a meal to enhance absorption and minimize GI intolerance.",
+        "max_daily_dose": "3000 mg Amoxicillin equivalent / 24h",
+        "renal_dose_adjustment": "CrCl 10-30 mL/min: 625mg q12h; CrCl < 10 mL/min: 625mg q24h",
+        "contraindications": ["History of penicillin or beta-lactam anaphylaxis", "History of amoxicillin-clavulanate-associated jaundice or hepatic dysfunction"],
+        "pregnancy_category": "B (Generally safe; avoid routinely in preterm rupture of membranes)",
+        "nlem_level": ["P", "S", "T"],
+        "snomed_ct_code": "372687004",
+        "common_brands_india": ["Augmentin 625 Duo", "Clavam 625", "Moxikind-CV 625", "Polyclav", "Amoxyclav"]
+    },
+    {
+        "id": "ip-amoxicillin",
+        "inn_name": "Amoxicillin",
+        "ip_title": "Amoxicillin IP / Amoxicillin Capsules IP",
+        "schedule": "Schedule H",
+        "therapeutic_category": "Antibacterials",
+        "dosage_forms": [
+            {"form": "Capsule / Tablet", "strengths": ["250 mg", "500 mg"], "route": "Oral"},
+            {"form": "Syrup / Dry Suspension", "strengths": ["125 mg/5 mL", "250 mg/5 mL"], "route": "Oral"}
+        ],
+        "default_dose": "500 mg",
+        "default_frequency": "TDS",
+        "default_duration": "5-7 days",
+        "default_instructions": "Take with water. Complete full course even if fever resolves.",
+        "max_daily_dose": "3000 mg/24h",
+        "renal_dose_adjustment": "CrCl 10-30 mL/min: 250-500mg q12h; CrCl < 10 mL/min: 250-500mg q24h",
+        "contraindications": ["Known penicillin allergy", "Infectious mononucleosis (high incidence of erythematous maculopapular rash)"],
+        "pregnancy_category": "B",
+        "nlem_level": ["P", "S", "T"],
+        "snomed_ct_code": "372687004",
+        "common_brands_india": ["Mox", "Novamox", "Amoxil", "Wymox", "Almox"]
+    },
+    {
+        "id": "ip-azithromycin",
+        "inn_name": "Azithromycin",
+        "ip_title": "Azithromycin IP / Azithromycin Tablets IP",
+        "schedule": "Schedule H1",
+        "therapeutic_category": "Antibacterials",
+        "dosage_forms": [
+            {"form": "Tablet", "strengths": ["250 mg", "500 mg"], "route": "Oral"},
+            {"form": "Suspension", "strengths": ["100 mg/5 mL", "200 mg/5 mL"], "route": "Oral"},
+            {"form": "Injection", "strengths": ["500 mg vial"], "route": "Intravenous"}
+        ],
+        "default_dose": "500 mg",
+        "default_frequency": "OD",
+        "default_duration": "3-5 days",
+        "default_instructions": "Take 1 hour before or 2 hours after meals with a glass of water.",
+        "max_daily_dose": "500 mg/24h",
+        "renal_dose_adjustment": "No dose adjustment required for mild-to-moderate impairment; caution if CrCl < 10 mL/min",
+        "contraindications": ["Known macrolide hypersensitivity", "History of cholestatic jaundice with prior azithromycin", "Congenital long QT syndrome or baseline QTc > 500ms"],
+        "pregnancy_category": "B",
+        "nlem_level": ["P", "S", "T"],
+        "snomed_ct_code": "372696001",
+        "common_brands_india": ["Azithral 500", "Azee 500", "Zithrox", "Azax", "Aziwok"]
+    },
+    {
+        "id": "ip-ceftriaxone",
+        "inn_name": "Ceftriaxone",
+        "ip_title": "Ceftriaxone Sodium IP / Ceftriaxone Injection IP",
+        "schedule": "Schedule H1",
+        "therapeutic_category": "Antibacterials",
+        "dosage_forms": [
+            {"form": "Injection (Vial)", "strengths": ["250 mg", "500 mg", "1 g", "2 g"], "route": "Intravenous / Intramuscular"}
+        ],
+        "default_dose": "1 g - 2 g",
+        "default_frequency": "OD or BD",
+        "default_duration": "5-10 days",
+        "default_instructions": "Reconstitute with sterile water. Infuse IV over 30 minutes. NEVER co-administer with calcium-containing IV solutions (Ringer Lactate) in same line.",
+        "max_daily_dose": "4 g/24h (in bacterial meningitis)",
+        "renal_dose_adjustment": "No adjustment needed unless both severe renal AND hepatic impairment coexist (max 2 g/day)",
+        "contraindications": ["Neonates <= 28 days receiving IV calcium", "Severe hypersensitivity (anaphylaxis) to cephalosporins or beta-lactams", "Hyperbilirubinemic neonates"],
+        "pregnancy_category": "B",
+        "nlem_level": ["S", "T"],
+        "snomed_ct_code": "372671009",
+        "common_brands_india": ["Monocef", "Oframax", "Zonecef", "Powercef", "Ceftriax"]
+    },
+    {
+        "id": "ip-cefixime",
+        "inn_name": "Cefixime",
+        "ip_title": "Cefixime IP / Cefixime Tablets IP",
+        "schedule": "Schedule H1",
+        "therapeutic_category": "Antibacterials",
+        "dosage_forms": [
+            {"form": "Tablet", "strengths": ["100 mg", "200 mg"], "route": "Oral"},
+            {"form": "Syrup / Drops", "strengths": ["50 mg/5 mL", "100 mg/5 mL"], "route": "Oral"}
+        ],
+        "default_dose": "200 mg",
+        "default_frequency": "BD",
+        "default_duration": "5-7 days",
+        "default_instructions": "Take with or without food. Complete course for typhoid or uncomplicated UTI.",
+        "max_daily_dose": "400 mg/24h",
+        "renal_dose_adjustment": "CrCl 20-40 mL/min: 200mg OD; CrCl < 20 mL/min: 100mg OD",
+        "contraindications": ["Known cephalosporin hypersensitivity"],
+        "pregnancy_category": "B",
+        "nlem_level": ["P", "S", "T"],
+        "snomed_ct_code": "372670005",
+        "common_brands_india": ["Taxim-O", "Zifi", "Mahacef", "Cephalkem", "Omnicef"]
+    },
+    {
+        "id": "ip-piperacillin-tazobactam",
+        "inn_name": "Piperacillin and Tazobactam",
+        "ip_title": "Piperacillin and Tazobactam Injection IP",
+        "schedule": "Schedule H1",
+        "therapeutic_category": "Antibacterials",
+        "dosage_forms": [
+            {"form": "Injection (Vial)", "strengths": ["2.25 g", "4.5 g"], "route": "Intravenous"}
+        ],
+        "default_dose": "4.5 g (4g Pip + 0.5g Tazo)",
+        "default_frequency": "q6h or q8h (Extended infusion over 3-4 hours)",
+        "default_duration": "7-14 days",
+        "default_instructions": "Dilute in 100mL 0.9% Normal Saline. First dose STAT within 1 hour in severe sepsis.",
+        "max_daily_dose": "18 g Piperacillin / 24h",
+        "renal_dose_adjustment": "CrCl 20-40 mL/min: 3.375g q6h; CrCl < 20 mL/min: 2.25g q6h; Hemodialysis: 2.25g q8h + 0.75g post-dialysis",
+        "contraindications": ["History of severe allergic reactions to penicillins, cephalosporins, or beta-lactamase inhibitors"],
+        "pregnancy_category": "B",
+        "nlem_level": ["S", "T"],
+        "snomed_ct_code": "387400007",
+        "common_brands_india": ["Pipzo", "Tazact", "Zosyn", "Piptaz", "Maxitaz"]
+    },
+    {
+        "id": "ip-meropenem",
+        "inn_name": "Meropenem",
+        "ip_title": "Meropenem IP / Meropenem Injection IP",
+        "schedule": "Schedule H1",
+        "therapeutic_category": "Antibacterials",
+        "dosage_forms": [
+            {"form": "Injection (Vial)", "strengths": ["500 mg", "1 g"], "route": "Intravenous"}
+        ],
+        "default_dose": "1 g",
+        "default_frequency": "q8h",
+        "default_duration": "7-14 days",
+        "default_instructions": "Infuse IV over 15-30 minutes, or extended infusion over 3 hours.",
+        "max_daily_dose": "6 g/24h (in bacterial meningitis or severe Pseudomonas infections)",
+        "renal_dose_adjustment": "CrCl 26-50 mL/min: 1g q12h; CrCl 10-25 mL/min: 500mg q12h; CrCl < 10 mL/min: 500mg q24h",
+        "contraindications": ["Severe hypersensitivity to carbapenems or immediate-type hypersensitivity to other beta-lactams"],
+        "pregnancy_category": "B",
+        "nlem_level": ["T"],
+        "snomed_ct_code": "387396001",
+        "common_brands_india": ["Meromac", "Mero", "Meronem", "Penro", "Zyropen"]
+    },
+    {
+        "id": "ip-ciprofloxacin",
+        "inn_name": "Ciprofloxacin",
+        "ip_title": "Ciprofloxacin Hydrochloride IP / Ciprofloxacin Tablets IP",
+        "schedule": "Schedule H1",
+        "therapeutic_category": "Antibacterials",
+        "dosage_forms": [
+            {"form": "Tablet", "strengths": ["250 mg", "500 mg", "750 mg"], "route": "Oral"},
+            {"form": "Eye/Ear Drops", "strengths": ["0.3% w/v"], "route": "Ophthalmic / Otic"},
+            {"form": "IV Infusion", "strengths": ["2 mg/mL (200 mg/100 mL)"], "route": "Intravenous"}
+        ],
+        "default_dose": "500 mg",
+        "default_frequency": "BD",
+        "default_duration": "5-7 days",
+        "default_instructions": "Take with full glass of water. Avoid antacids or milk within 2 hours. Warn patient to report tendon pain immediately.",
+        "max_daily_dose": "1500 mg/24h oral, 1200 mg/24h IV",
+        "renal_dose_adjustment": "CrCl 30-50 mL/min: 250-500mg q12h; CrCl < 30 mL/min: 250-500mg q18h",
+        "contraindications": ["Concurrent tizanidine administration", "History of fluoroquinolone-induced tendonitis or tendon rupture", "Myasthenia gravis"],
+        "pregnancy_category": "C (Avoid in pregnancy and pediatric patients unless no safe alternatives)",
+        "nlem_level": ["P", "S", "T"],
+        "snomed_ct_code": "372833007",
+        "common_brands_india": ["Cifran", "Ciplox", "Alcipro", "Ciprobid", "Zoxan"]
+    },
+    {
+        "id": "ip-levofloxacin",
+        "inn_name": "Levofloxacin",
+        "ip_title": "Levofloxacin IP / Levofloxacin Tablets IP",
+        "schedule": "Schedule H1",
+        "therapeutic_category": "Antibacterials",
+        "dosage_forms": [
+            {"form": "Tablet", "strengths": ["250 mg", "500 mg", "750 mg"], "route": "Oral"},
+            {"form": "IV Infusion", "strengths": ["5 mg/mL (500 mg/100 mL)"], "route": "Intravenous"}
+        ],
+        "default_dose": "500 mg",
+        "default_frequency": "OD",
+        "default_duration": "5-7 days",
+        "default_instructions": "Drink plenty of fluids. Take 2 hours before or after antacids / multivitamins containing iron or zinc.",
+        "max_daily_dose": "750 mg/24h",
+        "renal_dose_adjustment": "CrCl 20-49 mL/min: initial 500mg then 250mg q24h; CrCl < 20 mL/min: initial 500mg then 250mg q48h",
+        "contraindications": ["Known fluoroquinolone allergy", "History of tendon disorders", "Epilepsy / low seizure threshold"],
+        "pregnancy_category": "C",
+        "nlem_level": ["S", "T"],
+        "snomed_ct_code": "372832004",
+        "common_brands_india": ["Levomac", "Loxof", "Glevo", "Levoflox", "L-Cin"]
+    },
+    {
+        "id": "ip-doxycycline",
+        "inn_name": "Doxycycline",
+        "ip_title": "Doxycycline Hyclate IP / Doxycycline Capsules IP",
+        "schedule": "Schedule H",
+        "therapeutic_category": "Antibacterials",
+        "dosage_forms": [
+            {"form": "Capsule / Tablet", "strengths": ["100 mg"], "route": "Oral"}
+        ],
+        "default_dose": "100 mg",
+        "default_frequency": "BD",
+        "default_duration": "7-10 days",
+        "default_instructions": "Take with a full glass of water sitting upright. Do not lie down for 30 minutes (prevents pill esophagitis). Avoid direct sun exposure.",
+        "max_daily_dose": "200 mg/24h",
+        "renal_dose_adjustment": "No dose adjustment required in renal failure (eliminated primarily via non-renal GI pathways)",
+        "contraindications": ["Second and third trimesters of pregnancy", "Children under 8 years of age (tooth discoloration and enamel hypoplasia)"],
+        "pregnancy_category": "D",
+        "nlem_level": ["P", "S", "T"],
+        "snomed_ct_code": "372831009",
+        "common_brands_india": ["Doxicip", "Doxy-1", "Microdox", "Doxt-SL", "Biodoxi"]
+    },
+    {
+        "id": "ip-metronidazole",
+        "inn_name": "Metronidazole",
+        "ip_title": "Metronidazole IP / Metronidazole Tablets IP / Metronidazole Injection IP",
+        "schedule": "Schedule H",
+        "therapeutic_category": "Antibacterials & Antiprotozoals",
+        "dosage_forms": [
+            {"form": "Tablet", "strengths": ["200 mg", "400 mg"], "route": "Oral"},
+            {"form": "IV Infusion", "strengths": ["5 mg/mL (500 mg/100 mL)"], "route": "Intravenous"},
+            {"form": "Suspension", "strengths": ["200 mg/5 mL"], "route": "Oral"}
+        ],
+        "default_dose": "400 mg PO TDS / 500 mg IV q8h",
+        "default_frequency": "TDS",
+        "default_duration": "5-7 days",
+        "default_instructions": "Take after meals. STRICTLY avoid alcohol during and for 48 hours after treatment (causes severe disulfiram-like reaction). Metallic taste is common.",
+        "max_daily_dose": "2000 mg/24h oral, 4000 mg/24h IV in severe anaerobic infection",
+        "renal_dose_adjustment": "CrCl < 10 mL/min: reduce dose by 50%; hemodialysis removes drug (supplement post-dialysis)",
+        "contraindications": ["First trimester of pregnancy (relative)", "Concurrent disulfiram (psychotic reactions)", "Hypersensitivity to nitroimidazoles"],
+        "pregnancy_category": "B",
+        "nlem_level": ["P", "S", "T"],
+        "snomed_ct_code": "372674001",
+        "common_brands_india": ["Flagyl", "Metrogyl", "Aristogyl", "Metron"]
+    },
+    {
+        "id": "ip-amikacin",
+        "inn_name": "Amikacin",
+        "ip_title": "Amikacin Sulphate IP / Amikacin Injection IP",
+        "schedule": "Schedule H",
+        "therapeutic_category": "Antibacterials",
+        "dosage_forms": [
+            {"form": "Injection", "strengths": ["100 mg/2 mL", "250 mg/2 mL", "500 mg/2 mL"], "route": "Intramuscular / Intravenous"}
+        ],
+        "default_dose": "15 mg/kg OD (Once-daily aminoglycoside dosing) or 500 mg BD",
+        "default_frequency": "OD (Preferred) or BD",
+        "default_duration": "5-7 days",
+        "default_instructions": "Dilute in 100mL NS and infuse over 30-60 minutes. Monitor serum creatinine and urine output. Perform baseline audiometry if prolonged therapy.",
+        "max_daily_dose": "1500 mg/24h (or 15 mg/kg)",
+        "renal_dose_adjustment": "CrCl 50-80 mL/min: q24-36h; CrCl 30-50 mL/min: q48h; monitor trough levels (< 4-5 mcg/mL)",
+        "contraindications": ["Known aminoglycoside hypersensitivity", "Myasthenia gravis (causes neuromuscular blockade)", "Concurrent nephrotoxic/ototoxic agents (colistin, vancomycin) without TDM"],
+        "pregnancy_category": "D (Risk of congenital eighth cranial nerve damage)",
+        "nlem_level": ["S", "T"],
+        "snomed_ct_code": "372834001",
+        "common_brands_india": ["Amicip", "Mikacin", "Amikamac", "Almikacin"]
+    },
+
+    # =========================================================================
+    # 3. CARDIOVASCULAR MEDICINES
+    # =========================================================================
+    {
+        "id": "ip-amlodipine",
+        "inn_name": "Amlodipine",
+        "ip_title": "Amlodipine Besilate IP / Amlodipine Tablets IP",
+        "schedule": "Schedule H",
+        "therapeutic_category": "Cardiovascular Medicines",
+        "dosage_forms": [
+            {"form": "Tablet", "strengths": ["2.5 mg", "5 mg", "10 mg"], "route": "Oral"}
+        ],
+        "default_dose": "5 mg",
+        "default_frequency": "OD",
+        "default_duration": "Ongoing",
+        "default_instructions": "Take once daily in the morning with or without food. Monitor for ankle swelling / pedal edema.",
+        "max_daily_dose": "10 mg/24h",
+        "renal_dose_adjustment": "No adjustment required in renal impairment",
+        "contraindications": ["Severe hypotension (SBP < 90 mmHg)", "Cardiogenic shock", "Severe aortic stenosis"],
+        "pregnancy_category": "C",
+        "nlem_level": ["P", "S", "T"],
+        "snomed_ct_code": "386864001",
+        "common_brands_india": ["Amlong", "Stamlo", "Amlovas", "Amlodac", "Amloheart"]
+    },
+    {
+        "id": "ip-telmisartan",
+        "inn_name": "Telmisartan",
+        "ip_title": "Telmisartan IP / Telmisartan Tablets IP",
+        "schedule": "Schedule H",
+        "therapeutic_category": "Cardiovascular Medicines",
+        "dosage_forms": [
+            {"form": "Tablet", "strengths": ["20 mg", "40 mg", "80 mg"], "route": "Oral"}
+        ],
+        "default_dose": "40 mg",
+        "default_frequency": "OD",
+        "default_duration": "Ongoing",
+        "default_instructions": "Take at the same time each day. Monitor serum potassium and creatinine within 2-4 weeks of initiation.",
+        "max_daily_dose": "80 mg/24h",
+        "renal_dose_adjustment": "No starting dose adjustment in mild-to-moderate impairment; caution in severe impairment or bilateral renal artery stenosis",
+        "contraindications": ["Pregnancy (2nd and 3rd trimesters: fetotoxicity and oligohydramnios)", "Bilateral renal artery stenosis", "Severe hepatic impairment or biliary obstruction"],
+        "pregnancy_category": "D (Teratogenic - strictly contraindicated in pregnancy)",
+        "nlem_level": ["P", "S", "T"],
+        "snomed_ct_code": "386873004",
+        "common_brands_india": ["Telma 40", "Telmikind", "Telvas", "Telsartan", "Creser"]
+    },
+    {
+        "id": "ip-ramipril",
+        "inn_name": "Ramipril",
+        "ip_title": "Ramipril IP / Ramipril Tablets IP",
+        "schedule": "Schedule H",
+        "therapeutic_category": "Cardiovascular Medicines",
+        "dosage_forms": [
+            {"form": "Tablet / Capsule", "strengths": ["2.5 mg", "5 mg", "10 mg"], "route": "Oral"}
+        ],
+        "default_dose": "2.5 mg - 5 mg",
+        "default_frequency": "OD",
+        "default_duration": "Ongoing",
+        "default_instructions": "Take at bedtime or morning. Report persistent dry cough or swelling of lips/tongue immediately.",
+        "max_daily_dose": "10 mg/24h",
+        "renal_dose_adjustment": "CrCl < 40 mL/min: initial dose 1.25 mg daily; titrate cautiously to max 5 mg daily",
+        "contraindications": ["History of ACE-inhibitor angioedema", "Pregnancy", "Concomitant sacubitril/valsartan (must allow 36h washout)"],
+        "pregnancy_category": "D",
+        "nlem_level": ["P", "S", "T"],
+        "snomed_ct_code": "386872009",
+        "common_brands_india": ["Cardace", "Hopace", "Ramihart", "Corpril"]
+    },
+    {
+        "id": "ip-metoprolol-succinate",
+        "inn_name": "Metoprolol Succinate",
+        "ip_title": "Metoprolol Succinate Prolonged-release Tablets IP",
+        "schedule": "Schedule H",
+        "therapeutic_category": "Cardiovascular Medicines",
+        "dosage_forms": [
+            {"form": "Tablet (Extended / Prolonged Release)", "strengths": ["25 mg", "50 mg", "100 mg"], "route": "Oral"}
+        ],
+        "default_dose": "25 mg - 50 mg",
+        "default_frequency": "OD",
+        "default_duration": "Ongoing",
+        "default_instructions": "Take with or immediately after a meal. Swallow whole. Check resting heart rate before dosing; hold if HR < 55 bpm.",
+        "max_daily_dose": "200 mg/24h",
+        "renal_dose_adjustment": "No dose adjustment required in renal impairment",
+        "contraindications": ["Severe bradycardia (HR < 50 bpm)", "Second or third-degree AV block without pacemaker", "Decompensated acute heart failure", "Severe active bronchial asthma"],
+        "pregnancy_category": "C",
+        "nlem_level": ["P", "S", "T"],
+        "snomed_ct_code": "372823007",
+        "common_brands_india": ["Metolar XR", "Betaloc", "Starpress-XL", "Met-XL", "Supermet"]
+    },
+    {
+        "id": "ip-atorvastatin",
+        "inn_name": "Atorvastatin",
+        "ip_title": "Atorvastatin Calcium IP / Atorvastatin Tablets IP",
+        "schedule": "Schedule H",
+        "therapeutic_category": "Cardiovascular Medicines",
+        "dosage_forms": [
+            {"form": "Tablet", "strengths": ["10 mg", "20 mg", "40 mg", "80 mg"], "route": "Oral"}
+        ],
+        "default_dose": "20 mg - 40 mg (80 mg STAT in acute ACS)",
+        "default_frequency": "OD (Night)",
+        "default_duration": "Ongoing",
+        "default_instructions": "Take at bedtime with or without food. Report unexplained muscle aches or dark urine immediately.",
+        "max_daily_dose": "80 mg/24h",
+        "renal_dose_adjustment": "No dose adjustment required in renal impairment",
+        "contraindications": ["Active liver disease or unexplained persistent elevation of transaminases (> 3x ULN)", "Pregnancy and breastfeeding"],
+        "pregnancy_category": "X (Strictly contraindicated in pregnancy)",
+        "nlem_level": ["P", "S", "T"],
+        "snomed_ct_code": "386869007",
+        "common_brands_india": ["Atorva", "Lipicure", "Atorlip", "Storvas", "Tonact"]
+    },
+    {
+        "id": "ip-rosuvastatin",
+        "inn_name": "Rosuvastatin",
+        "ip_title": "Rosuvastatin Calcium IP / Rosuvastatin Tablets IP",
+        "schedule": "Schedule H",
+        "therapeutic_category": "Cardiovascular Medicines",
+        "dosage_forms": [
+            {"form": "Tablet", "strengths": ["5 mg", "10 mg", "20 mg", "40 mg"], "route": "Oral"}
+        ],
+        "default_dose": "10 mg - 20 mg",
+        "default_frequency": "OD (Night)",
+        "default_duration": "Ongoing",
+        "default_instructions": "Take once daily with or without food at bedtime. High potency statin.",
+        "max_daily_dose": "40 mg/24h (max 20mg in severe renal failure)",
+        "renal_dose_adjustment": "CrCl < 30 mL/min: initial 5mg daily; max 10mg daily",
+        "contraindications": ["Active liver disease", "Pregnancy and lactation", "Severe renal impairment (for 40mg dose)"],
+        "pregnancy_category": "X",
+        "nlem_level": ["P", "S", "T"],
+        "snomed_ct_code": "386870008",
+        "common_brands_india": ["Rosuvas", "Rozavel", "Roseday", "Rosulip", "Novastat"]
+    },
+    {
+        "id": "ip-aspirin",
+        "inn_name": "Aspirin (Acetylsalicylic Acid)",
+        "ip_title": "Aspirin IP / Gastro-resistant Aspirin Tablets IP",
+        "schedule": "OTC",
+        "therapeutic_category": "Cardiovascular Medicines",
+        "dosage_forms": [
+            {"form": "Tablet (Gastro-resistant / Enteric-coated)", "strengths": ["75 mg", "150 mg"], "route": "Oral"},
+            {"form": "Chewable / Soluble Tablet", "strengths": ["300 mg", "325 mg"], "route": "Oral"}
+        ],
+        "default_dose": "75 mg (325 mg chewable STAT in acute MI/chest pain)",
+        "default_frequency": "OD",
+        "default_duration": "Ongoing",
+        "default_instructions": "Take after meals with water. Chew STAT loading dose in acute chest pain for rapid antiplatelet action.",
+        "max_daily_dose": "325 mg/24h (cardiovascular prevention)",
+        "renal_dose_adjustment": "Avoid in severe renal failure (CrCl < 10 mL/min)",
+        "contraindications": ["Active GI bleeding or ulceration", "Aspirin-induced asthma / triad", "Hemophilia or bleeding diathesis", "Children < 16 years with viral fever (Reye syndrome)"],
+        "pregnancy_category": "D (Low-dose 75-150mg used selectively for preeclampsia prevention under obstetric protocol)",
+        "nlem_level": ["P", "S", "T"],
+        "snomed_ct_code": "387458008",
+        "common_brands_india": ["Ecosprin 75", "Ecosprin 150", "Disprin", "Delisprin", "Loprin"]
+    },
+    {
+        "id": "ip-clopidogrel",
+        "inn_name": "Clopidogrel",
+        "ip_title": "Clopidogrel Bisulfate IP / Clopidogrel Tablets IP",
+        "schedule": "Schedule H",
+        "therapeutic_category": "Cardiovascular Medicines",
+        "dosage_forms": [
+            {"form": "Tablet", "strengths": ["75 mg", "300 mg (loading)"], "route": "Oral"}
+        ],
+        "default_dose": "75 mg (300 mg STAT loading in acute coronary syndrome)",
+        "default_frequency": "OD",
+        "default_duration": "12 months (post-PCI / ACS)",
+        "default_instructions": "Take once daily with or without food. Avoid omeprazole co-administration (prefer pantoprazole to avoid CYP2C19 inhibition).",
+        "max_daily_dose": "300 mg loading, 75 mg maintenance",
+        "renal_dose_adjustment": "No dose adjustment required in renal impairment",
+        "contraindications": ["Active pathological bleeding (peptic ulcer or intracranial hemorrhage)", "Severe hepatic impairment"],
+        "pregnancy_category": "B",
+        "nlem_level": ["P", "S", "T"],
+        "snomed_ct_code": "386874005",
+        "common_brands_india": ["Clavix", "Deplatt", "Plavix", "Clopivas", "Ceruvin"]
+    },
+    {
+        "id": "ip-furosemide",
+        "inn_name": "Furosemide",
+        "ip_title": "Furosemide IP / Furosemide Injection IP",
+        "schedule": "Schedule H",
+        "therapeutic_category": "Cardiovascular Medicines",
+        "dosage_forms": [
+            {"form": "Tablet", "strengths": ["20 mg", "40 mg"], "route": "Oral"},
+            {"form": "Injection", "strengths": ["10 mg/mL (20 mg/2 mL)"], "route": "Intravenous / Intramuscular"}
+        ],
+        "default_dose": "40 mg (Oral) / 20-40 mg IV STAT",
+        "default_frequency": "OD (Morning) or BD",
+        "default_duration": "As clinically indicated",
+        "default_instructions": "Take in morning to prevent nocturia. Monitor serum potassium, sodium, and daily urine output / fluid balance.",
+        "max_daily_dose": "600 mg/24h in refractory acute fluid overload",
+        "renal_dose_adjustment": "Higher doses may be required in oliguric renal failure to achieve diuresis",
+        "contraindications": ["Anuria refractory to test dose", "Severe hypokalemia or hyponatremia", "Hepatic coma / pre-coma"],
+        "pregnancy_category": "C",
+        "nlem_level": ["P", "S", "T"],
+        "snomed_ct_code": "387462002",
+        "common_brands_india": ["Lasix", "Frusenex", "Salinex", "Furox"]
+    },
+    {
+        "id": "ip-spironolactone",
+        "inn_name": "Spironolactone",
+        "ip_title": "Spironolactone IP / Spironolactone Tablets IP",
+        "schedule": "Schedule H",
+        "therapeutic_category": "Cardiovascular Medicines",
+        "dosage_forms": [
+            {"form": "Tablet", "strengths": ["25 mg", "50 mg", "100 mg"], "route": "Oral"}
+        ],
+        "default_dose": "25 mg",
+        "default_frequency": "OD",
+        "default_duration": "Ongoing",
+        "default_instructions": "Mineralocorticoid receptor antagonist for heart failure and resistant hypertension. Monitor potassium (hold if K+ > 5.0 mEq/L).",
+        "max_daily_dose": "200 mg/24h (in cirrhosis with ascites)",
+        "renal_dose_adjustment": "eGFR 30-50 mL/min: 12.5-25mg q48h; eGFR < 30 mL/min: CONTRAINDICATED (hyperkalemia)",
+        "contraindications": ["Hyperkalemia (serum K+ > 5.0 mEq/L)", "Severe renal insufficiency (eGFR < 30 mL/min)", "Addison disease"],
+        "pregnancy_category": "C",
+        "nlem_level": ["P", "S", "T"],
+        "snomed_ct_code": "387464001",
+        "common_brands_india": ["Aldactone", "Spilac", "Lacton", "Spirobar"]
+    },
+    {
+        "id": "ip-nitroglycerin",
+        "inn_name": "Nitroglycerin (Glyceryl Trinitrate)",
+        "ip_title": "Glyceryl Trinitrate Tablets IP / Glyceryl Trinitrate Injection IP",
+        "schedule": "Schedule H",
+        "therapeutic_category": "Cardiovascular Medicines",
+        "dosage_forms": [
+            {"form": "Sublingual Tablet", "strengths": ["0.4 mg", "0.5 mg"], "route": "Sublingual"},
+            {"form": "Injection / Infusion", "strengths": ["5 mg/mL (25 mg/5 mL, 50 mg/10 mL)"], "route": "Intravenous"}
+        ],
+        "default_dose": "0.4 mg - 0.5 mg Sublingual STAT",
+        "default_frequency": "PRN (q5min up to 3 doses)",
+        "default_duration": "Acute attack",
+        "default_instructions": "Dissolve under the tongue at onset of angina while seated. If pain persists after 3 doses in 15 min, seek immediate emergency care.",
+        "max_daily_dose": "3 sublingual tablets in 15 minutes",
+        "renal_dose_adjustment": "No dose adjustment required",
+        "contraindications": ["Concurrent PDE-5 inhibitors (sildenafil within 24h, tadalafil within 48h)", "Severe hypotension (SBP < 90 mmHg)", "Right ventricular infarction", "Hypertrophic obstructive cardiomyopathy"],
+        "pregnancy_category": "C",
+        "nlem_level": ["P", "S", "T"],
+        "snomed_ct_code": "387463007",
+        "common_brands_india": ["Sorbitrate", "Angispan-TR", "Nitrolong", "Myonit", "Nitrocontin"]
+    },
+
+    # =========================================================================
+    # 4. GASTROINTESTINAL & ANTIEMETICS
+    # =========================================================================
+    {
+        "id": "ip-pantoprazole",
+        "inn_name": "Pantoprazole",
+        "ip_title": "Pantoprazole Sodium IP / Pantoprazole Gastro-resistant Tablets IP",
+        "schedule": "Schedule H",
+        "therapeutic_category": "Gastrointestinal Medicines",
+        "dosage_forms": [
+            {"form": "Tablet (Gastro-resistant)", "strengths": ["40 mg"], "route": "Oral"},
+            {"form": "Injection", "strengths": ["40 mg vial"], "route": "Intravenous"}
+        ],
+        "default_dose": "40 mg",
+        "default_frequency": "OD",
+        "default_duration": "7-14 days",
+        "default_instructions": "Take 30 to 60 minutes before breakfast with a glass of water. Swallow whole; do not chew or crush.",
+        "max_daily_dose": "80 mg/24h (80 mg IV bolus followed by 8 mg/hr infusion in acute upper GI bleed)",
+        "renal_dose_adjustment": "No dose adjustment required in renal impairment",
+        "contraindications": ["Known hypersensitivity to substituted benzimidazoles"],
+        "pregnancy_category": "B",
+        "nlem_level": ["P", "S", "T"],
+        "snomed_ct_code": "386901007",
+        "common_brands_india": ["Pan 40", "Pantocid", "Pantop", "Pantosec", "Pantodac"]
+    },
+    {
+        "id": "ip-omeprazole",
+        "inn_name": "Omeprazole",
+        "ip_title": "Omeprazole IP / Omeprazole Capsules IP",
+        "schedule": "Schedule H",
+        "therapeutic_category": "Gastrointestinal Medicines",
+        "dosage_forms": [
+            {"form": "Capsule / Tablet", "strengths": ["20 mg", "40 mg"], "route": "Oral"}
+        ],
+        "default_dose": "20 mg",
+        "default_frequency": "OD (Morning)",
+        "default_duration": "14 days",
+        "default_instructions": "Take 30 minutes before breakfast on empty stomach.",
+        "max_daily_dose": "40 mg/24h (80-120mg in Zollinger-Ellison syndrome)",
+        "renal_dose_adjustment": "No adjustment required",
+        "contraindications": ["Concurrent nelfinavir or rilpivirine", "Hypersensitivity to omeprazole"],
+        "pregnancy_category": "C",
+        "nlem_level": ["P", "S", "T"],
+        "snomed_ct_code": "386902000",
+        "common_brands_india": ["Omez", "Omee", "Omepraz", "Procept", "Ocid"]
+    },
+    {
+        "id": "ip-ondansetron",
+        "inn_name": "Ondansetron",
+        "ip_title": "Ondansetron Hydrochloride IP / Ondansetron Tablets IP",
+        "schedule": "Schedule H",
+        "therapeutic_category": "Gastrointestinal Medicines",
+        "dosage_forms": [
+            {"form": "Tablet / Orally Disintegrating (MD)", "strengths": ["4 mg", "8 mg"], "route": "Oral"},
+            {"form": "Syrup", "strengths": ["2 mg/5 mL"], "route": "Oral"},
+            {"form": "Injection", "strengths": ["2 mg/mL (4 mg/2 mL)"], "route": "Intravenous / Intramuscular"}
+        ],
+        "default_dose": "4 mg - 8 mg",
+        "default_frequency": "TDS PRN",
+        "default_duration": "2-3 days",
+        "default_instructions": "Take 30 minutes before meals or chemotherapy. MD tablet dissolves rapidly on tongue without water.",
+        "max_daily_dose": "16 mg IV single dose, 24 mg/24h oral",
+        "renal_dose_adjustment": "No dose adjustment required; in severe hepatic impairment max 8 mg/24h",
+        "contraindications": ["Concurrent apomorphine administration (severe hypotension)", "Congenital long QT syndrome"],
+        "pregnancy_category": "B",
+        "nlem_level": ["P", "S", "T"],
+        "snomed_ct_code": "386903005",
+        "common_brands_india": ["Emeset", "Ondem", "Zofran", "Vomikind", "Periset"]
+    },
+    {
+        "id": "ip-metoclopramide",
+        "inn_name": "Metoclopramide",
+        "ip_title": "Metoclopramide Hydrochloride IP / Metoclopramide Injection IP",
+        "schedule": "Schedule H",
+        "therapeutic_category": "Gastrointestinal Medicines",
+        "dosage_forms": [
+            {"form": "Tablet", "strengths": ["10 mg"], "route": "Oral"},
+            {"form": "Injection", "strengths": ["5 mg/mL (10 mg/2 mL)"], "route": "Intravenous / Intramuscular"}
+        ],
+        "default_dose": "10 mg",
+        "default_frequency": "TDS (Before meals)",
+        "default_duration": "3-5 days (Max 5 days)",
+        "default_instructions": "Take 30 minutes before meals. Warn patient regarding extrapyramidal symptoms / dystonia (treat with IV promethazine).",
+        "max_daily_dose": "30 mg/24h (or 0.5 mg/kg/day)",
+        "renal_dose_adjustment": "CrCl 15-60 mL/min: reduce dose by 50%; CrCl < 15 mL/min: reduce dose by 75%",
+        "contraindications": ["Gastrointestinal obstruction, perforation or hemorrhage", "Pheochromocytoma", "History of tardive dyskinesia"],
+        "pregnancy_category": "B",
+        "nlem_level": ["P", "S", "T"],
+        "snomed_ct_code": "372675000",
+        "common_brands_india": ["Perinorm", "Reglan", "Maxeron", "Mecol"]
+    },
+
+    # =========================================================================
+    # 5. ENDOCRINE MEDICINES & DIABETES
+    # =========================================================================
+    {
+        "id": "ip-metformin",
+        "inn_name": "Metformin",
+        "ip_title": "Metformin Hydrochloride IP / Metformin Prolonged-release Tablets IP",
+        "schedule": "Schedule H",
+        "therapeutic_category": "Endocrine Medicines",
+        "dosage_forms": [
+            {"form": "Tablet (Immediate Release)", "strengths": ["500 mg", "850 mg"], "route": "Oral"},
+            {"form": "Tablet (Extended / Prolonged Release - SR/PR)", "strengths": ["500 mg", "1000 mg"], "route": "Oral"}
+        ],
+        "default_dose": "500 mg",
+        "default_frequency": "BD",
+        "default_duration": "Ongoing",
+        "default_instructions": "Take with or immediately after meals to reduce GI side effects. Swallow prolonged release tablets whole.",
+        "max_daily_dose": "2000 mg - 2550 mg/24h",
+        "renal_dose_adjustment": "eGFR 45-59 mL/min: max 1000 mg/day; eGFR 30-44 mL/min: max 500 mg/day; eGFR < 30 mL/min: CONTRAINDICATED (lactic acidosis risk)",
+        "contraindications": ["Severe renal failure (eGFR < 30 mL/min)", "Acute metabolic or lactic acidosis", "Severe hypoxia, sepsis, acute heart failure", "Hold 48h before and after iodinated radiocontrast"],
+        "pregnancy_category": "B (Often used under specialist endocrinology protocol in GDM)",
+        "nlem_level": ["P", "S", "T"],
+        "snomed_ct_code": "372567009",
+        "common_brands_india": ["Glycomet", "Glyciphage", "Obimet", "Cetapin", "Glucophage"]
+    },
+    {
+        "id": "ip-glimepiride",
+        "inn_name": "Glimepiride",
+        "ip_title": "Glimepiride IP / Glimepiride Tablets IP",
+        "schedule": "Schedule H",
+        "therapeutic_category": "Endocrine Medicines",
+        "dosage_forms": [
+            {"form": "Tablet", "strengths": ["1 mg", "2 mg", "3 mg", "4 mg"], "route": "Oral"}
+        ],
+        "default_dose": "1 mg - 2 mg",
+        "default_frequency": "OD (Immediately before breakfast)",
+        "default_duration": "Ongoing",
+        "default_instructions": "Take immediately before first substantial meal of the day. Educate on hypoglycemia signs (shakiness, diaphoresis, hunger) and keep sweets at hand.",
+        "max_daily_dose": "8 mg/24h",
+        "renal_dose_adjustment": "Initial 1 mg daily; titrate conservatively; avoid in severe renal failure",
+        "contraindications": ["Type 1 diabetes mellitus", "Diabetic ketoacidosis", "Severe renal or hepatic impairment", "Sulfa drug allergy"],
+        "pregnancy_category": "C",
+        "nlem_level": ["P", "S", "T"],
+        "snomed_ct_code": "372568004",
+        "common_brands_india": ["Amaryl", "Glimy", "Zoryl", "Gemer", "Glimestar"]
+    },
+    {
+        "id": "ip-insulin-regular",
+        "inn_name": "Insulin (Human Soluble / Regular)",
+        "ip_title": "Human Insulin Injection IP (Soluble / Regular)",
+        "schedule": "Schedule G",
+        "therapeutic_category": "Endocrine Medicines",
+        "dosage_forms": [
+            {"form": "Injection (Vial / Cartridge)", "strengths": ["40 IU/mL", "100 IU/mL"], "route": "Subcutaneous / Intravenous"}
+        ],
+        "default_dose": "4 - 10 IU (or per sliding scale algorithm)",
+        "default_frequency": "TDS (30 min before meals)",
+        "default_duration": "Ongoing / Inpatient titration",
+        "default_instructions": "Inject subcutaneously 30 minutes before meals. Rotate injection sites across abdomen and thighs. Only form suitable for IV infusion in DKA.",
+        "max_daily_dose": "Individualized based on blood glucose and weight",
+        "renal_dose_adjustment": "Insulin clearance decreases in renal failure; reduce dose and monitor CBG closely",
+        "contraindications": ["Hypoglycemia (blood glucose < 70 mg/dL)", "Known systemic hypersensitivity to human insulin"],
+        "pregnancy_category": "B (Gold standard for glycemic control in pregnancy)",
+        "nlem_level": ["P", "S", "T"],
+        "snomed_ct_code": "386927003",
+        "common_brands_india": ["Actrapid", "Huminsulin R", "Insugen R", "Wosulin R"]
+    },
+    {
+        "id": "ip-insulin-glargine",
+        "inn_name": "Insulin Glargine",
+        "ip_title": "Insulin Glargine Injection IP",
+        "schedule": "Schedule G",
+        "therapeutic_category": "Endocrine Medicines",
+        "dosage_forms": [
+            {"form": "Injection (Cartridge / Pre-filled Pen)", "strengths": ["100 IU/mL"], "route": "Subcutaneous"}
+        ],
+        "default_dose": "10 IU (or 0.2 units/kg)",
+        "default_frequency": "OD (At bedtime / same time daily)",
+        "default_duration": "Ongoing basal insulin",
+        "default_instructions": "Peakless 24-hour basal insulin. Inject SC strictly at the same time each day. NEVER inject IV or mix in same syringe with other insulins.",
+        "max_daily_dose": "Individualized",
+        "renal_dose_adjustment": "Titrate to fasting blood sugar; requirements fall with declining renal function",
+        "contraindications": ["Hypoglycemia"],
+        "pregnancy_category": "B",
+        "nlem_level": ["S", "T"],
+        "snomed_ct_code": "386928008",
+        "common_brands_india": ["Lantus", "Basalog", "Glaritus", "Toujeo (300 IU/mL)"]
+    },
+
+    # =========================================================================
+    # 6. RESPIRATORY MEDICINES
+    # =========================================================================
+    {
+        "id": "ip-salbutamol",
+        "inn_name": "Salbutamol (Albuterol)",
+        "ip_title": "Salbutamol Sulphate IP / Salbutamol Inhalation IP",
+        "schedule": "Schedule H",
+        "therapeutic_category": "Respiratory Medicines",
+        "dosage_forms": [
+            {"form": "Metered Dose Inhaler (MDI)", "strengths": ["100 mcg/puff"], "route": "Inhalation"},
+            {"form": "Respirator Solution / Respules", "strengths": ["2.5 mg/2.5 mL", "5 mg/2.5 mL"], "route": "Inhalation (Nebulized)"},
+            {"form": "Tablet", "strengths": ["2 mg", "4 mg"], "route": "Oral"}
+        ],
+        "default_dose": "1-2 puffs (100-200 mcg) MDI or 2.5 mg Nebulized STAT",
+        "default_frequency": "q4-6h PRN",
+        "default_duration": "As needed for acute wheeze / bronchospasm",
+        "default_instructions": "Shake inhaler well. Use spacer device if possible. Inhale slowly and hold breath for 10 seconds.",
+        "max_daily_dose": "800 mcg/24h via inhaler (or frequent nebulization under telemetry in ICU)",
+        "renal_dose_adjustment": "No dose adjustment required",
+        "contraindications": ["Hypersensitivity to salbutamol", "Caution in severe tachyarrhythmias or thyrotoxicosis"],
+        "pregnancy_category": "C (Drug of choice for acute asthma rescue in pregnancy)",
+        "nlem_level": ["P", "S", "T"],
+        "snomed_ct_code": "372822002",
+        "common_brands_india": ["Asthalin", "Ventorlin", "Aerocort", "Deriphyllin"]
+    },
+    {
+        "id": "ip-budesonide",
+        "inn_name": "Budesonide",
+        "ip_title": "Budesonide IP / Budesonide Inhalation Suspension IP",
+        "schedule": "Schedule H",
+        "therapeutic_category": "Respiratory Medicines",
+        "dosage_forms": [
+            {"form": "Metered Dose Inhaler (MDI / DPI)", "strengths": ["100 mcg", "200 mcg", "400 mcg"], "route": "Inhalation"},
+            {"form": "Respules", "strengths": ["0.5 mg/2 mL", "1 mg/2 mL"], "route": "Inhalation (Nebulized)"}
+        ],
+        "default_dose": "200 mcg - 400 mcg (or 0.5mg respule nebulized)",
+        "default_frequency": "BD",
+        "default_duration": "Ongoing (Maintenance controller)",
+        "default_instructions": "Rinse mouth and gargle with water without swallowing after each inhalation (prevents oral candidiasis).",
+        "max_daily_dose": "1600 mcg/24h",
+        "renal_dose_adjustment": "No adjustment required",
+        "contraindications": ["Status asthmaticus primary therapy (requires systemic corticosteroids)", "Untreated fungal or viral respiratory infections"],
+        "pregnancy_category": "B (Safest inhaled corticosteroid in pregnancy)",
+        "nlem_level": ["P", "S", "T"],
+        "snomed_ct_code": "386940003",
+        "common_brands_india": ["Budecort", "Pulmicort", "Foracort", "Budetrol"]
+    },
+    {
+        "id": "ip-ipratropium",
+        "inn_name": "Ipratropium Bromide",
+        "ip_title": "Ipratropium Bromide IP / Ipratropium Inhalation Solution IP",
+        "schedule": "Schedule H",
+        "therapeutic_category": "Respiratory Medicines",
+        "dosage_forms": [
+            {"form": "Inhalation Respule", "strengths": ["500 mcg/2 mL"], "route": "Inhalation (Nebulized)"},
+            {"form": "Inhaler (MDI)", "strengths": ["20 mcg/puff"], "route": "Inhalation"}
+        ],
+        "default_dose": "500 mcg nebulized",
+        "default_frequency": "TDS-QID",
+        "default_duration": "Acute exacerbation / ongoing COPD",
+        "default_instructions": "Anticholinergic bronchodilator. Protect eyes from nebulizer mist (prevents acute narrow angle glaucoma).",
+        "max_daily_dose": "2000 mcg/24h nebulized",
+        "renal_dose_adjustment": "No adjustment required",
+        "contraindications": ["Narrow-angle glaucoma", "Urinary retention / severe prostatic hypertrophy"],
+        "pregnancy_category": "B",
+        "nlem_level": ["P", "S", "T"],
+        "snomed_ct_code": "386941004",
+        "common_brands_india": ["Ipravent", "Duolin (with Levosalbutamol)", "Combivent"]
+    },
+    {
+        "id": "ip-montelukast",
+        "inn_name": "Montelukast",
+        "ip_title": "Montelukast Sodium IP / Montelukast Tablets IP",
+        "schedule": "Schedule H",
+        "therapeutic_category": "Respiratory Medicines",
+        "dosage_forms": [
+            {"form": "Tablet", "strengths": ["4 mg chewable", "5 mg chewable", "10 mg"], "route": "Oral"}
+        ],
+        "default_dose": "10 mg",
+        "default_frequency": "OD (At bedtime)",
+        "default_duration": "Ongoing",
+        "default_instructions": "Take at night. Warn patient and family regarding neuropsychiatric events (nightmares, agitation, mood changes).",
+        "max_daily_dose": "10 mg/24h",
+        "renal_dose_adjustment": "No adjustment required",
+        "contraindications": ["Acute asthma attack / status asthmaticus rescue (not a bronchodilator)"],
+        "pregnancy_category": "B",
+        "nlem_level": ["P", "S", "T"],
+        "snomed_ct_code": "386942006",
+        "common_brands_india": ["Montair", "Singulair", "Telekast", "Monticope (with Levocetirizine)", "Romilast"]
+    },
+
+    # =========================================================================
+    # 7. CRITICAL CARE, FLUIDS, EMERGENCY & RESUSCITATION
+    # =========================================================================
+    {
+        "id": "ip-normal-saline",
+        "inn_name": "0.9% Sodium Chloride (Normal Saline)",
+        "ip_title": "Sodium Chloride Injection IP (0.9% w/v)",
+        "schedule": "OTC",
+        "therapeutic_category": "Solutions Correcting Water, Electrolyte Disturbances and Acid-Base",
+        "dosage_forms": [
+            {"form": "IV Infusion", "strengths": ["0.9% w/v (100 mL, 500 mL, 1000 mL)"], "route": "Intravenous"}
+        ],
+        "default_dose": "500 mL - 1000 mL (30 mL/kg in septic shock)",
+        "default_frequency": "STAT / Variable IV rate",
+        "default_duration": "Resuscitation phase",
+        "default_instructions": "Check bag clarity before hanging. Monitor lung bases for crepitations and JVP to prevent pulmonary edema.",
+        "max_daily_dose": "Titrated to mean arterial pressure (MAP >= 65 mmHg) and urine output",
+        "renal_dose_adjustment": "Use with caution in oliguric renal failure and congestive heart failure",
+        "contraindications": ["Hypernatremia", "Severe fluid overload / pulmonary edema"],
+        "pregnancy_category": "Safe",
+        "nlem_level": ["P", "S", "T"],
+        "snomed_ct_code": "387362001",
+        "common_brands_india": ["NS 0.9%", "Normal Saline IP", "Claris NS", "Baxter Saline"]
+    },
+    {
+        "id": "ip-ringers-lactate",
+        "inn_name": "Ringer's Lactate (Hartmann's Solution)",
+        "ip_title": "Compound Sodium Lactate Injection IP (Ringer Lactate)",
+        "schedule": "OTC",
+        "therapeutic_category": "Solutions Correcting Water, Electrolyte Disturbances and Acid-Base",
+        "dosage_forms": [
+            {"form": "IV Infusion", "strengths": ["500 mL, 1000 mL"], "route": "Intravenous"}
+        ],
+        "default_dose": "500 mL - 1000 mL",
+        "default_frequency": "STAT or at 75-125 mL/hr",
+        "default_duration": "Maintenance / Resuscitation",
+        "default_instructions": "Balanced crystalloid solution. NEVER administer via same infusion line as Ceftriaxone (calcium-ceftriaxone precipitation).",
+        "max_daily_dose": "Titrated to hemodynamic endpoints",
+        "renal_dose_adjustment": "Caution in severe renal failure with hyperkalemia (contains 4 mEq/L K+)",
+        "contraindications": ["Severe lactic acidosis or hepatic failure (impaired lactate metabolism)", "Concurrent ceftriaxone in neonates"],
+        "pregnancy_category": "Safe",
+        "nlem_level": ["P", "S", "T"],
+        "snomed_ct_code": "387363006",
+        "common_brands_india": ["RL", "Ringer Lactate IP", "Hartmann Solution"]
+    },
+    {
+        "id": "ip-noradrenaline",
+        "inn_name": "Norepinephrine (Noradrenaline)",
+        "ip_title": "Noradrenaline Bitartrate Injection IP",
+        "schedule": "Schedule H",
+        "therapeutic_category": "Cardiovascular & Resuscitation",
+        "dosage_forms": [
+            {"form": "Injection (Ampoule)", "strengths": ["2 mg/mL (4 mg/2 mL)"], "route": "Intravenous"}
+        ],
+        "default_dose": "0.05 - 0.5 mcg/kg/min continuous infusion",
+        "default_frequency": "Continuous IV Infusion",
+        "default_duration": "Shock resuscitation",
+        "default_instructions": "Dilute 4 mg in 50 mL D5W or NS (80 mcg/mL). Infuse exclusively via Central Venous Catheter with automated syringe pump. Target MAP >= 65 mmHg.",
+        "max_daily_dose": "Titrated to hemodynamic target (wean as shock resolves)",
+        "renal_dose_adjustment": "No dose adjustment; restores renal perfusion in septic shock",
+        "contraindications": ["Hypovolemic shock prior to adequate fluid resuscitation (except as emergency bridge)"],
+        "pregnancy_category": "C (Emergency life-saving use takes precedence)",
+        "nlem_level": ["S", "T"],
+        "snomed_ct_code": "387364000",
+        "common_brands_india": ["Norad", "Adrenor", "Vascufin", "Norcontin"]
+    },
+    {
+        "id": "ip-adrenaline",
+        "inn_name": "Epinephrine (Adrenaline)",
+        "ip_title": "Adrenaline Injection IP (1:1000, 1 mg/mL)",
+        "schedule": "Schedule H",
+        "therapeutic_category": "Critical Care & Emergency",
+        "dosage_forms": [
+            {"form": "Injection (Ampoule)", "strengths": ["1 mg/mL (1:1000)"], "route": "Intramuscular / Intravenous"}
+        ],
+        "default_dose": "0.5 mg IM (Anaphylaxis) / 1 mg IV (Cardiac Arrest)",
+        "default_frequency": "STAT (q5-15 min PRN in anaphylaxis; q3-5 min in CPR)",
+        "default_duration": "Resuscitation",
+        "default_instructions": "ANAPHYLAXIS: Inject 0.5 mg (0.5 mL of 1:1000) IM into anterolateral thigh immediately. CARDIAC ARREST: 1 mg IV push followed by 20 mL flush.",
+        "max_daily_dose": "Emergency titration",
+        "renal_dose_adjustment": "No adjustment",
+        "contraindications": ["No absolute contraindications in cardiac arrest or severe anaphylaxis"],
+        "pregnancy_category": "C (Life-saving emergency drug)",
+        "nlem_level": ["P", "S", "T"],
+        "snomed_ct_code": "387365004",
+        "common_brands_india": ["Adrenaline IP", "Vasocon", "Adrenalin"]
+    },
+    {
+        "id": "ip-atropine",
+        "inn_name": "Atropine Sulphate",
+        "ip_title": "Atropine Sulphate Injection IP",
+        "schedule": "Schedule H",
+        "therapeutic_category": "Critical Care & Emergency",
+        "dosage_forms": [
+            {"form": "Injection (Ampoule)", "strengths": ["0.6 mg/mL"], "route": "Intravenous / Intramuscular"}
+        ],
+        "default_dose": "0.5 mg - 1 mg IV STAT",
+        "default_frequency": "q3-5 min (Max 3 mg)",
+        "default_duration": "Acute symptomatic bradycardia / Organophosphate poisoning",
+        "default_instructions": "Give rapid IV push. Doses < 0.5 mg may cause paradoxical bradycardia. In organophosphate poisoning, titrate until full atropinization (clear chest, HR > 80, dry axillae).",
+        "max_daily_dose": "3 mg (bradycardia); no ceiling in organophosphate poisoning",
+        "renal_dose_adjustment": "No adjustment",
+        "contraindications": ["Glaucoma (relative in life-threatening bradycardia)"],
+        "pregnancy_category": "C",
+        "nlem_level": ["P", "S", "T"],
+        "snomed_ct_code": "372569007",
+        "common_brands_india": ["Atropine IP", "Atropin", "Tropine"]
+    },
+
+    # =========================================================================
+    # 8. CENTRAL NERVOUS SYSTEM, PSYCHOTHERAPEUTIC & ANTIEPILEPTICS
+    # =========================================================================
+    {
+        "id": "ip-lorazepam",
+        "inn_name": "Lorazepam",
+        "ip_title": "Lorazepam IP / Lorazepam Tablets IP / Lorazepam Injection IP",
+        "schedule": "Schedule H1",
+        "therapeutic_category": "Central Nervous System",
+        "dosage_forms": [
+            {"form": "Tablet", "strengths": ["1 mg", "2 mg"], "route": "Oral"},
+            {"form": "Injection", "strengths": ["2 mg/mL"], "route": "Intravenous / Intramuscular"}
+        ],
+        "default_dose": "2 mg - 4 mg IV (Status epilepticus) / 1 mg PO",
+        "default_frequency": "STAT / BD PRN",
+        "default_duration": "Short-term acute management",
+        "default_instructions": "First-line IV drug of choice in status epilepticus. Give slow IV over 2 minutes. Monitor airway and oxygen saturation.",
+        "max_daily_dose": "10 mg/24h",
+        "renal_dose_adjustment": "Safe in renal failure (inactive glucuronide metabolite)",
+        "contraindications": ["Myasthenia gravis", "Severe respiratory insufficiency", "Sleep apnea syndrome"],
+        "pregnancy_category": "D",
+        "nlem_level": ["S", "T"],
+        "snomed_ct_code": "386929000",
+        "common_brands_india": ["Ativan", "Trapex", "Lopez", "Calmese"]
+    },
+    {
+        "id": "ip-phenytoin",
+        "inn_name": "Phenytoin",
+        "ip_title": "Phenytoin Sodium IP / Phenytoin Tablets IP / Phenytoin Injection IP",
+        "schedule": "Schedule H",
+        "therapeutic_category": "Central Nervous System",
+        "dosage_forms": [
+            {"form": "Tablet", "strengths": ["100 mg"], "route": "Oral"},
+            {"form": "Injection", "strengths": ["50 mg/mL (100 mg/2 mL)"], "route": "Intravenous"}
+        ],
+        "default_dose": "100 mg TDS (Loading dose 15-20 mg/kg IV)",
+        "default_frequency": "TDS oral / STAT loading",
+        "default_duration": "Ongoing antiepileptic therapy",
+        "default_instructions": "Dilute loading dose ONLY in 0.9% Normal Saline (precipitates in dextrose). Infusion rate MUST NOT exceed 50 mg/min (causes cardiac arrhythmias and hypotension). Monitor ECG.",
+        "max_daily_dose": "Titrated to therapeutic serum drug level (10-20 mcg/mL)",
+        "renal_dose_adjustment": "Protein binding decreases in uremia; interpret free phenytoin level",
+        "contraindications": ["Sinus bradycardia, sino-atrial block, second- and third-degree AV block"],
+        "pregnancy_category": "D (Fetal hydantoin syndrome)",
+        "nlem_level": ["P", "S", "T"],
+        "snomed_ct_code": "387460005",
+        "common_brands_india": ["Eptoin", "Dilantin", "Fenite", "Epilentin"]
+    },
+    {
+        "id": "ip-valproate",
+        "inn_name": "Sodium Valproate",
+        "ip_title": "Sodium Valproate IP / Valproate Gastro-resistant Tablets IP",
+        "schedule": "Schedule H",
+        "therapeutic_category": "Central Nervous System",
+        "dosage_forms": [
+            {"form": "Tablet (Controlled / Chrono Release)", "strengths": ["200 mg", "300 mg", "500 mg"], "route": "Oral"},
+            {"form": "Injection", "strengths": ["100 mg/mL (500 mg/5 mL)"], "route": "Intravenous"}
+        ],
+        "default_dose": "500 mg",
+        "default_frequency": "BD",
+        "default_duration": "Ongoing",
+        "default_instructions": "Take with meals. Check baseline liver function tests and platelets. Highly teratogenic (avoid in women of childbearing potential).",
+        "max_daily_dose": "2500 mg/24h (or 60 mg/kg/day)",
+        "renal_dose_adjustment": "No dose adjustment needed, but monitor free valproic acid",
+        "contraindications": ["Severe active hepatic disease or familial history of severe hepatic dysfunction", "Mitochondrial disorders (POLG mutations)", "Pregnancy (unless no alternative in severe epilepsy)"],
+        "pregnancy_category": "X (Neural tube defects, facial dysmorphism, cognitive impairment)",
+        "nlem_level": ["P", "S", "T"],
+        "snomed_ct_code": "387461009",
+        "common_brands_india": ["Encorate Chrono", "Valparin", "Epival", "Depakote"]
+    }
+]
+
+# Standardized Evidence-Based Clinical Order Sets
+CLINICAL_ORDER_SETS = [
+    {
+        "id": "orderset-acs-chestpain",
+        "name": "Acute Coronary Syndrome / STEMI Protocol",
+        "category": "Cardiology & Emergency",
+        "description": "Standardized acute emergency resuscitation and antiplatelet loading bundle for acute chest pain / acute myocardial infarction.",
+        "evidence_grade": "Class I, Level A (AHA/ACC/CSI Guidelines)",
+        "items": [
+            {
+                "id": "acs-1",
+                "item_type": "medication",
+                "title": "Aspirin 325 mg PO STAT",
+                "pharmacopoeia_id": "ip-aspirin",
+                "dose": "325 mg",
+                "route": "Oral",
+                "frequency": "STAT",
+                "duration": "1 dose",
+                "instructions": "Chew and swallow tablet immediately for rapid antiplatelet activation.",
+                "urgency": "STAT",
+                "is_default_checked": True
+            },
+            {
+                "id": "acs-2",
+                "item_type": "medication",
+                "title": "Clopidogrel 300 mg PO STAT",
+                "pharmacopoeia_id": "ip-clopidogrel",
+                "dose": "300 mg (4 tabs of 75mg)",
+                "route": "Oral",
+                "frequency": "STAT",
+                "duration": "1 dose",
+                "instructions": "Loading dose for dual antiplatelet therapy (DAPT).",
+                "urgency": "STAT",
+                "is_default_checked": True
+            },
+            {
+                "id": "acs-3",
+                "item_type": "medication",
+                "title": "Atorvastatin 80 mg PO STAT",
+                "pharmacopoeia_id": "ip-atorvastatin",
+                "dose": "80 mg",
+                "route": "Oral",
+                "frequency": "STAT",
+                "duration": "1 dose",
+                "instructions": "High-intensity statin plaque stabilization therapy.",
+                "urgency": "STAT",
+                "is_default_checked": True
+            },
+            {
+                "id": "acs-4",
+                "item_type": "medication",
+                "title": "Sublingual Nitroglycerin 0.5 mg SL q5min PRN",
+                "pharmacopoeia_id": "ip-nitroglycerin",
+                "dose": "0.5 mg",
+                "route": "Sublingual",
+                "frequency": "PRN (Max 3 doses)",
+                "duration": "Acute pain",
+                "instructions": "Dissolve under tongue. Hold if SBP < 90 mmHg or suspected right ventricular infarct.",
+                "urgency": "STAT",
+                "is_default_checked": True
+            },
+            {
+                "id": "acs-5",
+                "item_type": "laboratory",
+                "title": "Serum Troponin I STAT and repeat at 3 hours",
+                "pharmacopoeia_id": None,
+                "dose": None,
+                "route": None,
+                "frequency": "STAT and q3h x 2",
+                "duration": "Immediate",
+                "instructions": "High-sensitivity cardiac troponin biomarker.",
+                "urgency": "STAT",
+                "is_default_checked": True
+            },
+            {
+                "id": "acs-6",
+                "item_type": "radiology",
+                "title": "12-Lead Electrocardiogram (ECG) STAT",
+                "pharmacopoeia_id": None,
+                "dose": None,
+                "route": None,
+                "frequency": "STAT",
+                "duration": "Immediate",
+                "instructions": "Immediate 10-minute door-to-ECG acquisition. Check reciprocal changes.",
+                "urgency": "STAT",
+                "is_default_checked": True
+            }
+        ]
+    },
+    {
+        "id": "orderset-sepsis-hour1",
+        "name": "Surviving Sepsis Campaign Hour-1 Bundle",
+        "category": "Critical Care & Emergency",
+        "description": "Immediate empirical resuscitation and broad-spectrum antimicrobial bundle for severe sepsis and septic shock.",
+        "evidence_grade": "Strong Recommendation, High Quality Evidence (Surviving Sepsis Campaign 2021)",
+        "items": [
+            {
+                "id": "sep-1",
+                "item_type": "laboratory",
+                "title": "Blood Cultures x 2 Sets STAT before antibiotics",
+                "pharmacopoeia_id": None,
+                "dose": None,
+                "route": None,
+                "frequency": "STAT",
+                "duration": "Immediate",
+                "instructions": "Draw from two distinct venipuncture sites with aseptic technique before starting antibiotics.",
+                "urgency": "STAT",
+                "is_default_checked": True
+            },
+            {
+                "id": "sep-2",
+                "item_type": "laboratory",
+                "title": "Serum Lactate STAT and repeat in 2-4 hours",
+                "pharmacopoeia_id": None,
+                "dose": None,
+                "route": None,
+                "frequency": "STAT",
+                "duration": "Immediate",
+                "instructions": "Stratify tissue hypoperfusion. If lactate > 2 mmol/L, trigger aggressive monitoring.",
+                "urgency": "STAT",
+                "is_default_checked": True
+            },
+            {
+                "id": "sep-3",
+                "item_type": "medication",
+                "title": "Piperacillin / Tazobactam 4.5 g IV STAT",
+                "pharmacopoeia_id": "ip-piperacillin-tazobactam",
+                "dose": "4.5 g",
+                "route": "Intravenous",
+                "frequency": "STAT, then q6h",
+                "duration": "7 days",
+                "instructions": "Infuse over 30 minutes (or 3-hour extended infusion). First dose must be given within 1 hour.",
+                "urgency": "STAT",
+                "is_default_checked": True
+            },
+            {
+                "id": "sep-4",
+                "item_type": "medication",
+                "title": "0.9% Normal Saline 30 mL/kg IV Bolus STAT",
+                "pharmacopoeia_id": "ip-normal-saline",
+                "dose": "30 mL/kg",
+                "route": "Intravenous",
+                "frequency": "STAT",
+                "duration": "Infuse over 30-60 min",
+                "instructions": "Rapid crystalloid resuscitation for hypotension or lactate >= 4 mmol/L.",
+                "urgency": "STAT",
+                "is_default_checked": True
+            },
+            {
+                "id": "sep-5",
+                "item_type": "medication",
+                "title": "Norepinephrine IV Infusion (if MAP < 65 mmHg post-fluids)",
+                "pharmacopoeia_id": "ip-noradrenaline",
+                "dose": "0.05 - 0.5 mcg/kg/min",
+                "route": "Intravenous",
+                "frequency": "Continuous Infusion",
+                "duration": "Titrated to MAP >= 65",
+                "instructions": "Vasopressor of choice in septic shock. Infuse via central venous catheter with syringe pump.",
+                "urgency": "STAT",
+                "is_default_checked": True
+            }
+        ]
+    },
+    {
+        "id": "orderset-chf-diuresis",
+        "name": "Acute Decompensated Heart Failure Protocol",
+        "category": "Inpatient Cardiology",
+        "description": "Standardized inpatient volume offloading and neurohormonal management protocol.",
+        "evidence_grade": "Class I, Level B (ESC / HFSA Guidelines)",
+        "items": [
+            {
+                "id": "chf-1",
+                "item_type": "medication",
+                "title": "Furosemide 40 mg - 80 mg IV STAT",
+                "pharmacopoeia_id": "ip-furosemide",
+                "dose": "40 mg",
+                "route": "Intravenous",
+                "frequency": "STAT, then BD",
+                "duration": "3 days",
+                "instructions": "Slow IV bolus over 2 minutes. Match or double chronic outpatient oral dose.",
+                "urgency": "STAT",
+                "is_default_checked": True
+            },
+            {
+                "id": "chf-2",
+                "item_type": "nursing",
+                "title": "Strict Fluid Restriction (1.5 L/24h) and Low Sodium Diet (< 2g/day)",
+                "pharmacopoeia_id": None,
+                "dose": None,
+                "route": None,
+                "frequency": "Daily",
+                "duration": "Hospital stay",
+                "instructions": "Post bedside fluid restriction sign. Record all IV and oral fluids.",
+                "urgency": "Routine",
+                "is_default_checked": True
+            },
+            {
+                "id": "chf-3",
+                "item_type": "nursing",
+                "title": "Strict Intake & Output Charting and Daily Weights in AM",
+                "pharmacopoeia_id": None,
+                "dose": None,
+                "route": None,
+                "frequency": "Daily at 06:00",
+                "duration": "Hospital stay",
+                "instructions": "Weigh patient on same scale after first morning void. Notify team if weight +/- 1.5 kg.",
+                "urgency": "Routine",
+                "is_default_checked": True
+            },
+            {
+                "id": "chf-4",
+                "item_type": "laboratory",
+                "title": "Renal Panel (Serum Creatinine, BUN, Potassium, Sodium) Daily",
+                "pharmacopoeia_id": None,
+                "dose": None,
+                "route": None,
+                "frequency": "Daily in AM",
+                "duration": "Hospital stay",
+                "instructions": "Monitor for diuretic-induced hypokalemia and worsening renal function.",
+                "urgency": "Routine",
+                "is_default_checked": True
+            }
+        ]
+    },
+    {
+        "id": "orderset-cap-inpatient",
+        "name": "Community-Acquired Pneumonia (CAP) Inpatient Protocol",
+        "category": "Inpatient General Medicine",
+        "description": "Standardized inpatient ward antimicrobial regimen and respiratory support protocol for CAP.",
+        "evidence_grade": "Strong Recommendation, High Quality Evidence (ATS/IDSA Guidelines)",
+        "items": [
+            {
+                "id": "cap-1",
+                "item_type": "medication",
+                "title": "Ceftriaxone 1 g IV OD",
+                "pharmacopoeia_id": "ip-ceftriaxone",
+                "dose": "1 g",
+                "route": "Intravenous",
+                "frequency": "OD",
+                "duration": "5-7 days",
+                "instructions": "Infuse in 100 mL Normal Saline over 30 minutes. Do NOT mix with calcium-containing fluids.",
+                "urgency": "STAT",
+                "is_default_checked": True
+            },
+            {
+                "id": "cap-2",
+                "item_type": "medication",
+                "title": "Azithromycin 500 mg PO/IV OD",
+                "pharmacopoeia_id": "ip-azithromycin",
+                "dose": "500 mg",
+                "route": "Oral",
+                "frequency": "OD",
+                "duration": "5 days",
+                "instructions": "Atypical pathogen coverage. Take 1 hour before or 2 hours after meals.",
+                "urgency": "Routine",
+                "is_default_checked": True
+            },
+            {
+                "id": "cap-3",
+                "item_type": "medication",
+                "title": "Paracetamol 650 mg PO TDS PRN for fever > 100.4 F",
+                "pharmacopoeia_id": "ip-paracetamol",
+                "dose": "650 mg",
+                "route": "Oral",
+                "frequency": "TDS PRN",
+                "duration": "3 days",
+                "instructions": "Antipyretic as needed. Minimum 4 hours between doses.",
+                "urgency": "Routine",
+                "is_default_checked": True
+            },
+            {
+                "id": "cap-4",
+                "item_type": "laboratory",
+                "title": "Sputum Gram Stain & Culture and Complete Blood Count (CBC)",
+                "pharmacopoeia_id": None,
+                "dose": None,
+                "route": None,
+                "frequency": "STAT",
+                "duration": "Immediate",
+                "instructions": "Collect deep expectorated morning sputum before antibiotic administration if feasible.",
+                "urgency": "STAT",
+                "is_default_checked": True
+            },
+            {
+                "id": "cap-5",
+                "item_type": "radiology",
+                "title": "Chest X-Ray PA/AP View",
+                "pharmacopoeia_id": None,
+                "dose": None,
+                "route": None,
+                "frequency": "STAT",
+                "duration": "Immediate",
+                "instructions": "Assess lobar consolidation, air bronchograms, or parapneumonic effusion.",
+                "urgency": "STAT",
+                "is_default_checked": True
+            }
+        ]
+    },
+    {
+        "id": "orderset-dka-glycemic",
+        "name": "Diabetic Ketoacidosis & Inpatient Glycemic Protocol",
+        "category": "Inpatient Endocrinology",
+        "description": "Standardized IV regular insulin infusion, fluid rehydration, and potassium monitoring for severe hyperglycemic emergencies.",
+        "evidence_grade": "Class I, Level A (ADA / RSSDI Guidelines)",
+        "items": [
+            {
+                "id": "dka-1",
+                "item_type": "medication",
+                "title": "0.9% Normal Saline 1000 mL IV Infusion over 1 hour",
+                "pharmacopoeia_id": "ip-normal-saline",
+                "dose": "1000 mL",
+                "route": "Intravenous",
+                "frequency": "STAT",
+                "duration": "1 hour",
+                "instructions": "Initial fluid expansion in DKA. Reassess hydration and switch to 0.45% NS if serum Na is normal/high.",
+                "urgency": "STAT",
+                "is_default_checked": True
+            },
+            {
+                "id": "dka-2",
+                "item_type": "medication",
+                "title": "Human Regular Insulin IV Infusion (0.1 units/kg/hr)",
+                "pharmacopoeia_id": "ip-insulin-regular",
+                "dose": "0.1 units/kg/hr",
+                "route": "Intravenous",
+                "frequency": "Continuous Infusion",
+                "duration": "Titrated until resolution of ketoacidosis",
+                "instructions": "Mix 50 IU Regular Insulin in 50 mL 0.9% NS (1 unit/mL). Run via syringe infusion pump. Target BG decline 50-75 mg/dL/hr.",
+                "urgency": "STAT",
+                "is_default_checked": True
+            },
+            {
+                "id": "dka-3",
+                "item_type": "nursing",
+                "title": "Capillary Blood Glucose (CBG) Monitoring Hourly",
+                "pharmacopoeia_id": None,
+                "dose": None,
+                "route": None,
+                "frequency": "q1h",
+                "duration": "While on IV insulin infusion",
+                "instructions": "Check bedside point-of-care glucometer hourly. Notify physician if BG < 200 mg/dL to add 5% Dextrose.",
+                "urgency": "STAT",
+                "is_default_checked": True
+            },
+            {
+                "id": "dka-4",
+                "item_type": "laboratory",
+                "title": "Serum Electrolytes (Potassium, Sodium, Bicarbonate, Anion Gap) q2-4h",
+                "pharmacopoeia_id": None,
+                "dose": None,
+                "route": None,
+                "frequency": "q2-4h",
+                "duration": "Until anion gap closes",
+                "instructions": "Maintain serum K+ between 4.0 - 5.0 mEq/L. Add 20-30 mEq KCl per liter of IV fluid once K+ < 5.2 mEq/L.",
+                "urgency": "STAT",
+                "is_default_checked": True
+            }
+        ]
+    },
+    {
+        "id": "orderset-postop-care",
+        "name": "Post-Operative Standard Care & VTE Prophylaxis Protocol",
+        "category": "Surgical Inpatient",
+        "description": "Standardized post-operative analgesia, antiemetics, venous thromboembolism prophylaxis, and wound monitoring.",
+        "evidence_grade": "Class I, Level A (ERAS / ACCP Guidelines)",
+        "items": [
+            {
+                "id": "pop-1",
+                "item_type": "medication",
+                "title": "Enoxaparin 40 mg SC OD (VTE Prophylaxis)",
+                "pharmacopoeia_id": "ip-enoxaparin",
+                "dose": "40 mg (0.4 mL)",
+                "route": "Subcutaneous",
+                "frequency": "OD",
+                "duration": "Until fully ambulatory",
+                "instructions": "Inject subcutaneously in anterolateral abdominal wall. Start 6-12 hours post-op after surgical hemostasis verified.",
+                "urgency": "Routine",
+                "is_default_checked": True
+            },
+            {
+                "id": "pop-2",
+                "item_type": "medication",
+                "title": "Pantoprazole 40 mg IV OD (Stress Ulcer Prophylaxis)",
+                "pharmacopoeia_id": "ip-pantoprazole",
+                "dose": "40 mg",
+                "route": "Intravenous",
+                "frequency": "OD",
+                "duration": "3-5 days",
+                "instructions": "Slow IV injection over 2 minutes in morning.",
+                "urgency": "Routine",
+                "is_default_checked": True
+            },
+            {
+                "id": "pop-3",
+                "item_type": "medication",
+                "title": "Ondansetron 4 mg IV TDS PRN for nausea/vomiting",
+                "pharmacopoeia_id": "ip-ondansetron",
+                "dose": "4 mg",
+                "route": "Intravenous",
+                "frequency": "TDS PRN",
+                "duration": "2 days",
+                "instructions": "Post-operative nausea and vomiting (PONV) control.",
+                "urgency": "Routine",
+                "is_default_checked": True
+            },
+            {
+                "id": "pop-4",
+                "item_type": "medication",
+                "title": "Paracetamol 1000 mg IV TDS Scheduled (Multimodal Analgesia)",
+                "pharmacopoeia_id": "ip-paracetamol",
+                "dose": "1000 mg (100 mL)",
+                "route": "Intravenous",
+                "frequency": "TDS",
+                "duration": "48 hours",
+                "instructions": "Infuse IV over 15 minutes. Foundation of opioid-sparing multimodal postoperative analgesia.",
+                "urgency": "Routine",
+                "is_default_checked": True
+            },
+            {
+                "id": "pop-5",
+                "item_type": "nursing",
+                "title": "Vitals q4h, Surgical Dressing Inspection, Incentive Spirometry q1h while awake",
+                "pharmacopoeia_id": None,
+                "dose": None,
+                "route": None,
+                "frequency": "q4h",
+                "duration": "Hospital stay",
+                "instructions": "Check for wound strike-through, hematoma, urine output >= 0.5 mL/kg/hr.",
+                "urgency": "Routine",
+                "is_default_checked": True
+            }
+        ]
+    },
+    {
+        "id": "orderset-copd-asthma",
+        "name": "Acute Exacerbation of COPD / Severe Asthma Protocol",
+        "category": "Inpatient Pulmonology & Emergency",
+        "description": "Standardized bronchodilator nebulization, systemic corticosteroids, controlled oxygen, and non-invasive ventilation screening.",
+        "evidence_grade": "Class I, Level A (GOLD / GINA Guidelines)",
+        "items": [
+            {
+                "id": "copd-1",
+                "item_type": "medication",
+                "title": "Salbutamol 2.5 mg + Ipratropium 500 mcg Nebulization STAT and q4h",
+                "pharmacopoeia_id": "ip-salbutamol",
+                "dose": "2.5 mg + 500 mcg",
+                "route": "Inhalation (Nebulized)",
+                "frequency": "STAT, then q4h",
+                "duration": "3-5 days",
+                "instructions": "Nebulize with compressed air (or oxygen if hypoxic, target SpO2 88-92% in chronic hypercapnia).",
+                "urgency": "STAT",
+                "is_default_checked": True
+            },
+            {
+                "id": "copd-2",
+                "item_type": "medication",
+                "title": "Hydrocortisone 100 mg IV STAT / Prednisolone 40 mg PO OD",
+                "pharmacopoeia_id": "ip-hydrocortisone",
+                "dose": "100 mg IV / 40 mg PO",
+                "route": "Intravenous / Oral",
+                "frequency": "STAT, then OD",
+                "duration": "5 days",
+                "instructions": "Short 5-day course of systemic corticosteroids; no tapering required for courses <= 5 days.",
+                "urgency": "STAT",
+                "is_default_checked": True
+            },
+            {
+                "id": "copd-3",
+                "item_type": "medication",
+                "title": "Doxycycline 100 mg PO BD (if purulent sputum)",
+                "pharmacopoeia_id": "ip-doxycycline",
+                "dose": "100 mg",
+                "route": "Oral",
+                "frequency": "BD",
+                "duration": "5-7 days",
+                "instructions": "First-line empirical antibacterial for Anthonisen Type 1/2 COPD exacerbation.",
+                "urgency": "Routine",
+                "is_default_checked": True
+            },
+            {
+                "id": "copd-4",
+                "item_type": "nursing",
+                "title": "Continuous Pulse Oximetry and Controlled Oxygen Therapy (Target SpO2 88-92%)",
+                "pharmacopoeia_id": None,
+                "dose": None,
+                "route": None,
+                "frequency": "Continuous",
+                "duration": "Acute exacerbation",
+                "instructions": "Use Venturi mask (24% or 28%). Avoid high-flow unchecked oxygen to prevent hypercapnic respiratory arrest.",
+                "urgency": "STAT",
+                "is_default_checked": True
+            },
+            {
+                "id": "copd-5",
+                "item_type": "laboratory",
+                "title": "Arterial Blood Gas (ABG) Analysis STAT",
+                "pharmacopoeia_id": None,
+                "dose": None,
+                "route": None,
+                "frequency": "STAT",
+                "duration": "Immediate",
+                "instructions": "Assess pH, PaCO2, PaO2, HCO3-. If pH < 7.35 and PaCO2 > 45 mmHg, trigger BiPAP evaluation.",
+                "urgency": "STAT",
+                "is_default_checked": True
+            }
+        ]
+    },
+    {
+        "id": "orderset-stroke-acute",
+        "name": "Acute Ischemic Stroke Inpatient Order Set",
+        "category": "Inpatient Neurology & Emergency",
+        "description": "Standardized acute ischemic stroke care, neurological monitoring, permissive hypertension limits, and dysphagia screening.",
+        "evidence_grade": "Class I, Level A (AHA/ASA Stroke Guidelines)",
+        "items": [
+            {
+                "id": "stk-1",
+                "item_type": "radiology",
+                "title": "Non-Contrast Brain CT STAT",
+                "pharmacopoeia_id": None,
+                "dose": None,
+                "route": None,
+                "frequency": "STAT",
+                "duration": "Immediate",
+                "instructions": "Emergency acquisition within 20 minutes of door arrival to exclude intracranial hemorrhage.",
+                "urgency": "STAT",
+                "is_default_checked": True
+            },
+            {
+                "id": "stk-2",
+                "item_type": "nursing",
+                "title": "Strict NPO Until Formal Dysphagia Swallow Screen Performed",
+                "pharmacopoeia_id": None,
+                "dose": None,
+                "route": None,
+                "frequency": "Continuous",
+                "duration": "Until cleared by nursing/speech therapy",
+                "instructions": "Prevents catastrophic aspiration pneumonia. No oral medications or water until cleared.",
+                "urgency": "STAT",
+                "is_default_checked": True
+            },
+            {
+                "id": "stk-3",
+                "item_type": "medication",
+                "title": "Aspirin 300 mg Suppository / Soluble PO (after CT excludes hemorrhage)",
+                "pharmacopoeia_id": "ip-aspirin",
+                "dose": "300 mg",
+                "route": "Rectal / Oral",
+                "frequency": "STAT, then 75 mg OD",
+                "duration": "Ongoing",
+                "instructions": "Give within 24-48 hours of stroke onset (hold for 24h if IV thrombolysis/alteplase administered).",
+                "urgency": "Routine",
+                "is_default_checked": True
+            },
+            {
+                "id": "stk-4",
+                "item_type": "medication",
+                "title": "Atorvastatin 80 mg PO / NG Daily at Bedtime",
+                "pharmacopoeia_id": "ip-atorvastatin",
+                "dose": "80 mg",
+                "route": "Oral / Nasogastric",
+                "frequency": "OD (Night)",
+                "duration": "Ongoing",
+                "instructions": "High-intensity statin neurovascular plaque stabilization.",
+                "urgency": "Routine",
+                "is_default_checked": True
+            },
+            {
+                "id": "stk-5",
+                "item_type": "nursing",
+                "title": "Permissive Hypertension Management (Treat only if BP > 220/120 mmHg)",
+                "pharmacopoeia_id": None,
+                "dose": None,
+                "route": None,
+                "frequency": "q1h x 24h",
+                "duration": "First 24-48 hours",
+                "instructions": "Do NOT lower BP acutely unless SBP > 220 or DBP > 120 mmHg (maintains ischemic penumbra perfusion).",
+                "urgency": "Routine",
+                "is_default_checked": True
+            }
+        ]
+    },
+    {
+        "id": "orderset-gi-bleed",
+        "name": "Acute Upper Gastrointestinal Bleeding Protocol",
+        "category": "Inpatient Gastroenterology & Emergency",
+        "description": "Standardized high-dose IV proton pump inhibitor therapy, volume resuscitation, and emergent endoscopy preparation.",
+        "evidence_grade": "Class I, Level A (ACG / ESGE Guidelines)",
+        "items": [
+            {
+                "id": "gib-1",
+                "item_type": "medication",
+                "title": "Pantoprazole 80 mg IV Bolus STAT, followed by 8 mg/hr continuous infusion",
+                "pharmacopoeia_id": "ip-pantoprazole",
+                "dose": "80 mg bolus, then 8 mg/hr",
+                "route": "Intravenous",
+                "frequency": "STAT + Continuous Infusion",
+                "duration": "72 hours",
+                "instructions": "Maintains intragastric pH > 6 to stabilize fibrin clot over bleeding ulcer base.",
+                "urgency": "STAT",
+                "is_default_checked": True
+            },
+            {
+                "id": "gib-2",
+                "item_type": "medication",
+                "title": "Tranexamic Acid 1000 mg IV STAT",
+                "pharmacopoeia_id": "ip-tranexamic-acid",
+                "dose": "1000 mg (10 mL)",
+                "route": "Intravenous",
+                "frequency": "STAT, then TDS",
+                "duration": "24-48 hours",
+                "instructions": "Slow IV injection over 10 minutes.",
+                "urgency": "STAT",
+                "is_default_checked": True
+            },
+            {
+                "id": "gib-3",
+                "item_type": "laboratory",
+                "title": "Type & Crossmatch 2-4 Units Packed Red Blood Cells (PRBC) STAT",
+                "pharmacopoeia_id": None,
+                "dose": None,
+                "route": None,
+                "frequency": "STAT",
+                "duration": "Immediate",
+                "instructions": "Blood bank emergency priority. Transfuse to maintain Hemoglobin >= 7-8 g/dL (restrictive transfusion threshold).",
+                "urgency": "STAT",
+                "is_default_checked": True
+            },
+            {
+                "id": "gib-4",
+                "item_type": "medication",
+                "title": "0.9% Normal Saline IV Infusion (Wide-Bore 16G/18G PIV x 2)",
+                "pharmacopoeia_id": "ip-normal-saline",
+                "dose": "1000 mL",
+                "route": "Intravenous",
+                "frequency": "STAT",
+                "duration": "Resuscitation",
+                "instructions": "Establish two large-bore peripheral IV lines immediately. Resuscitate hemodynamics before endoscopy.",
+                "urgency": "STAT",
+                "is_default_checked": True
+            }
+        ]
+    },
+    {
+        "id": "orderset-inpatient-admission",
+        "name": "General Inpatient Admission Routine Order Set",
+        "category": "Inpatient General Medicine",
+        "description": "Standardized inpatient admission baseline orders covering vitals, DVT prophylaxis, gastroprotection, and diet.",
+        "evidence_grade": "Standard Clinical Practice Invariant",
+        "items": [
+            {
+                "id": "adm-1",
+                "item_type": "nursing",
+                "title": "Vital Signs Monitoring (BP, Pulse, RR, SpO2, Temp) q4h",
+                "pharmacopoeia_id": None,
+                "dose": None,
+                "route": None,
+                "frequency": "q4h",
+                "duration": "Hospital stay",
+                "instructions": "Record NEWS2 score. Notify provider if SBP < 90 or > 180, HR < 50 or > 110, SpO2 < 92%.",
+                "urgency": "Routine",
+                "is_default_checked": True
+            },
+            {
+                "id": "adm-2",
+                "item_type": "medication",
+                "title": "Pantoprazole 40 mg PO OD before breakfast",
+                "pharmacopoeia_id": "ip-pantoprazole",
+                "dose": "40 mg",
+                "route": "Oral",
+                "frequency": "OD",
+                "duration": "Hospital stay",
+                "instructions": "Inpatient gastroprotection.",
+                "urgency": "Routine",
+                "is_default_checked": True
+            },
+            {
+                "id": "adm-3",
+                "item_type": "laboratory",
+                "title": "Admission Bloods: CBC, Comprehensive Metabolic Panel, Urinalysis",
+                "pharmacopoeia_id": None,
+                "dose": None,
+                "route": None,
+                "frequency": "STAT on admission",
+                "duration": "Immediate",
+                "instructions": "Baseline organ function and hematology profile.",
+                "urgency": "STAT",
+                "is_default_checked": True
+            },
+            {
+                "id": "adm-4",
+                "item_type": "diet",
+                "title": "Regular Hospital Diet / Diabetic Diet as appropriate",
+                "pharmacopoeia_id": None,
+                "dose": None,
+                "route": None,
+                "frequency": "TDS meals",
+                "duration": "Hospital stay",
+                "instructions": "Low sodium (< 2g) if hypertensive; diabetic diet if glycemic disorder.",
+                "urgency": "Routine",
+                "is_default_checked": True
+            }
+        ]
+    }
+]
+
+# Assemble complete database
+database = {
+    "version": "2026.11",
+    "published_date": "2026-11-15",
+    "reference_standard": "Indian Pharmacopoeia (IP 2022, 9th Ed) & National Formulary of India (NFI) / NLEM 2022",
+    "total_monographs": len(CLINICAL_MONOGRAPHS),
+    "total_order_sets": len(CLINICAL_ORDER_SETS),
+    "entries": CLINICAL_MONOGRAPHS,
+    "order_sets": CLINICAL_ORDER_SETS
+}
+
+with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+    json.dump(database, f, indent=2, ensure_ascii=False)
+
+print(f"[SUCCESS] Wrote Indian Pharmacopoeia reference to {OUTPUT_FILE}")
+print(f"[*] Entries count: {len(CLINICAL_MONOGRAPHS)}")
+print(f"[*] Clinical Order Sets count: {len(CLINICAL_ORDER_SETS)}")

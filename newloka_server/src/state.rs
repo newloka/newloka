@@ -12,6 +12,7 @@ pub struct AppState {
     pub config: NodeConfig,
     pub sessions: Arc<RwLock<HashMap<String, newloka_core::identity::Session>>>,
     pub rxpad_tx: tokio::sync::broadcast::Sender<String>,
+    pub pharmacopoeia: Arc<newloka_core::pharmacopoeia::PharmacopoeiaIndex>,
 }
 
 impl AppState {
@@ -21,12 +22,14 @@ impl AppState {
         config: NodeConfig,
     ) -> Self {
         let (rxpad_tx, _) = tokio::sync::broadcast::channel(256);
+        let pharmacopoeia = Arc::new(newloka_core::pharmacopoeia::PharmacopoeiaIndex::default());
         Self {
             node_id,
             storage,
             config,
             sessions: Arc::new(RwLock::new(HashMap::new())),
             rxpad_tx,
+            pharmacopoeia,
         }
     }
 }

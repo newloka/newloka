@@ -19,7 +19,7 @@ pub struct StorageEngine {
 }
 
 /// Encrypted record row as stored in SQLite.
-#[derive(Debug, Clone, sqlx::FromRow)]
+#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
 pub struct EncryptedRecord {
     pub id: String,
     pub resource_type: String,
@@ -285,6 +285,77 @@ impl StorageEngine {
             department_id,
         )
         .await
+    }
+
+    /// Create an EncryptedRecord from a JSON payload and DMK without storing it.
+    pub fn encrypt_record(
+        dmk: &crate::crypto::DeviceMasterKey,
+        resource_type: &str,
+        id: &str,
+        json: &serde_json::Value,
+        patient_id: Option<String>,
+        department_id: Option<String>,
+    ) -> crate::Result<EncryptedRecord> {
+        let json_bytes = serde_json::to_vec(json)?;
+        let hash = crate::crypto::hash_resource(&json_bytes);
+
+        let prk = crate::crypto::PatientRecordKey::generate();
+        let (ciphertext, nonce) = prk.encrypt(&json_bytes)?;
+        let (wrapped_prk, wrap_nonce) = crate::crypto::wrap_prk(dmk, &prk)?;
+
+        let mut content = Vec::with_capacity(
+            wrapped_prk.len() + wrap_nonce.len() + nonce.len() + ciphertext.len() + 4,
+        );
+        content.extend_from_slice(&(wrapped_prk.len() as u32).to_be_bytes());
+        content.extend_from_slice(&wrapped_prk);
+        content.extend_from_slice(&wrap_nonce);
+        content.extend_from_slice(&nonce);
+        content.extend_from_slice(&ciphertext);
+
+        let now = Utc::now().timestamp_millis();
+        Ok(EncryptedRecord {
+            id: id.to_string(),
+            resource_type: resource_type.to_string(),
+            content,
+            nonce: nonce.to_vec(),
+            vector_clock: "1:1".to_string(),
+            created_at: now,
+            modified_at: now,
+            hash,
+            deleted: false,
+            patient_id,
+            department_id,
+        })
+    }
+
+    /// Store an already-encrypted record directly (e.g. during sync replication or encrypted fixture import).
+    pub async fn store_encrypted_record(&self, record: &EncryptedRecord) -> crate::Result<()> {
+        sqlx::query(
+            r#"
+            INSERT OR REPLACE INTO fhir_resources
+            (id, resource_type, content, nonce, vector_clock, created_at, modified_at, hash, deleted, patient_id, department_id)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+            "#,
+        )
+        .bind(&record.id)
+        .bind(&record.resource_type)
+        .bind(&record.content)
+        .bind(&record.nonce)
+        .bind(&record.vector_clock)
+        .bind(record.created_at)
+        .bind(record.modified_at)
+        .bind(&record.hash)
+        .bind(record.deleted)
+        .bind(&record.patient_id)
+        .bind(&record.department_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    /// Expose decryption check for an encrypted record using this engine's DMK.
+    pub async fn decrypt_record(&self, record: &EncryptedRecord) -> crate::Result<serde_json::Value> {
+        self.decrypt_json(record).await
     }
 
     /// Retrieve decrypted JSON resource.

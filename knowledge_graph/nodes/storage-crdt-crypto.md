@@ -13,6 +13,7 @@
 - CRDT Sync & Vector Clocks: Employs vector clock tracking across nodes where dominating clocks cleanly fast-forward to the newer version, identical clocks result in zero mutation, and concurrent vector clocks trigger conflict detection. [valid_from: 2026-06-11, recorded: 2026-11-13, source: newloka_core/src/sync/mod.rs]
 - Delta Sync Protocol: Asynchronous sync between authorized nodes via `/sync/manifest` and `/sync/delta` transmitting only mutated records since the last shared timestamp to minimize bandwidth. [valid_from: 2026-06-11, recorded: 2026-11-13, source: newloka_core/src/sync/mod.rs & newloka_server/src/lib.rs]
 - Conflict Resolution Safety Rule: Non-critical demographic metadata may merge deterministically, but clinically dangerous conflicts (medications, allergies, active orders) are flagged for mandatory clinician review rather than auto-resolved. [valid_from: 2026-06-11, recorded: 2026-11-13, source: Project_Scope_and_Requirements.txt §4.6]
+- EncryptedRecord Serialization & Pre-Encrypted Fixture Import: `EncryptedRecord` implements `Serialize` and `Deserialize` to enable storing, exporting, and importing pre-encrypted data packets. `StorageEngine::encrypt_record` performs off-database AEAD encryption with a specified DMK, and `StorageEngine::decrypt_record` cryptographically verifies that a record can be unwrapped and decrypted by the active storage DMK prior to storing it via `store_encrypted_record`. [valid_from: 2026-11-15, recorded: 2026-11-16, source: newloka_core/src/storage/mod.rs]
 
 ## Superseded
 (none)

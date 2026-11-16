@@ -13,6 +13,7 @@ pub mod department;
 pub mod federation;
 pub mod fhir;
 pub mod identity;
+pub mod pharmacopoeia;
 pub mod storage;
 pub mod sync;
 
@@ -34,6 +35,8 @@ pub enum NewLokaError {
     Abac(String),
     #[error("fhir error: {0}")]
     Fhir(String),
+    #[error("pharmacopoeia error: {0}")]
+    Pharmacopoeia(String),
     #[error("serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
     #[error("database error: {0}")]

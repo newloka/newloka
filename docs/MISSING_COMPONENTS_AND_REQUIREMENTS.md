@@ -19,7 +19,7 @@ New Loka is grounded in five **Foundational Axioms** (guiding principles, not do
 Beyond these axioms, New Loka operates under a posture of **continuous learning, real-world adaptation, and active problem solving**.
 
 ### Purpose of this Document
-This document is the definitive, continuously updated inventory of all components, functional specifications, and architectural requirements defined in the **New Loka Vision** (`Project_Scope_and_Requirements.txt`, the 11-Phase Roadmap in `site/team.html`, and reference architectures) compared against our **current codebase state**.
+This document is the definitive, continuously updated inventory of all components, functional specifications, and architectural requirements defined in the **New Loka Vision** (`Project_Scope_and_Requirements.txt`, the 11-Phase Roadmap in `D:\GitRepos\site\team.html`, and reference architectures including `docs/reference/commercial_emr_benchmarks.md`) compared against our **current codebase state**.
 
 ---
 
@@ -130,6 +130,8 @@ This document is the definitive, continuously updated inventory of all component
   - Receptionist and cashier billing ledger (`#billing`) with core-enforced ABAC diagnosis masking.
   - Pharmacy head activity telemetry and emergency stockout alerts (`#deptSummary`).
   - Executive hospital reports (`#reports`) tracking occupancy rate, ALOS, and emergency triage TAT.
+  - Full FHIR R4 Bedside Bridges: Complete elimination of UI stubs across `#carePlans` (`CarePlan`), `#familyHistory` (`FamilyMemberHistory`), `#immunizations` (`Immunization`), `#documents` (`DocumentReference`), `#mar` (`MedicationAdministration` & dual-witness waste), `#whiteboard` (bidirectional sync with `/api/inpatient/census`), and `#appointmentSchedule` (`Encounter`).
+  - Bedside Hardware & Environmental Sensor Integration: WebRTC live camera capture with snapshot canvas and mobile camera fallback for point-of-care wound progression and ECG strips, alongside a 5-rights barcode scanner verification modal for medication safety.
 - [ ] **Missing & Required:**
   1. **Dispensary Batch & Expiry Inventory Management:**
      - Granular stock tracking: Batch/Lot numbers, manufacturing and expiry dates, supplier master, purchase orders, and goods received notes (GRN).

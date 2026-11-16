@@ -8,7 +8,7 @@ use axum::{
     http::StatusCode,
     response::{
         sse::{Event, KeepAlive, Sse},
-        Html, Json,
+        Json, Redirect,
     },
 };
 use base64::Engine;
@@ -334,7 +334,7 @@ pub async fn sync_prescription(
             "subject": { "reference": format!("Patient/{}", patient_id) },
             "encounter": { "reference": format!("Encounter/{}", encounter_id) },
             "authoredOn": &now_iso,
-            "requester": { "display": payload.doctor.clone().unwrap_or_else(|| "Dr. Yash Kulkarni".to_string()) },
+            "requester": { "display": payload.doctor.clone().unwrap_or_default() },
             "medicationCodeableConcept": { "text": drug },
             "dosageInstruction": [{
                 "text": med.instr.clone().unwrap_or_default(),
@@ -420,8 +420,8 @@ pub async fn sync_prescription(
             "followUp": payload.follow_up.clone().unwrap_or_default(),
             "meds": payload.meds,
             "labs": payload.labs,
-            "doctor": payload.doctor.clone().unwrap_or_else(|| "Dr. Yash Kulkarni".to_string()),
-            "regNo": payload.reg_no.clone().unwrap_or_else(|| "MMC-20260608539".to_string()),
+            "doctor": payload.doctor.clone().unwrap_or_default(),
+            "regNo": payload.reg_no.clone().unwrap_or_default(),
             "dispenseStatus": "prescribed",
             "medicationRequestIds": &med_ids,
             "serviceRequestIds": &srv_ids,
@@ -449,16 +449,25 @@ pub async fn sync_prescription(
             b64.as_str()
         };
         if let Ok(pdf_bytes) = base64::engine::general_purpose::STANDARD.decode(b64_clean.trim()) {
-            if let Ok(db_path) = std::env::var("NEWLOKA_DB_PATH") {
+            let target_dir = if let Ok(db_path) = std::env::var("NEWLOKA_DB_PATH") {
                 let p = std::path::Path::new(&db_path);
-                if let Some(dir) = p.parent() {
-                    let out_pdf = dir.join(&filename);
-                    if let Err(e) = std::fs::write(&out_pdf, &pdf_bytes) {
-                        tracing::warn!("Failed to save prescription PDF to {}: {}", out_pdf.display(), e);
-                    } else {
-                        tracing::info!("Saved prescription PDF directly to {}", out_pdf.display());
-                    }
+                p.parent().map(|d| d.to_path_buf())
+            } else {
+                None
+            }.unwrap_or_else(|| {
+                let default_clinic = std::path::PathBuf::from(r"D:\Medical\Clinic");
+                if default_clinic.exists() {
+                    default_clinic
+                } else {
+                    std::path::PathBuf::from(".")
                 }
+            });
+
+            let out_pdf = target_dir.join(&filename);
+            if let Err(e) = std::fs::write(&out_pdf, &pdf_bytes) {
+                tracing::warn!("Failed to save prescription PDF to {}: {}", out_pdf.display(), e);
+            } else {
+                tracing::info!("Saved prescription PDF directly to {}", out_pdf.display());
             }
         }
     }
@@ -673,7 +682,7 @@ pub async fn dispense_prescription(
     let now_iso = Utc::now().to_rfc3339();
     let practitioner = payload
         .practitioner
-        .unwrap_or_else(|| "Dr. Yash Kulkarni".to_string());
+        .unwrap_or_default();
     let quantity = payload
         .quantity
         .unwrap_or_else(|| "Full prescribed quantity".to_string());
@@ -800,6 +809,7 @@ pub async fn get_next_serial(
         StatusCode::OK,
         Json(serde_json::json!({
             "next_serial": next_serial,
+            "nextSerial": next_serial,
             "formatted": format!("{:04}", next_serial)
         })),
     )
@@ -976,17 +986,9 @@ pub async fn delete_prescription(
     )
 }
 
-/// Serve the prescription pad HTML directly to the browser.
-pub async fn serve_rxpad() -> Html<String> {
-    let local_path = std::path::Path::new(r"D:\Medical\Clinic\eRx Pad Pro.html");
-    if local_path.exists() {
-        if let Ok(content) = std::fs::read_to_string(local_path) {
-            return Html(content);
-        }
-    }
-
-    // Fallback if file path differs
-    Html(include_str!("../../newloka_web/index.html").to_string())
+/// Route to the integrated New Loka prescription pad.
+pub async fn serve_rxpad() -> Redirect {
+    Redirect::temporary("/static/index.html#rxpad")
 }
 
 /// Real-time Server-Sent Events stream for eRx Pad updates.
@@ -1137,18 +1139,7 @@ async fn resolve_or_create_patient(
 
 const FORMULARY_DOC_ID: &str = "rxpad-formulary";
 
-async fn fetch_formulary_items(state: &AppState) -> Vec<RxPadMedItem> {
-    if let Ok(Some(doc)) = state.storage.get_json(FORMULARY_DOC_ID).await {
-        if let Some(items) = doc.get("items") {
-            if let Ok(list) = serde_json::from_value::<Vec<RxPadMedItem>>(items.clone()) {
-                if !list.is_empty() {
-                    return list;
-                }
-            }
-        }
-    }
-
-    // Default clinic formulary
+fn default_clinic_formulary() -> Vec<RxPadMedItem> {
     vec![
         RxPadMedItem {
             drug: "NITROFURANTOIN 100MG".to_string(),
@@ -1214,6 +1205,60 @@ async fn fetch_formulary_items(state: &AppState) -> Vec<RxPadMedItem> {
             instr: Some("inj deep IM".to_string()),
         },
     ]
+}
+
+async fn fetch_formulary_items(state: &AppState) -> Vec<RxPadMedItem> {
+    let mut current_items = Vec::new();
+    if let Ok(Some(doc)) = state.storage.get_json(FORMULARY_DOC_ID).await {
+        if let Some(items) = doc.get("items") {
+            if let Ok(list) = serde_json::from_value::<Vec<RxPadMedItem>>(items.clone()) {
+                current_items = list;
+            }
+        }
+    }
+
+    if current_items.is_empty() {
+        current_items = default_clinic_formulary();
+    }
+
+    // Merge in Indian Pharmacopoeia standard entries as autocomplete suggestions
+    let mut seen_drugs = std::collections::HashSet::new();
+    for it in &current_items {
+        seen_drugs.insert(it.drug.trim().to_lowercase());
+    }
+
+    let ip_entries = state.pharmacopoeia.search("", None, 200);
+    for ip in ip_entries {
+        let entry = ip.entry;
+        // 1. Generic representation
+        let gen_key = entry.inn_name.trim().to_lowercase();
+        if !seen_drugs.contains(&gen_key) {
+            seen_drugs.insert(gen_key);
+            current_items.push(RxPadMedItem {
+                drug: format!("{} ({})", entry.inn_name.to_uppercase(), entry.ip_title),
+                dose: Some(entry.default_dose.clone()),
+                freq: Some(entry.default_frequency.clone()),
+                dur: Some(entry.default_duration.clone()),
+                instr: Some(entry.default_instructions.clone()),
+            });
+        }
+        // 2. Top Indian brand equivalents representation
+        for brand in entry.common_brands_india.iter().take(2) {
+            let brand_key = brand.trim().to_lowercase();
+            if !seen_drugs.contains(&brand_key) {
+                seen_drugs.insert(brand_key);
+                current_items.push(RxPadMedItem {
+                    drug: format!("{} [Generic: {}]", brand.to_uppercase(), entry.inn_name),
+                    dose: Some(entry.default_dose.clone()),
+                    freq: Some(entry.default_frequency.clone()),
+                    dur: Some(entry.default_duration.clone()),
+                    instr: Some(entry.default_instructions.clone()),
+                });
+            }
+        }
+    }
+
+    current_items
 }
 
 async fn merge_formulary_items(state: &AppState, new_items: &[RxPadMedItem]) -> Vec<RxPadMedItem> {
@@ -1282,3 +1327,114 @@ async fn merge_formulary_items(state: &AppState, new_items: &[RxPadMedItem]) -> 
 
     current
 }
+
+// ---------------------------------------------------------------------------
+// RxPad Configurable Template & Box Behavior Engine
+// ---------------------------------------------------------------------------
+
+pub const TEMPLATE_DOC_ID: &str = "rxpad-template-default";
+
+pub async fn get_template(
+    State(state): State<Arc<RwLock<AppState>>>,
+) -> Json<serde_json::Value> {
+    let state = state.read().await;
+    if let Ok(Some(doc)) = state.storage.get_json(TEMPLATE_DOC_ID).await {
+        return Json(doc);
+    }
+
+    // Unconfigured / blank template
+    Json(serde_json::json!({
+        "resourceType": "DocumentReference",
+        "id": TEMPLATE_DOC_ID,
+        "name": "Standard Template",
+        "isLockedByAdmin": false,
+        "userEditable": true,
+        "header": {
+            "showLogo": false,
+            "logoBase64": "",
+            "showEntityName": false,
+            "entityName": "",
+            "showDoctorName": false,
+            "doctorName": "",
+            "showQualifications": false,
+            "qualifications": "",
+            "showRegNo": false,
+            "regNo": "",
+            "showDepartment": false,
+            "department": "",
+            "showSubtitle": false,
+            "subtitle": "",
+            "showAddressContact": false,
+            "address": "",
+            "phone": "",
+            "email": "",
+            "signatureBase64": ""
+        },
+        "bindings": {
+            "entityName": "persist",
+            "doctorName": "persist",
+            "doctorQual": "persist",
+            "doctorReg": "persist",
+            "doctorSig": "persist",
+            "clinicContact": "persist",
+            "currentDate": "fetch",
+            "ageSex": "fetch",
+            "patientSerial": "db_sync",
+            "patientName": "db_sync",
+            "patientContact": "db_sync",
+            "weight": "fetch",
+            "bp": "fetch",
+            "diagnosis": "db_sync",
+            "advisedLabs": "db_sync",
+            "medications": "db_sync",
+            "followUp": "db_sync"
+        },
+        "visibility": {
+            "logo": false,
+            "entityName": false,
+            "doctorName": false,
+            "qualifications": false,
+            "regNo": false,
+            "department": false,
+            "subtitle": false,
+            "addressContact": false,
+            "serial": true,
+            "patientName": true,
+            "ageSex": true,
+            "date": true,
+            "patientContact": true,
+            "weight": false,
+            "bp": false,
+            "diagnosis": true,
+            "advisedLabs": true,
+            "medications": true,
+            "followUp": true,
+            "signature": false
+        }
+    }))
+}
+
+pub async fn save_template(
+    State(state): State<Arc<RwLock<AppState>>>,
+    Json(payload): Json<serde_json::Value>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let state = state.read().await;
+    match state
+        .storage
+        .store_json("DocumentReference", TEMPLATE_DOC_ID, &payload, None, None)
+        .await
+    {
+        Ok(_) => {
+            let _ = state.rxpad_tx.send(format!(
+                r#"{{"event":"rxpad_template_updated","timestamp":{}}}"#,
+                chrono::Utc::now().timestamp_millis()
+            ));
+            (StatusCode::OK, Json(payload))
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": format!("Failed to save template: {}", e) })),
+        ),
+    }
+}
+

@@ -1101,40 +1101,480 @@ html, body {
 .rx-signature-wrap {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  min-width: 200px;
+  align-items: center;
+  min-width: 180px;
 }
 
-.rx-signature-img {
-  max-height: 60px;
+.rx-signature-img,
+.rx-signature-image {
+  max-height: 3.8rem;
+  max-width: 190px;
   object-fit: contain;
   margin-bottom: 0.25rem;
-  mix-blend-mode: multiply;
-  filter: contrast(140%);
+  mix-blend-mode: normal !important;
+  filter: none !important;
+  display: block;
 }
 
 .rx-signature-line {
   width: 100%;
-  border-top: 1px solid #111827;
+  border-top: 1.5px solid #111827;
   padding-top: 0.25rem;
-  text-align: right;
-  font-size: 0.8rem;
+  text-align: center;
+  font-size: 0.82rem;
   font-weight: 700;
+  color: #111827;
 }
 
-/* Print Overrides for Prescription Pad */
+/* ========================================================================== */
+/* eRx Pad Pro Exact Layout Replica Styles                                    */
+/* ========================================================================== */
+.page-container {
+  width: 210mm;
+  min-height: 297mm;
+  background-color: #f8f9f9;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+  position: relative;
+  color: #1f2937;
+  padding: 38px 45px;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  border-radius: 4px;
+  margin: 0 auto;
+}
+
+#wrapHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  border-bottom: 2px solid #1f2937;
+  padding-bottom: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+#wrapClinicLogo {
+  width: 33.333%;
+  display: flex;
+  align-items: flex-start;
+}
+
+#clinicLogoImg {
+  height: 96px;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+#wrapDoctorHeader {
+  flex: 1 1 auto;
+  max-width: 68%;
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  box-sizing: border-box;
+}
+
+#wrapDoctorHeader input {
+  width: 100%;
+  text-align: right;
+  box-sizing: border-box;
+}
+
+#doctorName {
+  font-size: 1.65rem;
+  font-weight: 800;
+  color: #111827;
+  text-align: right;
+  margin-bottom: 2px;
+}
+
+#doctorQual {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #374151;
+  text-align: right;
+  margin-bottom: 2px;
+}
+
+#doctorReg {
+  font-size: 0.85rem;
+  color: #4b5563;
+  text-align: right;
+  margin-bottom: 4px;
+}
+
+#clinicContact {
+  font-size: 0.8rem;
+  color: #6b7280;
+  text-align: right;
+  line-height: 1.35;
+  resize: vertical;
+  min-height: 48px;
+}
+
+#clinicContactPrint {
+  text-align: right;
+  font-size: 0.8rem;
+  color: #4b5563;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  width: 100%;
+}
+
+#wrapPatientSection {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.75rem 1rem;
+  margin-bottom: 1.25rem;
+  font-size: 0.875rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+#wrapPatientSection .col-span-2 {
+  grid-column: span 2 / span 2;
+}
+
+#wrapPatientSection label {
+  font-weight: 600;
+  color: #374151;
+  font-size: 0.8rem;
+  display: block;
+  margin-bottom: 2px;
+}
+
+#patientContactPrint, #followUpPrint {
+  font-size: 0.875rem;
+  color: #111827;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.rx-divider {
+  width: 100%;
+  border-top: 1px solid #d1d5db;
+  margin-bottom: 1.25rem;
+}
+
+#wrapMainBody {
+  display: flex;
+  gap: 1.5rem;
+  flex-grow: 1;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+#wrapLeftCol {
+  flex: 0 0 32%;
+  max-width: 32%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  box-sizing: border-box;
+}
+
+#wrapDiagnosis h3, #wrapAdvisedLabs h3 {
+  font-weight: 700;
+  color: #1f2937;
+  border-bottom: 1px solid #d1d5db;
+  padding-bottom: 0.25rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.95rem;
+}
+
+#diagnosis {
+  font-size: 0.875rem;
+  min-height: 64px;
+  width: 100%;
+}
+
+#diagnosisPrint {
+  font-size: 0.875rem;
+  color: #111827;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  width: 100%;
+}
+
+.rx-print-display {
+  display: none !important;
+}
+
+.med-instr-print {
+  font-size: 0.85rem;
+  font-style: italic;
+  color: #4b5563;
+  margin-top: 4px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+#wrapAdvisedLabs {
+  flex-grow: 1;
+}
+
+#labList {
+  list-style-type: decimal;
+  padding-left: 1.25rem;
+  font-size: 0.875rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+#labList li {
+  position: relative;
+}
+
+#wrapMedCol {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+  border-left: 1px solid #e5e7eb;
+  padding-left: 1.75rem;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+.rx-symbol {
+  font-size: 2.5rem;
+  font-weight: 700;
+  line-height: 1;
+  font-family: serif;
+  color: #111827;
+}
+
+#medList {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.med-row {
+  position: relative;
+  padding-bottom: 1rem;
+  border-bottom: 1px dashed #e5e7eb;
+}
+
+.med-num {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #111827;
+  min-width: 20px;
+}
+
+#wrapFooter {
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 2px solid #1f2937;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+#wrapFollowUp label {
+  font-weight: 600;
+  color: #374151;
+  font-size: 0.875rem;
+  display: block;
+  margin-bottom: 3px;
+}
+
+#followUp {
+  width: 180px;
+  font-size: 0.875rem;
+}
+
+#wrapSignature {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+#doctorSigImg, .signature-image {
+  display: block;
+  max-height: 4.2rem;
+  object-fit: contain;
+  margin-bottom: -4px;
+  z-index: 10;
+  mix-blend-mode: normal !important;
+  filter: none !important;
+}
+
+#doctorSignName {
+  font-weight: 700;
+  text-align: center;
+  font-size: 0.875rem;
+  width: 190px;
+  position: relative;
+  z-index: 0;
+}
+
+#doctorSignReg {
+  font-size: 0.75rem;
+  text-align: center;
+  color: #4b5563;
+  width: 190px;
+  margin-top: 2px;
+}
+
+/* Edit Mode Inputs */
+.page-container input, .page-container textarea, .page-container select {
+  background-color: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 4px;
+  padding: 4px 8px;
+  transition: all 0.2s;
+  width: 100%;
+  color: #111827;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.page-container input:focus, .page-container textarea:focus, .page-container select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  background-color: #ffffff;
+}
+
+/* Direct PDF Export Styling via html2pdf */
+body.exporting-pdf-mode .side-nav,
+body.exporting-pdf-mode .app-header,
+body.exporting-pdf-mode #offline-banner,
+body.exporting-pdf-mode .flashing-alert-bar,
+body.exporting-pdf-mode .no-print,
+body.exporting-pdf-mode #app-footer,
+body.exporting-pdf-mode .rx-toolbar {
+  display: none !important;
+}
+
+body.exporting-pdf-mode,
+body.exporting-pdf-mode html {
+  margin: 0 !important;
+  padding: 0 !important;
+  background: #ffffff !important;
+}
+
+body.exporting-pdf-mode .main-content {
+  margin-left: 0 !important;
+  padding: 0 !important;
+  width: 100% !important;
+}
+
+body.exporting-pdf-mode #view-container {
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 100% !important;
+}
+
+body.exporting-pdf-mode .rx-composer-wrap {
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 100% !important;
+  display: block !important;
+}
+
+.exporting-pdf {
+  background-color: #ffffff !important;
+  box-shadow: none !important;
+  width: 210mm !important;
+  max-width: 210mm !important;
+  min-width: 210mm !important;
+  height: 290mm !important;
+  max-height: 290mm !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+  padding: 35px 42px !important;
+  margin: 0 !important;
+}
+.exporting-pdf .no-print {
+  display: none !important;
+}
+.exporting-pdf .rx-print-display {
+  display: block !important;
+}
+.exporting-pdf #clinicContact,
+.exporting-pdf #diagnosis,
+.exporting-pdf #patientContact,
+.exporting-pdf #followUp,
+.exporting-pdf .med-instr {
+  display: none !important;
+}
+.exporting-pdf input,
+.exporting-pdf textarea,
+.exporting-pdf select {
+  border: none !important;
+  background-color: transparent !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  resize: none !important;
+  box-shadow: none !important;
+  color: #111827 !important;
+}
+.exporting-pdf .med-drug,
+.med-drug {
+  text-transform: uppercase !important;
+}
+.exporting-pdf input::placeholder,
+.exporting-pdf textarea::placeholder {
+  color: transparent !important;
+}
+.exporting-pdf .signature-image,
+.exporting-pdf #doctorSigImg {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  mix-blend-mode: normal !important;
+  filter: none !important;
+}
+
+/* Autocomplete within Pad */
+.ac-wrap { position: relative; width: 100%; }
+.ac-list {
+  position: absolute; z-index: 60; left: 0; right: 0; top: 100%;
+  background: #fff; border: 1px solid #cbd5e1; border-radius: 6px;
+  max-height: 220px; overflow-y: auto; box-shadow: 0 8px 24px rgba(0,0,0,.12);
+  display: none;
+}
+.ac-item { padding: 6px 10px; font-size: 0.85rem; cursor: pointer; border-bottom: 1px solid #f3f4f6; }
+.ac-item:hover, .ac-item.active { background: #eff6ff; }
+.ac-item small { color: #6b7280; }
+
+/* Print Overrides for Prescription Pad & Clinical Documents */
 @media print {
   @page {
     size: A4 portrait;
     margin: 0;
   }
-  body {
+  html, body, #app-root, .app-container, .main-content, #view-container, .workspace-with-storyboard, .storyboard-canvas-main {
     background: #ffffff !important;
+    background-color: #ffffff !important;
     color: #000000 !important;
     padding: 0 !important;
     margin: 0 !important;
+    width: 100% !important;
+    min-width: 100% !important;
+    border: none !important;
+    box-shadow: none !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
-  .app-header, .side-nav, #offline-banner, .rx-toolbar, .no-print, .alert-bar, .modal-overlay {
+  .app-header, .side-nav, #offline-banner, .offline-banner, .alert-bar, .flashing-alert-bar,
+  .patient-banner, .storyboard-rail, .storyboard-quick-nav, .no-print, .btn, .rx-toolbar,
+  .rx-autocomplete-list, #rx-drug-search, #rx-drug-search-wrap, .rx-med-del,
+  .rx-diag-chip, .rx-lab-toggle, #rx-patient-select, .modal-overlay, #statusBar, .toast,
+  .rx-add-med-btn, .rx-table-del-col, .chip-tag, #rx-interaction-shield, .ac-list {
     display: none !important;
   }
   .main-content {
@@ -1147,28 +1587,67 @@ html, body {
     padding: 0 !important;
     width: 100% !important;
   }
-  .rx-canvas {
+  .page-container, .rx-canvas, #printable-rx-canvas {
     width: 100% !important;
     max-width: 100% !important;
-    min-height: auto !important;
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: 290mm !important;
     border: none !important;
     box-shadow: none !important;
-    padding: 1.8cm 1.5cm !important;
+    padding: 1.0cm 1.2cm !important;
+    margin: 0 !important;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #000000 !important;
     box-sizing: border-box !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
   }
-  .rx-field input, .rx-field select, .rx-field textarea, .rx-med-row input, .rx-med-row select {
+  .page-container input, .page-container textarea, .page-container select,
+  .rx-field input, .rx-field select, .rx-field textarea,
+  .rx-med-row input, .rx-med-row select,
+  .rx-inline-input, .rx-mini-input {
     border: none !important;
     background: transparent !important;
+    background-color: transparent !important;
     padding: 0 !important;
     outline: none !important;
     color: #000000 !important;
     resize: none !important;
+    box-shadow: none !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
-  .rx-med-row .btn-remove-med, .btn-add-med {
+  .signature-image, #doctorSigImg, .rx-signature-img, .rx-signature-image {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    max-height: 4.2rem !important;
+    object-fit: contain !important;
+    filter: none !important;
+    mix-blend-mode: normal !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .med-drug, .page-container .med-drug, input.med-drug {
+    text-transform: uppercase !important;
+  }
+  .rx-print-display {
+    display: block !important;
+  }
+  #clinicContact, #diagnosis, #patientContact, #followUp, .med-instr {
     display: none !important;
   }
-  .rx-autocomplete-list {
-    display: none !important;
+  input::placeholder, textarea::placeholder {
+    color: transparent !important;
+  }
+  #wrapHeader, #wrapPatientSection, #wrapMainBody, #wrapFooter, .med-row,
+  .rx-header, .rx-patient-bar, .rx-vitals-diag-box, .rx-footer, .rx-signature-wrap {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
   }
 }
 

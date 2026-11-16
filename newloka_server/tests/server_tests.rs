@@ -16,6 +16,26 @@ fn db_path() -> String {
 }
 
 async fn test_app() -> (axum::Router, Arc<RwLock<newloka_server::AppState>>) {
+    let dmk = newloka_core::crypto::DeviceMasterKey {
+        key: newloka_demo::DEMO_MASTER_KEY_BYTES,
+    };
+    let storage =
+        newloka_core::storage::StorageEngine::open(&db_path(), "test-node".to_string(), dmk)
+            .await
+            .unwrap();
+    newloka_server::demo::seed_demo_data(&storage, "test-node")
+        .await
+        .unwrap();
+    let storage = Arc::new(storage);
+    let state = Arc::new(RwLock::new(newloka_server::AppState::new(
+        "test-node".to_string(),
+        storage,
+        newloka_server::NodeConfig::default(),
+    )));
+    (newloka_server::app(state.clone()), state)
+}
+
+async fn test_app_unseeded() -> (axum::Router, Arc<RwLock<newloka_server::AppState>>) {
     let dmk = newloka_core::crypto::DeviceMasterKey::generate();
     let storage =
         newloka_core::storage::StorageEngine::open(&db_path(), "test-node".to_string(), dmk)
@@ -148,7 +168,9 @@ async fn test_audit_event_create_and_search() {
 #[cfg(feature = "demo")]
 #[tokio::test]
 async fn test_demo_seed_data() {
-    let dmk = newloka_core::crypto::DeviceMasterKey::generate();
+    let dmk = newloka_core::crypto::DeviceMasterKey {
+        key: newloka_demo::DEMO_MASTER_KEY_BYTES,
+    };
     let storage =
         newloka_core::storage::StorageEngine::open(&db_path(), "test-node".to_string(), dmk)
             .await
@@ -197,23 +219,23 @@ async fn test_rxpad_sync_and_dispense() {
     let (app, state) = test_app().await;
 
     let sync_payload = serde_json::json!({
-        "patientName": "Punarnava Shastry",
-        "ageSex": "51y / F",
-        "contact": "+91-9833216533",
-        "date": "02/09/2026",
-        "weight": "65 kg",
-        "bp": "126/84",
-        "diagnosis": "hyperlipidemia, cystitis, atopy, prediabetes",
-        "followUp": "02/03/2027",
+        "patientName": "Ramesh Patel",
+        "ageSex": "54y / M",
+        "contact": "+1-555-019-2834",
+        "date": "15/11/2026",
+        "weight": "72 kg",
+        "bp": "130/84",
+        "diagnosis": "Type 2 Diabetes Mellitus & Essential Hypertension",
+        "followUp": "15/12/2026",
         "meds": [
-            { "drug": "NITROFURANTOIN 100MG", "dose": "1 tab", "freq": "BD", "dur": "5d", "instr": "After breakfast and dinner" },
-            { "drug": "ZINCOVIT (VIT C) 500MG", "dose": "1 tab", "freq": "OD", "dur": "15d", "instr": "After lunch" }
+            { "drug": "METFORMIN 500MG", "dose": "1 tab", "freq": "BD", "dur": "30d", "instr": "After meals" },
+            { "drug": "TELMISARTAN 40MG", "dose": "1 tab", "freq": "OD", "dur": "30d", "instr": "Morning" }
         ],
-        "labs": ["CBC (with diff)", "HbA1c + lipids"],
+        "labs": ["HbA1c", "Lipid Profile"],
         "serial": 4,
-        "filename": "020926_0004_PunarnavaShastry.pdf",
-        "doctor": "Dr. Yash Kulkarni",
-        "regNo": "MMC-20260608539"
+        "filename": "151126_0004_RameshPatel.pdf",
+        "doctor": "Dr. Alex Mercer",
+        "regNo": "NL-DOC-2026-001"
     });
 
     // 1. Sync prescription from pad
@@ -246,7 +268,7 @@ async fn test_rxpad_sync_and_dispense() {
         s.storage.clone()
     };
     let patient = storage.get_json(&patient_id).await.unwrap().unwrap();
-    assert_eq!(patient["gender"], "female");
+    assert_eq!(patient["gender"], "male");
 
     // 3. Verify MedicationRequests created
     let meds = storage.search_json("MedicationRequest", Some(&patient_id)).await.unwrap();
@@ -272,7 +294,7 @@ async fn test_rxpad_sync_and_dispense() {
 
     // 6. Dispense prescription
     let dispense_payload = serde_json::json!({
-        "practitioner": "Dr. Yash Kulkarni",
+        "practitioner": "Dr. Alex Mercer",
         "lot_number": "LOT-2026-TEST",
         "quantity": "15 tabs",
         "notes": "Dispensed at clinic dispensary"
@@ -468,7 +490,236 @@ async fn test_config_and_prescriber_endpoints() {
     let prescriber: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(prescriber["isLegalPrescriber"], true);
     assert!(prescriber["clinicianName"].as_str().unwrap().contains("Dr."));
+    assert_eq!(prescriber["qualifications"], "MBBS, MD");
+    assert_eq!(prescriber["department"], "");
+    assert_eq!(prescriber["clinicHeader"]["clinicName"], "New Loka Clinic");
+
+    // Test GET /api/rxpad/template (RxPad Configurable Template & Box Behavior Engine)
+    let res_tpl = app
+        .clone()
+        .oneshot(Request::builder().uri("/api/rxpad/template").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(res_tpl.status(), StatusCode::OK);
+    let body_tpl = axum::body::to_bytes(res_tpl.into_body(), usize::MAX).await.unwrap();
+    let tpl: serde_json::Value = serde_json::from_slice(&body_tpl).unwrap();
+    assert_eq!(tpl["header"]["entityName"], "New Loka Clinic");
+    assert_eq!(tpl["header"]["qualifications"], "MBBS, MD");
+    assert_eq!(tpl["header"]["showDepartment"], false);
+    assert_eq!(tpl["bindings"]["doctorName"], "persist");
+    assert_eq!(tpl["bindings"]["currentDate"], "fetch");
+    assert_eq!(tpl["bindings"]["medications"], "db_sync");
+    assert_eq!(tpl["visibility"]["department"], false);
+    assert_eq!(tpl["visibility"]["weight"], false);
+
+    // Test POST /api/rxpad/template
+    let mut updated_tpl = tpl.clone();
+    updated_tpl["header"]["entityName"] = serde_json::json!("New Loka Health Center");
+    let res_post = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/rxpad/template")
+                .header("Content-Type", "application/json")
+                .body(Body::from(serde_json::to_vec(&updated_tpl).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res_post.status(), StatusCode::OK);
 }
+
+#[tokio::test]
+async fn test_unconfigured_empty_database_graceful_nulls() {
+    let (app, _) = test_app_unseeded().await;
+
+    // 1. GET /api/config -> clinic is null
+    let res = app
+        .clone()
+        .oneshot(Request::builder().uri("/api/config").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+    let cfg: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert!(cfg["clinic"].is_null(), "Unconfigured clinic must be null");
+
+    // 2. GET /api/prescriber/profile -> clinicianName is empty, clinicHeader is null
+    let res = app
+        .clone()
+        .oneshot(Request::builder().uri("/api/prescriber/profile").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+    let prof: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(prof["clinicianName"], "");
+    assert!(prof["clinicHeader"].is_null(), "Unconfigured clinicHeader must be null");
+
+    // 3. GET /api/rxpad/template -> standard unconfigured template with empty fields & false visibility
+    let res = app
+        .clone()
+        .oneshot(Request::builder().uri("/api/rxpad/template").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+    let tpl: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(tpl["header"]["entityName"], "");
+    assert_eq!(tpl["header"]["doctorName"], "");
+    assert_eq!(tpl["visibility"]["entityName"], false);
+
+    // 4. GET /api/inpatient/census -> empty array []
+    let res = app
+        .clone()
+        .oneshot(Request::builder().uri("/api/inpatient/census").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+    let census: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(census, serde_json::json!([]));
+
+    // 5. GET /api/billing/invoices -> empty array []
+    let res = app
+        .clone()
+        .oneshot(Request::builder().uri("/api/billing/invoices").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+    let inv: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(inv, serde_json::json!([]));
+}
+
+#[tokio::test]
+async fn test_pharmacopoeia_endpoints_and_order_sets() {
+    let (app, _) = test_app().await;
+
+    // 1. GET /api/pharmacopoeia/info
+    let res = app
+        .clone()
+        .oneshot(Request::builder().uri("/api/pharmacopoeia/info").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+    let info: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(info["version"], "2026.11");
+    assert!(info["monographsCount"].as_u64().unwrap() >= 50);
+    assert!(info["orderSetsCount"].as_u64().unwrap() >= 10);
+
+    // 2. GET /api/pharmacopoeia/search?q=paracetamol
+    let res = app
+        .clone()
+        .oneshot(Request::builder().uri("/api/pharmacopoeia/search?q=paracetamol").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+    let results: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
+    assert!(!results.is_empty());
+    assert_eq!(results[0]["entry"]["inn_name"], "Paracetamol");
+
+    // 3. GET /api/pharmacopoeia/search?q=Dolo (Indian brand search)
+    let res = app
+        .clone()
+        .oneshot(Request::builder().uri("/api/pharmacopoeia/search?q=Dolo").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+    let results: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
+    assert!(!results.is_empty());
+    assert_eq!(results[0]["entry"]["inn_name"], "Paracetamol");
+    assert_eq!(results[0]["matched_via"], "brand");
+
+    // 4. GET /api/pharmacopoeia/entry/ip-paracetamol
+    let res = app
+        .clone()
+        .oneshot(Request::builder().uri("/api/pharmacopoeia/entry/ip-paracetamol").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+    let entry: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(entry["id"], "ip-paracetamol");
+    assert_eq!(entry["schedule"], "OTC");
+
+    // 5. GET /api/pharmacopoeia/categories
+    let res = app
+        .clone()
+        .oneshot(Request::builder().uri("/api/pharmacopoeia/categories").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+    let categories: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
+    assert!(!categories.is_empty());
+    assert!(categories.iter().any(|c| c["name"].as_str().unwrap().contains("Cardiovascular")));
+
+    // 6. GET /api/pharmacopoeia/order-sets
+    let res = app
+        .clone()
+        .oneshot(Request::builder().uri("/api/pharmacopoeia/order-sets").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+    let sets: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
+    assert!(sets.len() >= 10);
+
+    // 7. GET /api/pharmacopoeia/order-sets/orderset-acs-chestpain
+    let res = app
+        .clone()
+        .oneshot(Request::builder().uri("/api/pharmacopoeia/order-sets/orderset-acs-chestpain").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+    let set: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(set["id"], "orderset-acs-chestpain");
+    assert!(set["items"].as_array().unwrap().len() >= 4);
+
+    // 8. POST /api/pharmacopoeia/check-safety
+    let safety_req = serde_json::json!({
+        "drugs": ["Augmentin 625 Duo", "Ibuprofen 400mg", "Diclofenac 50mg"],
+        "allergies": ["Penicillin"]
+    });
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/pharmacopoeia/check-safety")
+                .header("Content-Type", "application/json")
+                .body(Body::from(serde_json::to_vec(&safety_req).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+    let report: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(report["has_critical"], true);
+    let warnings = report["warnings"].as_array().unwrap();
+    assert!(warnings.iter().any(|w| w["warning_type"] == "AllergyCrossReactivity"));
+    assert!(warnings.iter().any(|w| w["warning_type"] == "DuplicateTherapy"));
+
+    // 9. GET /api/rxpad/formulary - verify pharmacopoeia enrichment
+    let res = app
+        .clone()
+        .oneshot(Request::builder().uri("/api/rxpad/formulary").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+    let formulary: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
+    assert!(formulary.len() > 15, "Expected pharmacopoeia to enrich formulary items");
+    assert!(formulary.iter().any(|f| f["drug"].as_str().unwrap().contains("PARACETAMOL")));
+}
+
 
 #[tokio::test]
 async fn test_inpatient_and_billing_with_abac() {
@@ -625,7 +876,7 @@ async fn test_enterprise_ldap_login_and_config() {
 
     // POST /api/auth/enterprise/login (valid doctor)
     let login_payload = serde_json::json!({
-        "username": "dr.kulkarni@hospital.local",
+        "username": "dr.mercer@hospital.local",
         "password": "valid_enterprise_password_2026",
         "tier": "T3"
     });
@@ -649,7 +900,7 @@ async fn test_enterprise_ldap_login_and_config() {
 
     // POST /api/auth/enterprise/login (empty password -> 401)
     let bad_payload = serde_json::json!({
-        "username": "dr.kulkarni@hospital.local",
+        "username": "dr.mercer@hospital.local",
         "password": ""
     });
     let res_bad = app

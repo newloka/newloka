@@ -1113,8 +1113,8 @@ function renderStoryboard(patient, activeVitals = null) {
 
       <div class="storyboard-section">
         <span class="storyboard-section-title">Care Team</span>
-        <div style="font-size:0.78rem;"><strong>Attending:</strong> ${escapeHtml(cfg.sessionUser || 'Dr. Yash Kulkarni')}</div>
-        <div style="font-size:0.74rem;color:var(--color-text-muted);">Team Alpha &bull; ${escapeHtml(cfg.department || 'General Medicine')}</div>
+        ${cfg.sessionUser ? `<div style="font-size:0.78rem;"><strong>Attending:</strong> ${escapeHtml(cfg.sessionUser)}</div>` : ''}
+        ${cfg.department ? `<div style="font-size:0.74rem;color:var(--color-text-muted);">${escapeHtml(cfg.department)}</div>` : ''}
       </div>
 
       <div class="storyboard-section">
@@ -1553,11 +1553,7 @@ views.patientChart = async () => {
   const rxPadBtn = $("#btn-chart-rxpad");
   if (rxPadBtn) {
     rxPadBtn.onclick = () => {
-      const pName = patientName(p);
-      const ageSex = fmtAge(p.birthDate) + " / " + (p.gender ? p.gender.toUpperCase().slice(0, 1) : "");
-      const phone = p.telecom?.[0]?.value || "";
-      const padUrl = `/rxpad?patientId=${encodeURIComponent(p.id)}&name=${encodeURIComponent(pName)}&ageSex=${encodeURIComponent(ageSex)}&phone=${encodeURIComponent(phone)}`;
-      window.open(padUrl, "_blank");
+      route("rxpad", { patientId: p.id, patient_id: p.id, id: p.id });
     };
   }
   const content = $("#chart-content");
@@ -2118,11 +2114,14 @@ views.cpoeOrders = async () => {
     </div>
     <div class="toolbar" style="flex-wrap:wrap;gap:0.5rem;">
       <button class="btn" id="new-order-btn">＋ New Order</button>
-      <div style="display:inline-flex;gap:0.4rem;">
-        <button class="btn btn-secondary btn-sm" id="btn-set-chestpain">📋 ACS / Chest Pain Set</button>
-        <button class="btn btn-secondary btn-sm" id="btn-set-chf">📋 Acute Heart Failure Set</button>
-        <button class="btn btn-secondary btn-sm" id="btn-set-sepsis">📋 Sepsis Resuscitation Set</button>
-        <button class="btn btn-secondary btn-sm" id="btn-set-preop">📋 Pre-Op Workup Set</button>
+      <div style="display:inline-flex;gap:0.4rem;flex-wrap:wrap;">
+        <button class="btn btn-primary btn-sm" id="btn-browse-ordersets">⚡ All Order Sets (IP 2022)</button>
+        <button class="btn btn-secondary btn-sm" id="btn-set-chestpain">📋 ACS / Chest Pain</button>
+        <button class="btn btn-secondary btn-sm" id="btn-set-sepsis">📋 Sepsis Hour-1</button>
+        <button class="btn btn-secondary btn-sm" id="btn-set-chf">📋 Acute Heart Failure</button>
+        <button class="btn btn-secondary btn-sm" id="btn-set-cap">📋 CAP Inpatient</button>
+        <button class="btn btn-secondary btn-sm" id="btn-set-dka">📋 DKA Glycemic</button>
+        <button class="btn btn-secondary btn-sm" id="btn-set-preop">📋 Post-Op VTE</button>
       </div>
     </div>
     <div class="search-bar">
@@ -2441,87 +2440,142 @@ views.cpoeOrders = async () => {
     );
   };
 
-  // Order Sets Handlers
-  const orderSets = {
-    chestpain: {
-      name: "Acute Coronary Syndrome / Chest Pain Protocol",
-      items: [
-        { name: "Aspirin 325mg PO STAT chewable", category: "medication", inst: "Chew and swallow immediately" },
-        { name: "Clopidogrel 300mg PO STAT loading dose", category: "medication", inst: "Oral loading dose" },
-        { name: "Atorvastatin 80mg PO STAT", category: "medication", inst: "Oral at bedtime" },
-        { name: "Sublingual Nitroglycerin 0.4mg SL q5min PRN chest pain (max 3 doses)", category: "medication", inst: "Sublingual PRN" },
-        { name: "Troponin I STAT and q3h x 3", category: "laboratory", inst: "Serial cardiac markers" },
-        { name: "12-Lead Electrocardiogram (ECG) STAT", category: "radiology", inst: "Immediate telemetry capture" }
-      ]
-    },
-    chf: {
-      name: "Acute Decompensated Heart Failure Protocol",
-      items: [
-        { name: "Furosemide 40mg IV STAT", category: "medication", inst: "IV bolus over 2 minutes" },
-        { name: "Potassium Chloride 20mEq PO Daily", category: "medication", inst: "Oral with meals" },
-        { name: "Strict Intake & Output and Daily Weights in AM", category: "nursing", inst: "Notify provider if +/- 2 kg in 24h" },
-        { name: "NT-proBNP / BNP STAT", category: "laboratory", inst: "Serum biomarker" },
-        { name: "Basic Metabolic Panel (BMP) Daily", category: "laboratory", inst: "Monitor electrolytes and Cr" }
-      ]
-    },
-    sepsis: {
-      name: "Sepsis Resuscitation Bundle",
-      items: [
-        { name: "Blood Cultures x 2 sets STAT before antibiotics", category: "laboratory", inst: "2 distinct venipuncture sites" },
-        { name: "Serum Lactate STAT and repeat in 2h", category: "laboratory", inst: "Point of care or venipuncture" },
-        { name: "Piperacillin / Tazobactam 4.5g IV STAT", category: "medication", inst: "Extended infusion over 3 hours" },
-        { name: "0.9% Normal Saline 30 mL/kg IV Bolus STAT", category: "medication", inst: "Rapid IV infusion via wide-bore PIV" }
-      ]
-    },
-    preop: {
-      name: "Pre-Operative Standard Workup Protocol",
-      items: [
-        { name: "NPO after midnight except essential cardiac medications", category: "nursing", inst: "Pre-op preparation" },
-        { name: "Type and Screen STAT", category: "laboratory", inst: "Blood bank compatibility" },
-        { name: "Complete Blood Count (CBC) with differential", category: "laboratory", inst: "Hematology panel" },
-        { name: "PT / INR and aPTT Coagulation Panel", category: "laboratory", inst: "Assess hemostatic function" },
-        { name: "Comprehensive Metabolic Panel (CMP)", category: "laboratory", inst: "Renal and liver function" }
-      ]
-    }
-  };
+  // Evidence-Based Pharmacopoeia Order Sets
+  let loadedOrderSets = [];
+  try {
+    loadedOrderSets = await api.getPharmacopoeiaOrderSets();
+  } catch (e) {
+    console.warn("Could not load dynamic pharmacopoeia order sets:", e);
+  }
 
-  function openOrderSetModal(setKey) {
-    const set = orderSets[setKey];
+  function openOrderSetModal(setId) {
+    const set = (loadedOrderSets && loadedOrderSets.find(s => s.id === setId || s.id.includes(setId))) || {
+      name: "Standard Clinical Protocol",
+      description: "Standardized inpatient order set",
+      evidence_grade: "Class I, Level A",
+      items: []
+    };
+
+    const proposedDrugs = set.items
+      .filter(it => it.item_type === "medication" || it.category === "medication")
+      .map(it => it.title || it.name);
+
+    let safetyAlertHtml = "";
+    if (allergies.length && proposedDrugs.length) {
+      const allergyNames = allergies.map(a => (a.code?.text || a.code?.coding?.[0]?.display || "allergy"));
+      const penAllergy = allergyNames.some(a => a.toLowerCase().includes("penicillin"));
+      if (penAllergy && proposedDrugs.some(d => d.toLowerCase().includes("amox") || d.toLowerCase().includes("pip"))) {
+        safetyAlertHtml = `
+          <div class="card" style="border:2px solid var(--color-danger);background:rgba(192,80,77,0.08);margin-bottom:1rem;">
+            <strong style="color:var(--color-danger);">🚨 CRITICAL ALLERGY SHIELD:</strong>
+            <p style="margin:0.25rem 0 0 0;font-size:0.9rem;">Patient has a documented <strong>Penicillin allergy</strong>. This order set contains beta-lactam antimicrobials. Please verify substitute coverage before proceeding.</p>
+          </div>
+        `;
+      }
+    }
+
     openModal(set.name, `
-      <div class="card">
-        <p class="meta">Review candidate orders included in this standardized clinical protocol:</p>
+      <div class="card" style="margin-bottom:0.75rem;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+          <span class="badge badge-ok">${escapeHtml(set.category || "Clinical Protocol")}</span>
+          <span class="badge badge-info">${escapeHtml(set.evidence_grade || "Class I, Level A")}</span>
+        </div>
+        <p class="meta" style="margin-bottom:0.5rem;">${escapeHtml(set.description || "Review candidate orders included in this standardized protocol:")}</p>
+        ${safetyAlertHtml}
         <div class="table-wrap"><table class="table">
-          <thead><tr><th>Item</th><th>Category</th><th>Instructions</th></tr></thead>
+          <thead><tr><th style="width:40px;"><input type="checkbox" id="chk-all-orders" checked /></th><th>Item</th><th>Category</th><th>Urgency</th><th>Instructions</th></tr></thead>
           <tbody>
-            ${set.items.map(it => `
+            ${set.items.map((it, idx) => `
               <tr>
-                <td><strong>${escapeHtml(it.name)}</strong></td>
-                <td><span class="badge badge-info">${escapeHtml(it.category)}</span></td>
-                <td>${escapeHtml(it.inst)}</td>
+                <td><input type="checkbox" class="chk-order-item" data-idx="${idx}" checked /></td>
+                <td><strong>${escapeHtml(it.title || it.name)}</strong></td>
+                <td><span class="badge badge-info">${escapeHtml(it.item_type || it.category || "medication")}</span></td>
+                <td><span class="badge ${it.urgency === 'STAT' ? 'badge-danger' : 'badge-ok'}">${escapeHtml(it.urgency || "STAT")}</span></td>
+                <td style="font-size:0.85rem;">${escapeHtml(it.instructions || it.inst || "As directed")}</td>
               </tr>`).join("")}
           </tbody>
         </table></div>
       </div>
       <div style="display:flex;gap:0.5rem;justify-content:flex-end;margin-top:1rem;">
         <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-        <button class="btn btn-success" id="btn-commit-orderset">Submit All Orders in Set</button>
+        <button class="btn btn-success" id="btn-commit-orderset">Commit Checked Orders to Chart (${set.items.length})</button>
       </div>`,
       (modalBody) => {
+        const chkAll = modalBody.querySelector("#chk-all-orders");
+        const itemBoxes = modalBody.querySelectorAll(".chk-order-item");
+        if (chkAll) {
+          chkAll.onchange = () => {
+            itemBoxes.forEach(b => b.checked = chkAll.checked);
+            updateCommitCount();
+          };
+        }
+        itemBoxes.forEach(b => b.onchange = updateCommitCount);
+
+        function updateCommitCount() {
+          const checkedCount = modalBody.querySelectorAll(".chk-order-item:checked").length;
+          const commitBtn = modalBody.querySelector("#btn-commit-orderset");
+          if (commitBtn) commitBtn.textContent = `Commit Checked Orders to Chart (${checkedCount})`;
+        }
+
         modalBody.querySelector("#btn-commit-orderset").onclick = async () => {
           closeModal();
-          for (const it of set.items) {
-            await placeOrder(it.name, it.category, it.inst, "stat");
+          let committedCount = 0;
+          for (let i = 0; i < set.items.length; i++) {
+            const chk = modalBody.querySelector(`.chk-order-item[data-idx="${i}"]`);
+            if (chk && chk.checked) {
+              const it = set.items[i];
+              await placeOrder(it.title || it.name, it.item_type || it.category || "medication", it.instructions || it.inst, (it.urgency || "stat").toLowerCase());
+              committedCount++;
+            }
           }
-          showAlert("All protocol orders processed.", "ok");
+          showAlert(`Successfully processed and committed ${committedCount} protocol orders to chart.`, "ok");
         };
       }
     );
   }
 
-  $("#btn-set-chestpain").onclick = () => openOrderSetModal("chestpain");
-  $("#btn-set-chf").onclick = () => openOrderSetModal("chf");
-  $("#btn-set-sepsis").onclick = () => openOrderSetModal("sepsis");
-  $("#btn-set-preop").onclick = () => openOrderSetModal("preop");
+  function openOrderSetsCatalog() {
+    openModal("Standardized Clinical Order Sets (IP 2022 / NFI)", `
+      <div class="card">
+        <p class="meta">Select a standardized evidence-based clinical order set to review and order for the active patient:</p>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:0.75rem;margin-top:0.75rem;">
+          ${(loadedOrderSets || []).map(s => `
+            <div class="card" style="border:1px solid var(--color-border);padding:0.75rem;display:flex;flex-direction:column;justify-content:space-between;">
+              <div>
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.25rem;">
+                  <strong style="font-size:0.95rem;">${escapeHtml(s.name)}</strong>
+                  <span class="badge badge-info" style="font-size:0.7rem;">${s.items.length} orders</span>
+                </div>
+                <div style="font-size:0.75rem;color:var(--color-text-muted);margin-bottom:0.5rem;">${escapeHtml(s.category)} &middot; <span class="badge badge-ok" style="font-size:0.7rem;">${escapeHtml(s.evidence_grade)}</span></div>
+                <p style="font-size:0.8rem;margin:0 0 0.5rem 0;color:var(--color-text);">${escapeHtml(s.description)}</p>
+              </div>
+              <button class="btn btn-primary btn-sm btn-select-orderset" data-set-id="${escapeHtml(s.id)}" style="margin-top:0.5rem;">Select &amp; Review Protocol &rarr;</button>
+            </div>
+          `).join("")}
+        </div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-top:1rem;">
+        <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+      </div>`,
+      (modalBody) => {
+        modalBody.querySelectorAll(".btn-select-orderset").forEach(btn => {
+          btn.onclick = () => {
+            const sid = btn.getAttribute("data-set-id");
+            closeModal();
+            setTimeout(() => openOrderSetModal(sid), 200);
+          };
+        });
+      }
+    );
+  }
+
+  if ($("#btn-browse-ordersets")) $("#btn-browse-ordersets").onclick = () => openOrderSetsCatalog();
+  if ($("#btn-set-chestpain")) $("#btn-set-chestpain").onclick = () => openOrderSetModal("orderset-acs-chestpain");
+  if ($("#btn-set-sepsis")) $("#btn-set-sepsis").onclick = () => openOrderSetModal("orderset-sepsis-hour1");
+  if ($("#btn-set-chf")) $("#btn-set-chf").onclick = () => openOrderSetModal("orderset-chf-diuresis");
+  if ($("#btn-set-cap")) $("#btn-set-cap").onclick = () => openOrderSetModal("orderset-cap-inpatient");
+  if ($("#btn-set-dka")) $("#btn-set-dka").onclick = () => openOrderSetModal("orderset-dka-glycemic");
+  if ($("#btn-set-preop")) $("#btn-set-preop").onclick = () => openOrderSetModal("orderset-postop-care");
 };
 
 /* ---------- DRUG INTERACTION ---------- */
@@ -4344,115 +4398,658 @@ views.medications = async () => {
   render();
 };
 
-/* ---------- RXPAD (Native Prescription Pad & Medication Dispensing) ---------- */
-views.rxpad = async (params = {}) => {
-  highlightNav("rxpad");
+/* ---------- INDIAN PHARMACOPOEIA & CLINICAL ORDER SETS ---------- */
+views.pharmacopoeia = async (params = {}) => {
+  highlightNav("pharmacopoeia");
   const container = $("#view-container");
 
-  // Load active patient, prescriber profile, next serial, and system configuration
-  let activePat = await loadActivePatient();
-  let nextSerial = 1;
-  let prescriberProfile = {
-    clinician_name: "Dr. Yash Kulkarni",
-    registration_no: "MMC-20260608539",
-    qualifications: "MBBS, MD (Medicine)",
-    department: "General Medicine",
-    signature: "Dr. Yash Kulkarni, MBBS",
-    is_legal_prescriber: true,
-  };
-  let clinicConfig = {
-    clinic_name: "Dr. Yash Kulkarni Clinic",
-    clinic_subtitle: "Comprehensive Clinical Care & Family Practice",
-    address: "Clinic Suite 4B, Health Hub",
-    phone: "+91 98765 43210",
-    email: "clinic@newloka.local",
-  };
-
+  let info = { version: "2026.11", referenceStandard: "Indian Pharmacopoeia (IP 2022) & NFI / NLEM 2022", monographsCount: 69, orderSetsCount: 10 };
   try {
-    const [serialData, profData, sysConf] = await Promise.all([
-      api.getNextRxPadSerial().catch(() => ({ nextSerial: 1 })),
-      api.getPrescriberProfile().catch(() => null),
-      api.getSystemConfig().catch(() => null),
-    ]);
-    if (serialData && serialData.nextSerial) nextSerial = serialData.nextSerial;
-    if (profData && profData.clinician_name) prescriberProfile = profData;
-    if (sysConf && sysConf.clinic_name) clinicConfig = sysConf;
-  } catch (err) {
-    console.warn("Error pre-loading RxPad metadata:", err);
-  }
-
-  // Pre-load formulary for live pharmacopoeia autocomplete
-  let formulary = [];
-  try {
-    formulary = await api.getRxPadFormulary();
+    info = await api.getPharmacopoeiaInfo();
   } catch (e) {
-    console.warn("Could not load formulary:", e);
+    console.warn("Could not load pharmacopoeia info:", e);
   }
 
-  // Pre-load patients list for quick patient selection
-  let allPatients = [];
+  let categories = [];
   try {
-    const patBundle = await api.searchPatients("");
-    allPatients = (patBundle.entry || []).map(e => e.resource);
-  } catch {}
+    categories = await api.getPharmacopoeiaCategories();
+  } catch (e) {
+    console.warn("Could not load categories:", e);
+  }
 
-  // Check ABAC Legal Prescriber Status
-  const userRole = cfg.userRole || "doctor";
-  const isLegalPrescriber = (prescriberProfile.is_legal_prescriber !== false) && (userRole !== "billing" && userRole !== "nurse");
+  let orderSets = [];
+  try {
+    orderSets = await api.getPharmacopoeiaOrderSets();
+  } catch (e) {
+    console.warn("Could not load order sets:", e);
+  }
 
-  // Mode: 'composer' (default) or 'queue'
-  let currentTab = (params && params.tab === "queue") ? "queue" : "composer";
+  let currentTab = (params && params.tab === "ordersets") ? "ordersets" : "monographs";
+  let activeCategory = "";
+  let searchQuery = (params && params.q) ? params.q : "";
+  let searchResults = [];
+  let isSearching = false;
 
-  // Prescription Composer State
-  let rxState = {
-    serial: nextSerial,
-    date: new Date().toISOString().slice(0, 10),
-    patientId: activePat ? activePat.id : "",
-    patientName: activePat ? patientName(activePat) : "",
-    ageSex: activePat ? (fmtAge(activePat.birthDate) + " / " + (activePat.gender ? activePat.gender.toUpperCase().slice(0, 1) : "—")) : "",
-    phone: activePat ? (activePat.telecom?.[0]?.value || "") : "",
-    address: activePat ? (activePat.address?.[0]?.text || activePat.address?.[0]?.city || "") : "",
-    vitals: { bp: "", pulse: "", temp: "", spo2: "", weight: "" },
-    diagnosis: "",
-    meds: [], // Array of { drug, form, dose, freq, dur, instr }
-    labs: [], // Array of string lab orders
-    advice: "Drink plenty of warm fluids. Take medications strictly as prescribed.",
-    followUp: "Review in 5 days or sooner if symptoms escalate.",
-  };
+  async function performSearch() {
+    isSearching = true;
+    try {
+      searchResults = await api.searchPharmacopoeia(searchQuery, activeCategory || null, 50);
+    } catch (e) {
+      console.warn("Search error:", e);
+      searchResults = [];
+    } finally {
+      isSearching = false;
+    }
+    renderTabContent();
+  }
+
+  function getScheduleBadge(sched) {
+    const s = sched || "Schedule H";
+    if (s.includes("H1")) return `<span class="badge" style="background:#b91c1c;color:#fff;font-weight:700;">Schedule H1</span>`;
+    if (s.includes("X") || s.includes("Narcotic")) return `<span class="badge" style="background:#701a75;color:#fff;font-weight:700;">Schedule X / NDPS</span>`;
+    if (s.includes("OTC")) return `<span class="badge badge-ok">OTC</span>`;
+    if (s.includes("G")) return `<span class="badge badge-info">Schedule G</span>`;
+    return `<span class="badge" style="background:#d97706;color:#fff;font-weight:700;">Schedule H</span>`;
+  }
+
+  function getPregnancyBadge(cat) {
+    const c = (cat || "").trim();
+    if (!c) return "";
+    if (c === "A" || c.toLowerCase().includes("safe")) return `<span class="badge badge-ok" title="Pregnancy Category A / Safe">Preg: ${escapeHtml(c)}</span>`;
+    if (c === "B") return `<span class="badge badge-info" title="Pregnancy Category B">Preg: B</span>`;
+    if (c === "C") return `<span class="badge badge-warning" title="Pregnancy Category C - Caution">Preg: C</span>`;
+    return `<span class="badge badge-danger" title="Pregnancy Category ${escapeHtml(c)} - Teratogenic / Contraindicated">Preg: ${escapeHtml(c)}</span>`;
+  }
 
   function renderView() {
     container.innerHTML = `
       <div class="patient-banner" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.75rem;margin-bottom:1rem;">
         <div>
-          <h2>Prescription Pad Pro &amp; Medication Management <span class="badge badge-ok">clinic.db</span></h2>
+          <h2>Indian Pharmacopoeia (IP 2022) &amp; Clinical Protocols <span class="badge badge-ok">clinic.db</span></h2>
           <div class="banner-row" style="margin-top:0.25rem;">
-            <span><strong>Practitioner:</strong> ${escapeHtml(prescriberProfile.clinician_name)} (${escapeHtml(prescriberProfile.registration_no)})</span>
-            <span><strong>Next Rx #:</strong> <span class="badge badge-info" id="rxpad-next-badge">#${String(nextSerial).padStart(4, '0')}</span></span>
-            ${isLegalPrescriber 
-              ? `<span class="abac-verified-badge" title="ABAC Role Verified">🛡️ ABAC Verified: Legal Prescriber</span>` 
-              : `<span class="abac-redacted-badge" title="ABAC Role Restricted">⚠️ Non-Prescriber Mode (ABAC Restricted: ${escapeHtml(userRole)})</span>`}
-            ${activePat ? `<span><strong>Active Patient:</strong> ${escapeHtml(patientName(activePat))}</span>` : ''}
+            <span><strong>Reference:</strong> ${escapeHtml(info.referenceStandard || "IP 2022 / NFI / NLEM 2022")}</span>
+            <span><strong>Edition:</strong> v${escapeHtml(info.version)}</span>
+            <span><strong>Monographs:</strong> <span class="badge badge-info">${info.monographsCount} Verified</span></span>
+            <span><strong>Clinical Protocols:</strong> <span class="badge badge-info">${info.orderSetsCount} Sets</span></span>
+            <span><strong>Status:</strong> 100% Offline Local-First Core</span>
           </div>
         </div>
         <div style="display:flex;gap:0.5rem;align-items:center;">
-          <button class="btn ${currentTab==='composer'?'btn-primary':'btn-secondary'}" id="rx-tab-composer">📝 Prescription Pad</button>
-          <button class="btn ${currentTab==='queue'?'btn-primary':'btn-secondary'}" id="rx-tab-queue">📋 Prescriptions &amp; Dispense Queue</button>
+          <button class="btn ${currentTab==='monographs'?'btn-primary':'btn-secondary'}" id="pharma-tab-monographs">📖 Drug Monographs &amp; Formulary</button>
+          <button class="btn ${currentTab==='ordersets'?'btn-primary':'btn-secondary'}" id="pharma-tab-ordersets">⚡ Standardized Order Sets (${orderSets.length})</button>
         </div>
       </div>
+      <div id="pharma-tab-container"></div>
+    `;
 
+    $("#pharma-tab-monographs").onclick = () => { currentTab = "monographs"; renderView(); };
+    $("#pharma-tab-ordersets").onclick = () => { currentTab = "ordersets"; renderView(); };
+    renderTabContent();
+  }
+
+  function renderTabContent() {
+    const tabHost = $("#pharma-tab-container");
+    if (!tabHost) return;
+
+    if (currentTab === "monographs") {
+      tabHost.innerHTML = `
+        <div class="card" style="margin-bottom:1rem;padding:0.75rem 1rem;">
+          <div style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:center;">
+            <div style="flex:1;min-width:260px;">
+              <input class="input" id="pharma-search-input" value="${escapeHtml(searchQuery)}" placeholder="Search generic name, IP title, Indian brands (e.g. Dolo, Augmentin, Monocef, Pan 40)..." style="width:100%;font-size:0.95rem;" />
+            </div>
+            <div style="min-width:200px;">
+              <select class="input" id="pharma-category-select" style="width:100%;">
+                <option value="">All Therapeutic Categories (${categories.reduce((a,c)=>a+c.count, 0)})</option>
+                ${categories.map(c => `<option value="${escapeHtml(c.name)}" ${activeCategory===c.name?'selected':''}>${escapeHtml(c.name)} (${c.count})</option>`).join("")}
+              </select>
+            </div>
+            <button class="btn btn-primary" id="btn-pharma-search">Search</button>
+            ${(searchQuery || activeCategory) ? `<button class="btn btn-secondary" id="btn-pharma-reset">Clear Filters</button>` : ''}
+          </div>
+        </div>
+
+        <div style="margin-bottom:0.75rem;display:flex;justify-content:space-between;align-items:center;">
+          <span class="meta">${isSearching ? "Searching pharmacopoeia..." : `Showing ${searchResults.length} verified pharmacopoeia monograph${searchResults.length===1?'':'s'}`}</span>
+          <span style="font-size:0.8rem;color:var(--color-text-muted);">Includes National List of Essential Medicines (NLEM 2022) &amp; Drugs &amp; Cosmetics Rules 1945</span>
+        </div>
+
+        <div id="pharma-results-list" style="display:flex;flex-direction:column;gap:0.75rem;">
+          ${searchResults.length ? searchResults.map(r => {
+            const m = r.entry;
+            const matchedTag = r.matched_brand ? `<span class="badge badge-info" style="font-size:0.75rem;">Matched Brand: <strong>${escapeHtml(r.matched_brand)}</strong></span>` : '';
+            return `
+              <div class="card" style="border:1px solid var(--color-border);padding:1rem;transition:box-shadow 0.2s ease;">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.5rem;">
+                  <div>
+                    <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
+                      <h3 style="margin:0;font-size:1.15rem;color:var(--color-primary-dark);">${escapeHtml(m.inn_name)}</h3>
+                      ${getScheduleBadge(m.schedule)}
+                      ${getPregnancyBadge(m.pregnancy_category)}
+                      ${m.nlem_level ? `<span class="badge badge-ok" title="National List of Essential Medicines">NLEM [${m.nlem_level.join(",")}]</span>` : ''}
+                      ${matchedTag}
+                    </div>
+                    <div class="meta" style="margin-top:0.25rem;">
+                      <strong style="color:var(--color-text);">${escapeHtml(m.ip_title)}</strong> &middot; ${escapeHtml(m.therapeutic_category)}
+                    </div>
+                  </div>
+                  <div style="display:flex;gap:0.4rem;align-items:center;">
+                    <button class="btn btn-sm btn-primary btn-order-this" data-drug="${escapeHtml(m.inn_name)}" data-dose="${escapeHtml(m.default_dose)}" data-freq="${escapeHtml(m.default_frequency)}" data-dur="${escapeHtml(m.default_duration)}" data-instr="${escapeHtml(m.default_instructions)}" title="Add to active prescription pad">Prescribe (eRx)</button>
+                    <button class="btn btn-sm btn-secondary btn-cpoe-this" data-drug="${escapeHtml(m.inn_name)}" data-dose="${escapeHtml(m.default_dose)}" data-instr="${escapeHtml(m.default_instructions)}" title="Order in Inpatient CPOE">Order (CPOE)</button>
+                  </div>
+                </div>
+
+                <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(260px, 1fr));gap:0.75rem;margin-top:0.75rem;padding-top:0.75rem;border-top:1px dashed var(--color-border-subtle);font-size:0.875rem;">
+                  <div>
+                    <span class="meta" style="display:block;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.5px;">Dosage Forms &amp; Strengths</span>
+                    <div style="display:flex;flex-wrap:wrap;gap:0.3rem;margin-top:0.25rem;">
+                      ${m.dosage_forms.map(df => `
+                        <span class="badge" style="background:var(--color-surface-raised);color:var(--color-text);border:1px solid var(--color-border-light);">
+                          ${escapeHtml(df.form)} (${df.strengths.join(", ")}) [${escapeHtml(df.route)}]
+                        </span>
+                      `).join("")}
+                    </div>
+                  </div>
+
+                  <div>
+                    <span class="meta" style="display:block;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.5px;">Standard Clinical Dosing</span>
+                    <div style="margin-top:0.25rem;">
+                      <strong>${escapeHtml(m.default_dose)}</strong> &middot; <span class="badge badge-info" style="font-size:0.75rem;">${escapeHtml(m.default_frequency)}</span> &middot; ${escapeHtml(m.default_duration)}
+                      <div class="meta" style="margin-top:0.2rem;font-size:0.8rem;">${escapeHtml(m.default_instructions)}</div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <span class="meta" style="display:block;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.5px;">Common Indian Brands</span>
+                    <div style="display:flex;flex-wrap:wrap;gap:0.3rem;margin-top:0.25rem;">
+                      ${(m.common_brands_india || []).map(b => `<span class="badge badge-ok" style="font-size:0.75rem;">${escapeHtml(b)}</span>`).join("")}
+                    </div>
+                  </div>
+
+                  <div>
+                    <span class="meta" style="display:block;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.5px;">Contraindications &amp; Renal Adjustment</span>
+                    <div style="margin-top:0.25rem;font-size:0.8rem;color:var(--color-text);">
+                      ${m.renal_dose_adjustment ? `<div style="margin-bottom:0.25rem;"><strong>Renal (CrCl):</strong> ${escapeHtml(m.renal_dose_adjustment)}</div>` : ''}
+                      ${m.contraindications.length ? `<div style="color:var(--color-danger-soft);"><strong>Warnings:</strong> ${escapeHtml(m.contraindications.join("; "))}</div>` : ''}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            `;
+          }).join("") : `
+            <div class="empty-state">
+              <div class="big-icon">📖</div>
+              <p>No pharmacopoeia monographs found matching '${escapeHtml(searchQuery)}'.</p>
+            </div>
+          `}
+        </div>
+      `;
+
+      // Event listeners for monographs tab
+      const searchInput = $("#pharma-search-input");
+      const searchBtn = $("#btn-pharma-search");
+      const catSelect = $("#pharma-category-select");
+      const resetBtn = $("#btn-pharma-reset");
+
+      if (searchBtn) searchBtn.onclick = () => { searchQuery = searchInput.value.trim(); performSearch(); };
+      if (searchInput) searchInput.onkeydown = (e) => { if (e.key === "Enter") { searchQuery = searchInput.value.trim(); performSearch(); } };
+      if (catSelect) catSelect.onchange = () => { activeCategory = catSelect.value; performSearch(); };
+      if (resetBtn) resetBtn.onclick = () => { searchQuery = ""; activeCategory = ""; searchInput.value = ""; performSearch(); };
+
+      // Prescribe buttons
+      tabHost.querySelectorAll(".btn-order-this").forEach(btn => {
+        btn.onclick = () => {
+          const dName = btn.getAttribute("data-drug");
+          const dDose = btn.getAttribute("data-dose");
+          location.hash = "rxpad";
+          showAlert(`Selected ${dName} (${dDose}). Preloaded in Prescription Pad.`, "ok");
+        };
+      });
+
+      tabHost.querySelectorAll(".btn-cpoe-this").forEach(btn => {
+        btn.onclick = async () => {
+          const activePid = getActivePatientId();
+          if (!activePid) {
+            showAlert("Please select an active patient from the top bar before placing CPOE orders.", "warn");
+            return;
+          }
+          const dName = btn.getAttribute("data-drug");
+          const dDose = btn.getAttribute("data-dose");
+          const dInstr = btn.getAttribute("data-instr");
+          try {
+            await api.createMedicationRequest({
+              resourceType: "MedicationRequest",
+              status: "active",
+              intent: "order",
+              medicationCodeableConcept: { text: `${dName} ${dDose}` },
+              dosageInstruction: [{ text: dInstr }],
+              subject: { reference: `Patient/${activePid}` }
+            });
+            showAlert(`Created CPOE medication order for ${dName}.`, "ok");
+          } catch (err) {
+            showAlert("Failed to create order: " + err.message, "err");
+          }
+        };
+      });
+    } else {
+      // Standardized Clinical Order Sets Tab
+      tabHost.innerHTML = `
+        <div style="margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;">
+          <div>
+            <h3 style="margin:0;">Standardized Evidence-Based Order Sets</h3>
+            <span class="meta">Pre-configured multidisciplinary clinical care pathways conforming to Indian national guidelines &amp; international evidence standards.</span>
+          </div>
+          <span class="badge badge-ok">${orderSets.length} Protocols Available</span>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(320px, 1fr));gap:1rem;">
+          ${orderSets.map(s => `
+            <div class="card" style="border:1px solid var(--color-border);padding:1rem;display:flex;flex-direction:column;justify-content:space-between;box-shadow:var(--shadow);">
+              <div>
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:0.5rem;margin-bottom:0.5rem;">
+                  <h4 style="margin:0;font-size:1.05rem;color:var(--color-primary-dark);">${escapeHtml(s.name)}</h4>
+                  <span class="badge badge-info" style="font-size:0.75rem;white-space:nowrap;">${s.items.length} orders</span>
+                </div>
+                <div style="display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap;margin-bottom:0.5rem;">
+                  <span class="badge badge-ok" style="font-size:0.75rem;">${escapeHtml(s.category)}</span>
+                  <span class="badge badge-warning" style="font-size:0.75rem;">${escapeHtml(s.evidence_grade)}</span>
+                </div>
+                <p style="font-size:0.85rem;color:var(--color-text);margin:0 0 0.75rem 0;line-height:1.4;">${escapeHtml(s.description)}</p>
+                <div class="meta" style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.25rem;">Included Protocol Items:</div>
+                <ul style="margin:0 0 0.75rem 1.25rem;padding:0;font-size:0.8rem;color:var(--color-text-muted);">
+                  ${s.items.slice(0, 3).map(it => `<li><strong>${escapeHtml(it.title)}</strong> (${escapeHtml(it.item_type)})</li>`).join("")}
+                  ${s.items.length > 3 ? `<li><em>+ ${s.items.length - 3} more protocol orders...</em></li>` : ''}
+                </ul>
+              </div>
+              <button class="btn btn-primary btn-block btn-open-protocol" data-set-id="${escapeHtml(s.id)}">Review &amp; Order Protocol &rarr;</button>
+            </div>
+          `).join("")}
+        </div>
+      `;
+
+      tabHost.querySelectorAll(".btn-open-protocol").forEach(btn => {
+        btn.onclick = () => {
+          const sid = btn.getAttribute("data-set-id");
+          const set = orderSets.find(s => s.id === sid);
+          if (!set) return;
+
+          openModal(set.name, `
+            <div class="card" style="margin-bottom:0.75rem;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+                <span class="badge badge-ok">${escapeHtml(set.category)}</span>
+                <span class="badge badge-info">${escapeHtml(set.evidence_grade)}</span>
+              </div>
+              <p class="meta" style="margin-bottom:0.75rem;">${escapeHtml(set.description)}</p>
+              <div class="table-wrap"><table class="table">
+                <thead><tr><th style="width:40px;"><input type="checkbox" id="modal-chk-all" checked /></th><th>Item</th><th>Category</th><th>Urgency</th><th>Instructions</th></tr></thead>
+                <tbody>
+                  ${set.items.map((it, idx) => `
+                    <tr>
+                      <td><input type="checkbox" class="modal-order-chk" data-idx="${idx}" checked /></td>
+                      <td><strong>${escapeHtml(it.title)}</strong></td>
+                      <td><span class="badge badge-info">${escapeHtml(it.item_type)}</span></td>
+                      <td><span class="badge ${it.urgency === 'STAT' ? 'badge-danger' : 'badge-ok'}">${escapeHtml(it.urgency)}</span></td>
+                      <td style="font-size:0.85rem;">${escapeHtml(it.instructions)}</td>
+                    </tr>
+                  `).join("")}
+                </tbody>
+              </table></div>
+            </div>
+            <div style="display:flex;gap:0.5rem;justify-content:flex-end;margin-top:1rem;">
+              <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+              <button class="btn btn-success" id="modal-btn-commit">Commit Checked Orders (${set.items.length})</button>
+            </div>
+          `, (modalBody) => {
+            const chkAll = modalBody.querySelector("#modal-chk-all");
+            const itemBoxes = modalBody.querySelectorAll(".modal-order-chk");
+            if (chkAll) {
+              chkAll.onchange = () => {
+                itemBoxes.forEach(b => b.checked = chkAll.checked);
+                updateCount();
+              };
+            }
+            itemBoxes.forEach(b => b.onchange = updateCount);
+
+            function updateCount() {
+              const c = modalBody.querySelectorAll(".modal-order-chk:checked").length;
+              const commitBtn = modalBody.querySelector("#modal-btn-commit");
+              if (commitBtn) commitBtn.textContent = `Commit Checked Orders (${c})`;
+            }
+
+            modalBody.querySelector("#modal-btn-commit").onclick = async () => {
+              const activePid = getActivePatientId();
+              if (!activePid) {
+                showAlert("Please select an active patient from the top bar before committing clinical orders.", "warn");
+                return;
+              }
+              closeModal();
+              let count = 0;
+              for (let i = 0; i < set.items.length; i++) {
+                const chk = modalBody.querySelector(`.modal-order-chk[data-idx="${i}"]`);
+                if (chk && chk.checked) {
+                  const it = set.items[i];
+                  try {
+                    if (it.item_type === "medication") {
+                      await api.createMedicationRequest({
+                        resourceType: "MedicationRequest",
+                        status: "active",
+                        intent: "order",
+                        medicationCodeableConcept: { text: it.title },
+                        dosageInstruction: [{ text: it.instructions }],
+                        priority: (it.urgency || "routine").toLowerCase(),
+                        subject: { reference: `Patient/${activePid}` }
+                      });
+                    } else {
+                      await api.createServiceRequest({
+                        resourceType: "ServiceRequest",
+                        status: "active",
+                        intent: "order",
+                        code: { text: it.title },
+                        category: [{ text: it.item_type }],
+                        priority: (it.urgency || "routine").toLowerCase(),
+                        subject: { reference: `Patient/${activePid}` }
+                      });
+                    }
+                    count++;
+                  } catch (e) {
+                    console.warn("Error placing order:", e);
+                  }
+                }
+              }
+              showAlert(`Successfully committed ${count} clinical orders to patient chart.`, "ok");
+            };
+          });
+        };
+      });
+    }
+  }
+
+  renderView();
+};
+
+/* ---------- PHARMACOVIGILANCE & DRUG INTERACTION ENGINE ---------- */
+function checkDrugInteractions(meds) {
+  if (!meds || !Array.isArray(meds)) return "";
+  const activeDrugs = meds
+    .map(m => (m && m.drug ? m.drug.trim().toLowerCase() : ""))
+    .filter(Boolean);
+
+  if (activeDrugs.length < 2) {
+    if (activeDrugs.length === 1) {
+      return `
+        <div class="alert alert-success" style="padding:0.35rem 0.6rem;font-size:0.75rem;margin:0;color:#065f46;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:4px;">
+          🛡️ <strong>Safety Shield Active:</strong> 1 medication entered. Pharmacopoeia safety checks active.
+        </div>`;
+    }
+    return "";
+  }
+
+  const INTERACTION_RULES = [
+    {
+      groupA: ["ibuprofen", "diclofenac", "naproxen", "ketorolac", "aceclofenac", "piroxicam", "meloxicam", "indomethacin", "combiflam", "voveran"],
+      groupB: ["enalapril", "ramipril", "lisinopril", "telmisartan", "losartan", "olmesartan", "valsartan"],
+      severity: "warning",
+      desc: "NSAID + ACE-Inhibitor / ARB: Risk of acute renal impairment and attenuated antihypertensive efficacy. Monitor BP & renal function."
+    },
+    {
+      groupA: ["ibuprofen", "diclofenac", "naproxen", "ketorolac", "aceclofenac", "aspirin", "combiflam", "voveran"],
+      groupB: ["prednisolone", "dexamethasone", "betamethasone", "methylprednisolone", "hydrocortisone", "deflazacort"],
+      severity: "warning",
+      desc: "NSAID + Corticosteroid: Significantly increased risk of gastrointestinal ulceration, mucosal hemorrhage, and erosive gastritis. Co-prescribe gastroprotection (PPI)."
+    },
+    {
+      groupA: ["ciprofloxacin", "levofloxacin", "ofloxacin", "moxifloxacin", "norfloxacin"],
+      groupB: ["ibuprofen", "diclofenac", "naproxen", "aceclofenac", "combiflam"],
+      severity: "warning",
+      desc: "Fluoroquinolone + NSAID: Enhanced CNS stimulation, lowering convulsive threshold and increasing risk of neurological excitation or seizures."
+    },
+    {
+      groupA: ["azithromycin", "clarithromycin", "erythromycin"],
+      groupB: ["atorvastatin", "simvastatin", "rosuvastatin", "lovastatin"],
+      severity: "warning",
+      desc: "Macrolide + Statin: Inhibition of CYP3A4/OATP pathways elevates statin serum concentrations, increasing risk of myopathy and rhabdomyolysis."
+    },
+    {
+      groupA: ["clopidogrel"],
+      groupB: ["omeprazole", "esomeprazole"],
+      severity: "warning",
+      desc: "Clopidogrel + Omeprazole: CYP2C19 competitive inhibition reduces clopidogrel active metabolite and antiplatelet efficacy. Consider Pantoprazole."
+    },
+    {
+      groupA: ["warfarin", "heparin", "dabigatran", "apixaban", "rivaroxaban"],
+      groupB: ["aspirin", "ibuprofen", "diclofenac", "naproxen", "aceclofenac"],
+      severity: "danger",
+      desc: "Anticoagulant + NSAID / Antiplatelet: Potent synergistic bleeding risk and major hemorrhage hazard."
+    },
+    {
+      groupA: ["verapamil", "diltiazem"],
+      groupB: ["propranolol", "atenolol", "metoprolol", "bisoprolol", "carvedilol", "nebivolol"],
+      severity: "danger",
+      desc: "Non-DHP CCB + Beta-Blocker: Synergistic negative inotropic and chronotropic depression; severe risk of bradycardia, AV nodal conduction block, and hypotension."
+    },
+    {
+      groupA: ["spironolactone", "eplerenone"],
+      groupB: ["ramipril", "enalapril", "telmisartan", "losartan", "potassium"],
+      severity: "warning",
+      desc: "Potassium-Sparing Diuretic + RAAS Blocker: Elevated risk of hyperkalemia and cardiac dysrhythmias. Verify serum potassium."
+    },
+    {
+      groupA: ["tramadol"],
+      groupB: ["fluoxetine", "sertraline", "escitalopram", "paroxetine", "duloxetine", "venlafaxine"],
+      severity: "danger",
+      desc: "Tramadol + Serotonergic Antidepressant (SSRI/SNRI): Substantial risk of Serotonin Syndrome and increased seizure susceptibility."
+    },
+    {
+      groupA: ["metformin"],
+      groupB: ["furosemide"],
+      severity: "warning",
+      desc: "Metformin + High-Dose Loop Diuretic: Potential reduction in renal clearance with dehydration, increasing risk of lactic acidosis."
+    }
+  ];
+
+  const detected = [];
+  for (const rule of INTERACTION_RULES) {
+    const hasA = activeDrugs.some(d => rule.groupA.some(a => d.includes(a)));
+    const hasB = activeDrugs.some(d => rule.groupB.some(b => d.includes(b)));
+    if (hasA && hasB) {
+      detected.push(rule);
+    }
+  }
+
+  if (detected.length > 0) {
+    return detected.map(r => `
+      <div class="alert ${r.severity === 'danger' ? 'alert-strip danger' : 'alert-strip warning'}" style="margin-bottom:0.4rem;padding:0.4rem 0.7rem;font-size:0.8rem;display:flex;align-items:center;gap:0.5rem;border-radius:5px;">
+        <span>${r.severity === 'danger' ? '🚨' : '⚠️'} <strong>Clinical Interaction Alert:</strong> ${escapeHtml(r.desc)}</span>
+      </div>
+    `).join('');
+  }
+
+  return `
+    <div class="alert alert-success" style="padding:0.35rem 0.6rem;font-size:0.75rem;margin:0;color:#065f46;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:4px;">
+      🛡️ <strong>Safety Shield Active:</strong> No high-risk drug-drug interactions detected across ${activeDrugs.length} prescribed medications.
+    </div>`;
+}
+
+/* ---------- RXPAD (Native Prescription Pad & Medication Dispensing) ---------- */
+views.rxpad = async (params = {}) => {
+  highlightNav("rxpad");
+  const container = $("#view-container");
+
+  const targetPatId = params.patientId || params.patient_id || params.id || null;
+
+  let allPatients = [];
+  try {
+    allPatients = await api.getPatients();
+  } catch {
+    allPatients = [];
+  }
+
+  function getPatDisplayName(p) {
+    if (!p) return "";
+    if (typeof p.name === "string") return p.name;
+    if (p.displayName) return p.displayName;
+    if (Array.isArray(p.name)) {
+      const n = p.name[0];
+      if (typeof n === "string") return n;
+      if (n.text) return n.text;
+      const parts = [n.prefix, ...(n.given || []), n.family].filter(Boolean);
+      if (parts.length) return parts.join(" ");
+    }
+    return p.id || "";
+  }
+
+  function getPatAgeSex(p) {
+    if (!p) return "";
+    if (p.age_sex) return p.age_sex;
+    const age = p.birthDate ? fmtAge(p.birthDate) : "";
+    const sex = p.gender ? p.gender.toUpperCase().slice(0, 1) : "";
+    if (age && sex) return `${age} / ${sex}`;
+    return age || sex || "—";
+  }
+
+  function getPatContact(p) {
+    if (!p) return "";
+    if (typeof p.contact === "string" && p.contact) return p.contact;
+    if (Array.isArray(p.telecom) && p.telecom[0]?.value) return p.telecom[0].value;
+    return "";
+  }
+
+  let activePat = null;
+  if (targetPatId) {
+    activePat = allPatients.find(p => p.id === targetPatId) || null;
+    if (!activePat) {
+      try {
+        activePat = await api.getPatient(targetPatId);
+      } catch {
+        activePat = null;
+      }
+    }
+  }
+
+  let nextSerial = 18;
+  try {
+    const s = await api.getNextRxPadSerial();
+    const sNum = (s && (s.nextSerial || s.next_serial || parseInt(s.formatted, 10))) || 18;
+    nextSerial = sNum;
+  } catch {
+    nextSerial = 18;
+  }
+
+  let prescriberProfile = {
+    clinician_name: "Dr. Yash Kulkarni",
+    registration_no: "MMC-20260608539",
+    qualifications: "MBBS",
+    department: "",
+    contact: "2020100, Murbad Road, Kalyan, Thane, MH\nPhone: +91-7738090349 | Email: yashkulkarni2020100@gmail.com",
+    logoUrl: "/static/assets/clinic-logo.png?v=2",
+    signatureUrl: "/static/assets/doctor-signature.png",
+  };
+
+  let sysConf = {};
+  try {
+    sysConf = JSON.parse(localStorage.getItem('nl_config') || '{}');
+  } catch {}
+  if (sysConf.clinic) {
+    if (sysConf.clinic.name) prescriberProfile.clinic_name = sysConf.clinic.name;
+    if (sysConf.clinic.address || sysConf.clinic.phone || sysConf.clinic.email) {
+      prescriberProfile.contact = [
+        sysConf.clinic.address,
+        sysConf.clinic.phone ? 'Phone: ' + sysConf.clinic.phone : '',
+        sysConf.clinic.email ? 'Email: ' + sysConf.clinic.email : ''
+      ].filter(Boolean).join('\n') || prescriberProfile.contact;
+    }
+  }
+
+  let formulary = [];
+  try {
+    formulary = await api.getFormulary();
+  } catch {
+    formulary = [];
+  }
+  if (!formulary.length) {
+    formulary = [
+      { name: "Paracetamol", form: "Tab", strength: "500mg", default_dose: "1 Tab", default_freq: "TDS (Thrice daily)", default_instructions: "After meals" },
+      { name: "Paracetamol 650", form: "Tab", strength: "650mg", default_dose: "1 Tab", default_freq: "TDS (Thrice daily)", default_instructions: "After meals" },
+      { name: "Amoxicillin 500", form: "Cap", strength: "500mg", default_dose: "1 Cap", default_freq: "TDS (Thrice daily)", default_instructions: "After meals" },
+      { name: "Augmentin 625 (Amox-Clav)", form: "Tab", strength: "625mg", default_dose: "1 Tab", default_freq: "BD (Twice daily)", default_instructions: "With food" },
+      { name: "Azithromycin 500", form: "Tab", strength: "500mg", default_dose: "1 Tab", default_freq: "OD (Once daily)", default_instructions: "1 hour before food" },
+      { name: "Pantoprazole 40", form: "Tab", strength: "40mg", default_dose: "1 Tab", default_freq: "OD (Once daily)", default_instructions: "Before breakfast" },
+      { name: "Metformin 500", form: "Tab", strength: "500mg", default_dose: "1 Tab", default_freq: "BD (Twice daily)", default_instructions: "With meals" },
+      { name: "Telmisartan 40", form: "Tab", strength: "40mg", default_dose: "1 Tab", default_freq: "OD (Once daily)", default_instructions: "Morning after food" },
+      { name: "Amlodipine 5", form: "Tab", strength: "5mg", default_dose: "1 Tab", default_freq: "OD (Once daily)", default_instructions: "Morning after food" },
+      { name: "Cetirizine 10", form: "Tab", strength: "10mg", default_dose: "1 Tab", default_freq: "HS (At bedtime)", default_instructions: "At night" },
+      { name: "Montelukast-Levocetirizine", form: "Tab", strength: "10mg/5mg", default_dose: "1 Tab", default_freq: "HS (At bedtime)", default_instructions: "At night" },
+      { name: "Ibuprofen 400", form: "Tab", strength: "400mg", default_dose: "1 Tab", default_freq: "BD (Twice daily)", default_instructions: "After meals" },
+      { name: "Aceclofenac-Paracetamol", form: "Tab", strength: "100/325mg", default_dose: "1 Tab", default_freq: "BD (Twice daily)", default_instructions: "After meals" },
+      { name: "Sildenafil 50", form: "Tab", strength: "50mg", default_dose: "1 Tab", default_freq: "SOS (As needed)", default_instructions: "1 hour prior" },
+      { name: "Nitroglycerin 2.6", form: "Tab", strength: "2.6mg", default_dose: "1 Tab", default_freq: "BD (Twice daily)", default_instructions: "After meals" }
+    ];
+  }
+
+  function formatToday() {
+    const d = new Date();
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    return `${dd}/${mm}/${yyyy}`;
+  }
+
+  function getRxFilename(patientName, serialNum) {
+    const rawName = (patientName || '').trim() || 'Patient';
+    const cleanName = rawName.replace(/[^a-zA-Z0-9_-]/g, '') || 'Patient';
+    const serialStr = String(serialNum).padStart(4, '0');
+    const d = new Date();
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yy = String(d.getFullYear()).slice(-2);
+    return `${dd}${mm}${yy}_${serialStr}_${cleanName}.pdf`;
+  }
+
+  let rxState = {
+    serial: nextSerial,
+    patientId: activePat ? activePat.id : "",
+    patientName: activePat ? getPatDisplayName(activePat) : "",
+    ageSex: activePat ? getPatAgeSex(activePat) : "",
+    date: formatToday(),
+    contact: activePat ? getPatContact(activePat) : "",
+    weight: "",
+    bp: "",
+    diagnosis: "",
+    followUp: "5 Days / PRN",
+    labs: [],
+    meds: [
+      { drug: "", dose: "1 Tab", freq: "OD (Once daily)", dur: "5 Days", instr: "After food" },
+      { drug: "", dose: "1 Tab", freq: "BD (Twice daily)", dur: "5 Days", instr: "After food" },
+      { drug: "", dose: "1 Tab", freq: "TDS (Thrice daily)", dur: "3 Days", instr: "After food" }
+    ]
+  };
+
+  let currentTab = "composer";
+  renderBaseLayout();
+
+  function renderBaseLayout() {
+    container.innerHTML = `
+      <div class="no-print" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.75rem;">
+        <div>
+          <h2 style="margin:0;font-size:1.35rem;font-weight:700;">Prescription Pad (eRx)</h2>
+          <p class="meta" style="margin:0;">Clinic prescription management with local-first database persistence</p>
+        </div>
+        <div class="tabs no-print" style="margin:0;">
+          <button class="tab-btn ${currentTab === 'composer' ? 'active' : ''}" id="rx-tab-composer">📝 New Prescription</button>
+          <button class="tab-btn ${currentTab === 'queue' ? 'active' : ''}" id="rx-tab-queue">🗂️ Prescription Queue</button>
+        </div>
+      </div>
       <div id="rxpad-tab-content"></div>
     `;
 
     $("#rx-tab-composer").onclick = () => { currentTab = "composer"; renderTab(); };
     $("#rx-tab-queue").onclick = () => { currentTab = "queue"; renderTab(); };
-
     renderTab();
   }
 
   function renderTab() {
     const tabContent = $("#rxpad-tab-content");
     if (!tabContent) return;
-
     if (currentTab === "composer") {
       renderComposer(tabContent);
     } else {
@@ -4460,466 +5057,865 @@ views.rxpad = async (params = {}) => {
     }
   }
 
+  function applyPrescriptionToState(rx) {
+    rxState.patientId = rx.patient_id || "";
+    rxState.patientName = rx.patient_name || "";
+    rxState.ageSex = rx.age_sex || "";
+    rxState.contact = rx.contact || "";
+    rxState.weight = rx.weight || "";
+    rxState.bp = rx.bp || "";
+    rxState.diagnosis = rx.diagnosis || "";
+    rxState.followUp = rx.follow_up || rx.followUp || "5 Days / PRN";
+    rxState.labs = Array.isArray(rx.labs) ? [...rx.labs] : [];
+    rxState.meds = Array.isArray(rx.meds) && rx.meds.length
+      ? rx.meds.map(m => ({
+          drug: (m.drug || "").toUpperCase(),
+          dose: m.dose || "1 Tab",
+          freq: m.freq || "OD (Once daily)",
+          dur: m.dur || "5 Days",
+          instr: m.instr || "After food"
+        }))
+      : [
+          { drug: "", dose: "1 Tab", freq: "OD (Once daily)", dur: "5 Days", instr: "After food" },
+          { drug: "", dose: "1 Tab", freq: "BD (Twice daily)", dur: "5 Days", instr: "After food" },
+          { drug: "", dose: "1 Tab", freq: "TDS (Thrice daily)", dur: "3 Days", instr: "After food" }
+        ];
+  }
+
+  function populatePadInputsFromState() {
+    if ($("#patientName")) $("#patientName").value = rxState.patientName;
+    if ($("#ageSex")) $("#ageSex").value = rxState.ageSex;
+    if ($("#patientContact")) $("#patientContact").value = rxState.contact;
+    if ($("#weight")) $("#weight").value = rxState.weight;
+    if ($("#bp")) $("#bp").value = rxState.bp;
+    if ($("#diagnosis")) $("#diagnosis").value = rxState.diagnosis;
+    if ($("#followUp")) $("#followUp").value = rxState.followUp;
+    refreshLabsList();
+    refreshMedsList();
+    syncPrintDisplays();
+  }
+
+  function syncPrintDisplays() {
+    const contactVal = $("#clinicContact") ? $("#clinicContact").value : (prescriberProfile.contact || "");
+    const diagVal = $("#diagnosis") ? $("#diagnosis").value : (rxState.diagnosis || "");
+    const patContactVal = $("#patientContact") ? $("#patientContact").value : (rxState.contact || "");
+    const followUpVal = $("#followUp") ? $("#followUp").value : (rxState.followUp || "");
+
+    if ($("#clinicContactPrint")) {
+      $("#clinicContactPrint").innerHTML = escapeHtml(contactVal).replace(/\n/g, '<br>');
+    }
+    if ($("#diagnosisPrint")) {
+      $("#diagnosisPrint").innerHTML = escapeHtml(diagVal).replace(/\n/g, '<br>');
+    }
+    if ($("#patientContactPrint")) {
+      $("#patientContactPrint").innerHTML = escapeHtml(patContactVal).replace(/\n/g, '<br>');
+    }
+    if ($("#followUpPrint")) {
+      $("#followUpPrint").innerHTML = escapeHtml(followUpVal);
+    }
+
+    $$(".med-row").forEach(r => {
+      const instrInp = r.querySelector(".med-instr");
+      const instrPrint = r.querySelector(".med-instr-print");
+      if (instrInp && instrPrint) {
+        instrPrint.innerHTML = escapeHtml(instrInp.value);
+      }
+    });
+  }
+
   /* --- COMPOSER SUB-VIEW --- */
   function renderComposer(root) {
-    const storyboardHtml = activePat ? renderStoryboard(activePat, rxState.vitals) : '';
     root.innerHTML = `
-      <!-- Action Toolbar -->
-      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.75rem;margin-bottom:1rem;">
+      <!-- Action Toolbar (Hidden on Print) -->
+      <div class="no-print" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.75rem;margin-bottom:1rem;background:#ffffff;padding:0.75rem 1rem;border-radius:8px;border:1px solid #e5e7eb;box-shadow:0 1px 3px rgba(0,0,0,0.05);">
         <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
-          <label class="meta" style="font-weight:600;">Select Patient:</label>
-          <select class="select" id="rx-patient-select" style="margin:0;width:auto;min-width:220px;">
+          <button class="btn btn-primary btn-sm" id="rx-btn-new-rx" style="font-weight:700;">➕ New Rx</button>
+          <button class="btn btn-secondary btn-sm" id="rx-btn-load-modal" style="font-weight:600;display:flex;align-items:center;gap:0.35rem;">📂 Load Rx</button>
+          <span class="badge badge-info" id="rxpad-next-badge" style="font-size:0.85rem;padding:0.35rem 0.65rem;">#${String(rxState.serial).padStart(4, '0')}</span>
+          <label class="meta" style="font-weight:600;margin-left:0.5rem;">Patient:</label>
+          <select class="select" id="rx-patient-select" style="margin:0;width:auto;min-width:210px;font-size:0.85rem;">
             <option value="">-- Choose Existing Patient --</option>
             ${allPatients.map(p => `
               <option value="${p.id}" ${rxState.patientId === p.id ? 'selected' : ''}>
-                ${escapeHtml(patientName(p))} (${fmtAge(p.birthDate)} / ${p.gender || '—'})
+                ${escapeHtml(getPatDisplayName(p))} (${getPatAgeSex(p)})
               </option>
             `).join('')}
           </select>
-          <button class="btn btn-secondary btn-sm" id="rx-btn-new-rx">🔄 Clear / New Rx</button>
         </div>
         <div style="display:flex;gap:0.5rem;align-items:center;">
-          <button class="btn btn-secondary" id="rx-btn-print">🖨️ Print / Export PDF</button>
-          <button class="btn btn-primary" id="rx-btn-save-issue" ${!isLegalPrescriber ? 'disabled title="ABAC: Non-prescribers cannot issue legal prescriptions"' : ''}>
-            💾 Save &amp; Issue Prescription
+          <button class="btn btn-primary" id="rx-btn-save-pdf" style="font-weight:700;background:#2563eb;border-color:#1d4ed8;">💾 Save PDF</button>
+          <button class="btn btn-secondary" id="rx-btn-print" style="font-weight:600;">🖨️ Print (Ctrl+P)</button>
+          <button class="btn btn-secondary" id="rx-btn-save-issue" title="Sync prescription to clinic.db">
+            💾 Save to DB
           </button>
         </div>
       </div>
 
-      <div class="${activePat ? 'workspace-with-storyboard' : ''}">
-        ${storyboardHtml}
-        <div class="storyboard-canvas-main">
-          <!-- Native Printable A4 Prescription Pad Canvas -->
-          <div class="rx-canvas" id="printable-rx-canvas">
-        <!-- Clinic Letterhead Header -->
-        <div class="rx-header">
-          <div class="rx-clinic-info">
-            <h1>${escapeHtml(clinicConfig.clinic_name || "Dr. Yash Kulkarni Clinic")}</h1>
-            <p class="subtitle">${escapeHtml(clinicConfig.clinic_subtitle || "Comprehensive Clinical Care & Family Practice")}</p>
-            <p class="meta" style="font-size:0.8rem;margin-top:0.2rem;">
-              ${escapeHtml(clinicConfig.address || "Clinic Suite 4B, Health Hub")} &bull; Tel: ${escapeHtml(clinicConfig.phone || "+91 98765 43210")} &bull; ${escapeHtml(clinicConfig.email || "clinic@newloka.local")}
-            </p>
-          </div>
-          <div class="rx-prescriber-info">
-            <h3 style="margin:0;color:var(--color-primary);">${escapeHtml(prescriberProfile.clinician_name)}</h3>
-            <p style="margin:0.15rem 0;font-weight:600;font-size:0.85rem;">${escapeHtml(prescriberProfile.qualifications)}</p>
-            <p style="margin:0;font-size:0.8rem;color:var(--color-text-muted);">Reg. No: <strong>${escapeHtml(prescriberProfile.registration_no)}</strong></p>
-            <p style="margin:0;font-size:0.75rem;color:var(--color-text-muted);">${escapeHtml(prescriberProfile.department)}</p>
-          </div>
-        </div>
+      <div class="rx-composer-wrap" style="display:flex;justify-content:center;margin-bottom:2rem;">
+        <!-- Exact Replica Canvas of eRx Pad Pro -->
+        <div class="page-container" id="prescription-pad-canvas">
 
-        <!-- Patient Demographics Bar -->
-        <div class="rx-patient-bar">
-          <div class="rx-patient-cell">
-            <span class="label-tiny">PATIENT NAME</span>
-            <input class="rx-inline-input" id="rx-pat-name" placeholder="Patient Full Name" value="${escapeHtml(rxState.patientName)}" />
-          </div>
-          <div class="rx-patient-cell" style="max-width:140px;">
-            <span class="label-tiny">AGE / GENDER</span>
-            <input class="rx-inline-input" id="rx-pat-age-sex" placeholder="e.g. 42 / M" value="${escapeHtml(rxState.ageSex)}" />
-          </div>
-          <div class="rx-patient-cell" style="max-width:140px;">
-            <span class="label-tiny">PHONE</span>
-            <input class="rx-inline-input" id="rx-pat-phone" placeholder="Mobile #" value="${escapeHtml(rxState.phone)}" />
-          </div>
-          <div class="rx-patient-cell" style="max-width:130px;">
-            <span class="label-tiny">DATE</span>
-            <input type="date" class="rx-inline-input" id="rx-date" value="${rxState.date}" />
-          </div>
-          <div class="rx-patient-cell" style="max-width:100px;">
-            <span class="label-tiny">RX SERIAL</span>
-            <span style="font-weight:700;font-family:monospace;color:var(--color-primary);">#${String(rxState.serial).padStart(4, '0')}</span>
-          </div>
-        </div>
-
-        <!-- Clinical Vitals & Provisional Diagnosis -->
-        <div style="margin:0.75rem 0;padding:0.6rem 0.8rem;background:var(--color-bg);border-radius:0.4rem;border:1px solid var(--color-border);">
-          <div style="display:flex;gap:1rem;flex-wrap:wrap;align-items:center;margin-bottom:0.4rem;">
-            <span class="label-tiny" style="min-width:50px;">VITALS:</span>
-            <div style="display:flex;gap:0.75rem;flex-wrap:wrap;font-size:0.82rem;">
-              <span><strong>BP:</strong> <input class="rx-mini-input" id="rx-vital-bp" placeholder="120/80" value="${escapeHtml(rxState.vitals.bp)}" style="width:65px;" /> mmHg</span>
-              <span><strong>Pulse:</strong> <input class="rx-mini-input" id="rx-vital-pulse" placeholder="72" value="${escapeHtml(rxState.vitals.pulse)}" style="width:45px;" /> /min</span>
-              <span><strong>Temp:</strong> <input class="rx-mini-input" id="rx-vital-temp" placeholder="98.6" value="${escapeHtml(rxState.vitals.temp)}" style="width:45px;" /> °F</span>
-              <span><strong>SpO2:</strong> <input class="rx-mini-input" id="rx-vital-spo2" placeholder="99" value="${escapeHtml(rxState.vitals.spo2)}" style="width:45px;" /> %</span>
-              <span><strong>Wt:</strong> <input class="rx-mini-input" id="rx-vital-wt" placeholder="68" value="${escapeHtml(rxState.vitals.weight)}" style="width:45px;" /> kg</span>
+          <!-- HEADER -->
+          <header id="wrapHeader">
+            <div id="wrapClinicLogo">
+              <img id="clinicLogoImg" src="${prescriberProfile.logoUrl}" alt="Clinic Logo">
             </div>
-          </div>
-          <div style="display:flex;gap:0.5rem;align-items:center;">
-            <span class="label-tiny" style="min-width:65px;">DIAGNOSIS:</span>
-            <input class="rx-inline-input" id="rx-diagnosis" placeholder="Provisional Diagnosis / Clinical Impression (e.g. Acute URTI, Essential HTN)" value="${escapeHtml(rxState.diagnosis)}" style="flex:1;font-weight:600;" />
-          </div>
-          <div style="display:flex;gap:0.35rem;flex-wrap:wrap;margin-top:0.35rem;padding-left:70px;">
-            ${['Acute URTI', 'Essential Hypertension', 'Type 2 Diabetes Mellitus', 'Acute Gastroenteritis', 'Allergic Rhinitis', 'Migraine', 'Bronchial Asthma'].map(d => `
-              <span class="chip-tag rx-diag-chip" data-diag="${d}" style="cursor:pointer;font-size:0.72rem;padding:0.15rem 0.4rem;background:var(--color-surface);border:1px solid var(--color-border);border-radius:12px;">+ ${d}</span>
-            `).join('')}
-          </div>
-        </div>
+            <div id="wrapDoctorHeader">
+              <input type="text" id="doctorName" value="${escapeHtml(prescriberProfile.clinician_name)}" placeholder="Doctor Name">
+              <input type="text" id="doctorQual" value="${escapeHtml(prescriberProfile.qualifications)}" placeholder="Qualifications">
+              <input type="text" id="doctorReg" value="${escapeHtml(prescriberProfile.registration_no)}" placeholder="Registration Number">
+              <textarea id="clinicContact" placeholder="Clinic Address / Contact Info">${escapeHtml(prescriberProfile.contact)}</textarea>
+              <div id="clinicContactPrint" class="rx-print-display"></div>
+            </div>
+          </header>
 
-        <!-- Rx Prescription Section -->
-        <div style="position:relative;margin-top:1rem;">
-          <div class="rx-symbol">℞</div>
-          
-          <!-- Pharmacopoeia Live Autocomplete Search Bar -->
-          <div style="margin-bottom:0.75rem;position:relative;">
-            <div style="display:flex;gap:0.5rem;align-items:center;">
-              <div style="position:relative;flex:1;">
-                <input class="input" id="rx-drug-search" placeholder="🔍 Search Pharmacopoeia (e.g. Paracetamol, Amoxicillin, Metformin, Pantoprazole, Amlodipine)..." autocomplete="off" />
-                <div id="rx-autocomplete-dropdown" class="rx-autocomplete-list" style="display:none;"></div>
+          <!-- PATIENT DETAILS -->
+          <section id="wrapPatientSection">
+            <div class="col-span-2" id="wrapPatientName">
+              <label>Patient Name:</label>
+              <div class="ac-wrap">
+                <input type="text" id="patientName" placeholder="Enter Patient Name" autocomplete="off" value="${escapeHtml(rxState.patientName)}">
+                <div class="ac-list" id="patientAcList"></div>
               </div>
-              <button class="btn btn-secondary btn-sm" id="rx-btn-add-custom-drug">➕ Custom Drug</button>
             </div>
-          </div>
-
-          <!-- Dynamic Prescribed Medications Table -->
-          <div class="table-wrap" style="margin-bottom:0.75rem;">
-            <table class="table rx-meds-table" id="rx-table-meds">
-              <thead>
-                <tr>
-                  <th style="width:30px;">#</th>
-                  <th>Medication &amp; Formulation</th>
-                  <th style="width:140px;">Dose / Strength</th>
-                  <th style="width:130px;">Frequency</th>
-                  <th style="width:100px;">Duration</th>
-                  <th>Timing &amp; Instructions</th>
-                  <th style="width:40px;"></th>
-                </tr>
-              </thead>
-              <tbody id="rx-meds-body">
-                ${renderMedsRows(rxState.meds)}
-              </tbody>
-            </table>
-          </div>
-
-          <!-- Real-Time Drug-Drug Interaction Shield -->
-          <div id="rx-interaction-shield" style="margin-bottom:0.75rem;">
-            ${checkDrugInteractions(rxState.meds)}
-          </div>
-        </div>
-
-        <!-- Ordered Laboratory & Diagnostic Investigations -->
-        <div style="margin:1rem 0;padding:0.6rem 0.8rem;background:var(--color-bg);border-radius:0.4rem;border:1px solid var(--color-border);">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.35rem;">
-            <span class="label-tiny" style="font-weight:700;">LABORATORY &amp; DIAGNOSTIC ORDERS:</span>
-            <span class="meta" style="font-size:0.75rem;">Click to toggle ordered tests</span>
-          </div>
-          <div style="display:flex;gap:0.4rem;flex-wrap:wrap;">
-            ${['Complete Blood Count (CBC)', 'Random Blood Sugar (RBS)', 'HbA1c', 'Renal Function Test (KFT)', 'Liver Function Test (LFT)', 'Lipid Profile', 'Urine Routine & Micro', 'Chest X-Ray PA', 'ECG (12-Lead)', 'Ultrasound Abdomen'].map(lab => {
-              const active = rxState.labs.includes(lab);
-              return `<button type="button" class="btn btn-sm rx-lab-toggle ${active ? 'btn-primary' : 'btn-secondary'}" data-lab="${escapeHtml(lab)}" style="font-size:0.75rem;padding:0.2rem 0.5rem;">${active ? '✓ ' : '+ '}${escapeHtml(lab)}</button>`;
-            }).join('')}
-          </div>
-        </div>
-
-        <!-- Doctor Advice & Follow-Up -->
-        <div class="row" style="margin:1rem 0;">
-          <div class="col">
-            <span class="label-tiny" style="font-weight:700;">GENERAL ADVICE &amp; DIETARY INSTRUCTIONS:</span>
-            <textarea class="input" id="rx-advice" style="height:60px;font-size:0.85rem;" placeholder="e.g. Drink plenty of warm water. Avoid oily/spicy foods. Rest.">${escapeHtml(rxState.advice)}</textarea>
-          </div>
-          <div class="col" style="max-width:280px;">
-            <span class="label-tiny" style="font-weight:700;">FOLLOW UP:</span>
-            <input class="input" id="rx-follow-up" style="font-size:0.85rem;" placeholder="e.g. Review in 5 days" value="${escapeHtml(rxState.followUp)}" />
-          </div>
-        </div>
-
-        <!-- Prescriber Signature & Tamper-Evident Seal -->
-        <div class="rx-signature-wrap">
-          <div class="meta" style="font-size:0.75rem;max-width:320px;">
-            <div><strong>Digital Verification:</strong> Ed25519 Signed Audit Log</div>
-            <div><strong>Prescriber ABAC:</strong> Verified Legal Clinician</div>
-            <div style="margin-top:0.2rem;font-size:0.7rem;">Valid with clinic registration and tamper-evident clinic.db record.</div>
-          </div>
-          <div style="text-align:right;">
-            <div style="font-family:'Brush Script MT', cursive, sans-serif;font-size:1.6rem;color:var(--color-primary);margin-bottom:0.25rem;">
-              ${escapeHtml(prescriberProfile.signature || prescriberProfile.clinician_name)}
+            <div id="wrapAgeSex">
+              <label>Age / Sex:</label>
+              <input type="text" id="ageSex" placeholder="e.g. 34 Y / M" value="${escapeHtml(rxState.ageSex)}">
             </div>
-            <div style="border-top:1px solid var(--color-text-muted);padding-top:0.25rem;font-weight:700;font-size:0.85rem;">
-              ${escapeHtml(prescriberProfile.clinician_name)}
+            <div id="wrapDate">
+              <label>Date:</label>
+              <input type="text" id="currentDate" placeholder="DD/MM/YYYY" value="${escapeHtml(rxState.date)}">
             </div>
-            <div class="meta" style="font-size:0.75rem;">
-              ${escapeHtml(prescriberProfile.qualifications)} &bull; Reg: ${escapeHtml(prescriberProfile.registration_no)}
+            <div class="col-span-2" id="wrapPatientContact">
+              <label>Address / Contact:</label>
+              <input type="text" id="patientContact" placeholder="Enter Contact Details" value="${escapeHtml(rxState.contact)}">
+              <div id="patientContactPrint" class="rx-print-display"></div>
             </div>
-          </div>
+            <div id="wrapWeight">
+              <label>Weight (kg):</label>
+              <input type="text" id="weight" placeholder="--" value="${escapeHtml(rxState.weight)}">
+            </div>
+            <div id="wrapBp">
+              <label>BP / Vitals:</label>
+              <input type="text" id="bp" placeholder="120/80 mmHg" value="${escapeHtml(rxState.bp)}">
+            </div>
+          </section>
+
+          <div class="rx-divider"></div>
+
+          <!-- MAIN BODY: 2 Columns -->
+          <main id="wrapMainBody">
+            <!-- LEFT COLUMN -->
+            <div id="wrapLeftCol">
+              <div id="wrapDiagnosis">
+                <h3>Provisional Diagnosis</h3>
+                <textarea id="diagnosis" placeholder="Enter diagnosis or chief complaints...">${escapeHtml(rxState.diagnosis)}</textarea>
+                <div id="diagnosisPrint" class="rx-print-display"></div>
+                <div class="no-print" style="display:flex;gap:0.35rem;flex-wrap:wrap;margin-top:0.35rem;">
+                  ${['Acute URTI', 'Essential Hypertension', 'Type 2 Diabetes Mellitus', 'Acute Gastroenteritis', 'Allergic Rhinitis', 'Migraine', 'Bronchial Asthma'].map(d => `
+                    <span class="chip-tag rx-diag-chip" data-diag="${d}" style="cursor:pointer;font-size:0.72rem;padding:0.15rem 0.4rem;background:#f3f4f6;border:1px solid #d1d5db;border-radius:12px;">+ ${d}</span>
+                  `).join('')}
+                </div>
+              </div>
+
+              <div id="wrapAdvisedLabs">
+                <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:1px solid #d1d5db;padding-bottom:0.25rem;margin-bottom:0.5rem;">
+                  <h3 style="border:none;margin:0;padding:0;">Advised (Labs/Tests)</h3>
+                  <button type="button" id="btn-add-lab" class="no-print btn btn-sm btn-secondary" style="font-size:0.75rem;padding:0.15rem 0.45rem;">+ Add Lab</button>
+                </div>
+                <ul id="labList">
+                  ${renderLabsListHtml()}
+                </ul>
+                <div class="no-print" style="margin-top:0.5rem;display:flex;gap:0.3rem;flex-wrap:wrap;">
+                  ${['CBC', 'RBS', 'HbA1c', 'LFT', 'KFT', 'Lipid Profile', 'Urine R/M', 'ECG', 'CXR'].map(lab => `
+                    <span class="chip-tag rx-lab-chip" data-lab="${lab}" style="cursor:pointer;font-size:0.7rem;padding:0.1rem 0.35rem;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;">+ ${lab}</span>
+                  `).join('')}
+                </div>
+              </div>
+            </div>
+
+            <!-- RIGHT COLUMN: Medications -->
+            <div id="wrapMedCol">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.5rem;">
+                <div class="rx-symbol">Rx</div>
+                <button type="button" id="btn-add-med" class="no-print btn btn-sm btn-primary" style="font-weight:600;font-size:0.8rem;padding:0.25rem 0.65rem;">
+                  + Add Medicine
+                </button>
+              </div>
+
+              <!-- Quick Formulary Search Bar (no-print) -->
+              <div id="rx-drug-search-wrap" class="no-print" style="margin-bottom:0.6rem;position:relative;">
+                <div style="display:flex;gap:0.5rem;align-items:center;">
+                  <div class="ac-wrap" style="flex:1;">
+                    <input id="rx-drug-search" placeholder="🔍 Search Formulary (e.g. Paracetamol, Augmentin, Metformin, Pantoprazole)..." autocomplete="off" style="font-size:0.85rem;">
+                    <div id="rx-autocomplete-dropdown" class="ac-list"></div>
+                  </div>
+                  <button type="button" class="btn btn-secondary btn-sm" id="rx-btn-add-custom-drug">➕ Custom Drug</button>
+                </div>
+              </div>
+
+              <!-- Pharmacovigilance Real-Time Drug Interaction Shield -->
+              <div id="rx-interaction-shield" class="no-print" style="margin-bottom:0.6rem;">
+                ${checkDrugInteractions(rxState.meds)}
+              </div>
+
+              <!-- Dynamic Med Rows -->
+              <div id="medList">
+                ${renderMedRowsHtml()}
+              </div>
+            </div>
+          </main>
+
+          <!-- FOOTER -->
+          <footer id="wrapFooter">
+            <div id="wrapFollowUp">
+              <label>Follow up on / after:</label>
+              <input type="text" id="followUp" placeholder="e.g., 5 Days / PRN" value="${escapeHtml(rxState.followUp)}">
+              <div id="followUpPrint" class="rx-print-display"></div>
+            </div>
+
+            <div id="wrapSignature">
+              <img id="doctorSigImg" src="${prescriberProfile.signatureUrl}" alt="Doctor Signature" class="signature-image">
+              <input type="text" id="doctorSignName" value="${escapeHtml(prescriberProfile.clinician_name)}">
+              <input type="text" id="doctorSignReg" value="${escapeHtml(prescriberProfile.registration_no)}">
+            </div>
+          </footer>
         </div>
-      </div>
-      </div>
       </div>
     `;
 
-    // Wire patient selector dropdown
-    const patSelect = root.querySelector('#rx-patient-select');
+    wireEventHandlers();
+  }
+
+  function renderLabsListHtml() {
+    if (!rxState.labs || !rxState.labs.length) {
+      return `
+        <li class="relative group" data-lab-row style="list-style-type:none;padding:0.25rem 0;color:#6b7280;font-style:italic;">
+          No tests advised
+        </li>
+      `;
+    }
+    return rxState.labs.map((lab, idx) => `
+      <li class="relative group" data-lab-row style="padding:0.2rem 0;display:flex;align-items:center;gap:0.4rem;">
+        <span style="font-weight:700;color:#4b5563;min-width:18px;">${idx + 1}.</span>
+        <input type="text" class="lab-name-input" data-idx="${idx}" value="${escapeHtml(lab)}" placeholder="e.g. CBC, RBS" style="flex:1;font-size:0.85rem;">
+        <button type="button" class="no-print btn-del-lab" data-idx="${idx}" style="color:#ef4444;background:none;border:none;cursor:pointer;font-size:1.1rem;line-height:1;padding:0 4px;" title="Remove Test">&times;</button>
+      </li>
+    `).join('');
+  }
+
+  function renderMedRowsHtml() {
+    if (!rxState.meds || !rxState.meds.length) {
+      return `<div style="text-align:center;padding:1.5rem;color:#6b7280;">No medications prescribed. Click "+ Add Medicine" above.</div>`;
+    }
+
+    return rxState.meds.map((m, idx) => `
+      <div class="med-row" data-idx="${idx}">
+        <div style="display:flex;gap:0.5rem;align-items:flex-start;">
+          <span class="med-num">${idx + 1}.</span>
+          <div style="flex-grow:1;">
+            <div style="display:flex;gap:0.5rem;align-items:center;">
+              <div class="ac-wrap" style="flex-grow:1;">
+                <input type="text" class="med-drug" data-idx="${idx}" style="font-weight:700;font-size:0.95rem;text-transform:uppercase;" placeholder="DRUG NAME (BRAND NAME) - DOSAGE FORM" value="${escapeHtml((m.drug || '').toUpperCase())}" autocomplete="off">
+                <div class="ac-list med-row-ac-list" data-idx="${idx}"></div>
+              </div>
+              <button type="button" class="no-print btn btn-sm btn-danger med-del" data-idx="${idx}" title="Remove Medicine" style="padding:2px 7px;font-size:0.85rem;border-radius:4px;">✕</button>
+            </div>
+            <div style="display:flex;gap:0.75rem;margin-top:5px;">
+              <input type="text" class="med-dose" data-idx="${idx}" style="width:33%;font-size:0.85rem;" placeholder="Dose (e.g., 1 Tab)" value="${escapeHtml(m.dose || '')}">
+              <input type="text" class="med-freq" data-idx="${idx}" style="width:33%;font-size:0.85rem;" placeholder="Frequency (e.g., 1-0-1)" value="${escapeHtml(m.freq || '')}">
+              <input type="text" class="med-dur" data-idx="${idx}" style="width:33%;font-size:0.85rem;" placeholder="Duration (e.g., 5 Days)" value="${escapeHtml(m.dur || '')}">
+            </div>
+            <div class="med-instr-wrap">
+              <input type="text" class="med-instr" data-idx="${idx}" style="font-size:0.85rem;font-style:italic;color:#4b5563;margin-top:5px;" placeholder="Instructions (e.g., After meals)" value="${escapeHtml(m.instr || '')}">
+              <div class="rx-print-display med-instr-print" data-idx="${idx}">${escapeHtml(m.instr || '')}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  /* --- LOAD PRESCRIPTION MODAL --- */
+  async function openLoadModal() {
+    let rxList = [];
+    try {
+      rxList = await api.getRxPadPrescriptions(100);
+    } catch {
+      rxList = [];
+    }
+
+    const modalHtml = `
+      <div style="display:flex;flex-direction:column;gap:0.75rem;max-height:75vh;">
+        <div style="position:relative;">
+          <input class="input" id="modal-load-search" placeholder="🔍 Search by patient name, serial #, medication, or date..." style="width:100%;font-size:0.9rem;" autofocus />
+        </div>
+        <div id="modal-load-items-container" style="overflow-y:auto;max-height:55vh;display:flex;flex-direction:column;gap:0.6rem;padding-right:4px;">
+          ${renderModalLoadItems(rxList, "")}
+        </div>
+      </div>
+    `;
+
+    openModal("📂 Load Prescription from clinic.db", modalHtml);
+
+    const searchInp = $("#modal-load-search");
+    const container = $("#modal-load-items-container");
+    if (searchInp && container) {
+      searchInp.oninput = () => {
+        const q = searchInp.value.trim().toLowerCase();
+        container.innerHTML = renderModalLoadItems(rxList, q);
+        wireModalLoadClicks(rxList);
+      };
+    }
+    wireModalLoadClicks(rxList);
+  }
+
+  function renderModalLoadItems(list, q) {
+    const filtered = list.filter(rx => {
+      if (!q) return true;
+      const haystack = [
+        String(rx.serial || ""),
+        rx.patient_name || "",
+        rx.diagnosis || "",
+        rx.filename || "",
+        rx.date || "",
+        ...(rx.meds || []).map(m => m.drug || ""),
+        ...(rx.labs || [])
+      ].join(" ").toLowerCase();
+      return haystack.includes(q);
+    });
+
+    if (!filtered.length) {
+      return `<div style="text-align:center;padding:2rem;color:#6b7280;">No prescriptions found matching "${escapeHtml(q)}".</div>`;
+    }
+
+    return filtered.map(rx => `
+      <div class="card rx-load-card" data-id="${rx.id}" style="cursor:pointer;padding:0.75rem 1rem;border:1px solid #e5e7eb;border-radius:8px;transition:all 0.15s;display:flex;justify-content:space-between;align-items:center;">
+        <div style="flex:1;">
+          <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.25rem;">
+            <strong style="font-family:monospace;font-size:0.95rem;color:#1d4ed8;">#${String(rx.serial).padStart(4, '0')}</strong>
+            <span style="font-weight:700;font-size:0.95rem;color:#111827;">${escapeHtml(rx.patient_name || 'Patient')}</span>
+            <span class="meta" style="font-size:0.8rem;">(${escapeHtml(rx.age_sex || '—')})</span>
+            <span class="meta" style="font-size:0.78rem;margin-left:auto;">${escapeHtml(rx.date || '')}</span>
+          </div>
+          <div class="meta" style="font-size:0.82rem;line-height:1.35;color:#4b5563;">
+            ${rx.diagnosis ? `<span style="color:#111827;font-weight:600;">Diagnosis:</span> ${escapeHtml(rx.diagnosis)} &bull; ` : ''}
+            <span>${(rx.meds || []).length} Meds: ${escapeHtml(rx.meds_summary || (rx.meds || []).map(m => m.drug).join(', ') || 'None')}</span>
+          </div>
+        </div>
+        <div style="margin-left:1rem;">
+          <button type="button" class="btn btn-primary btn-sm rx-load-action-btn" data-id="${rx.id}" style="font-weight:600;white-space:nowrap;">
+            📝 Load into Pad
+          </button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function wireModalLoadClicks(list) {
+    const container = $("#modal-load-items-container");
+    if (!container) return;
+    container.querySelectorAll(".rx-load-action-btn, .rx-load-card").forEach(el => {
+      el.onclick = (e) => {
+        const id = el.dataset.id || el.closest(".rx-load-card")?.dataset.id;
+        const rx = list.find(x => x.id === id);
+        if (rx) {
+          applyPrescriptionToState(rx);
+          populatePadInputsFromState();
+          closeModal();
+          showAlert(`Loaded Rx #${String(rx.serial).padStart(4, '0')} for ${rx.patient_name}!`, "ok");
+        }
+      };
+    });
+  }
+
+  function wireEventHandlers() {
+    // Load Prescription Modal Button
+    const loadModalBtn = $("#rx-btn-load-modal");
+    if (loadModalBtn) {
+      loadModalBtn.onclick = () => {
+        openLoadModal();
+      };
+    }
+
+    // Sync patient select
+    const patSelect = $("#rx-patient-select");
     if (patSelect) {
       patSelect.onchange = () => {
-        const selId = patSelect.value;
-        if (!selId) return;
-        const p = allPatients.find(x => x.id === selId);
+        const pId = patSelect.value;
+        if (!pId) return;
+        const p = allPatients.find(x => x.id === pId);
         if (p) {
           rxState.patientId = p.id;
-          rxState.patientName = patientName(p);
-          rxState.ageSex = fmtAge(p.birthDate) + " / " + (p.gender ? p.gender.toUpperCase().slice(0, 1) : "—");
-          rxState.phone = p.telecom?.[0]?.value || "";
-          rxState.address = p.address?.[0]?.text || p.address?.[0]?.city || "";
-          
-          setActivePatient(p.id);
-          $("#rx-pat-name").value = rxState.patientName;
-          $("#rx-pat-age-sex").value = rxState.ageSex;
-          $("#rx-pat-phone").value = rxState.phone;
+          rxState.patientName = getPatDisplayName(p);
+          rxState.ageSex = getPatAgeSex(p);
+          rxState.contact = getPatContact(p);
+          if ($("#patientName")) $("#patientName").value = rxState.patientName;
+          if ($("#ageSex")) $("#ageSex").value = rxState.ageSex;
+          if ($("#patientContact")) $("#patientContact").value = rxState.contact;
         }
       };
     }
 
-    // Wire inputs to rxState
-    $("#rx-pat-name").oninput = (e) => { rxState.patientName = e.target.value; };
-    $("#rx-pat-age-sex").oninput = (e) => { rxState.ageSex = e.target.value; };
-    $("#rx-pat-phone").oninput = (e) => { rxState.phone = e.target.value; };
-    $("#rx-date").oninput = (e) => { rxState.date = e.target.value; };
-    $("#rx-vital-bp").oninput = (e) => { rxState.vitals.bp = e.target.value; };
-    $("#rx-vital-pulse").oninput = (e) => { rxState.vitals.pulse = e.target.value; };
-    $("#rx-vital-temp").oninput = (e) => { rxState.vitals.temp = e.target.value; };
-    $("#rx-vital-spo2").oninput = (e) => { rxState.vitals.spo2 = e.target.value; };
-    $("#rx-vital-wt").oninput = (e) => { rxState.vitals.weight = e.target.value; };
-    $("#rx-diagnosis").oninput = (e) => { rxState.diagnosis = e.target.value; };
-    $("#rx-advice").oninput = (e) => { rxState.advice = e.target.value; };
-    $("#rx-follow-up").oninput = (e) => { rxState.followUp = e.target.value; };
-
-    // Diagnosis quick chips
-    root.querySelectorAll('.rx-diag-chip').forEach(chip => {
-      chip.onclick = () => {
-        const d = chip.dataset.diag;
-        const cur = $("#rx-diagnosis").value.trim();
-        const newVal = cur ? (cur.includes(d) ? cur : cur + ", " + d) : d;
-        $("#rx-diagnosis").value = newVal;
-        rxState.diagnosis = newVal;
-      };
-    });
-
-    // Lab order chips
-    root.querySelectorAll('.rx-lab-toggle').forEach(btn => {
-      btn.onclick = () => {
-        const lab = btn.dataset.lab;
-        const idx = rxState.labs.indexOf(lab);
-        if (idx >= 0) {
-          rxState.labs.splice(idx, 1);
-          btn.classList.remove('btn-primary');
-          btn.classList.add('btn-secondary');
-          btn.textContent = '+ ' + lab;
-        } else {
-          rxState.labs.push(lab);
-          btn.classList.remove('btn-secondary');
-          btn.classList.add('btn-primary');
-          btn.textContent = '✓ ' + lab;
-        }
-      };
-    });
-
-    // Pharmacopoeia autocomplete search
-    const drugSearchInput = root.querySelector('#rx-drug-search');
-    const autoDropdown = root.querySelector('#rx-autocomplete-dropdown');
-
-    if (drugSearchInput && autoDropdown) {
-      drugSearchInput.addEventListener('input', () => {
-        const q = drugSearchInput.value.trim().toLowerCase();
+    // Patient Name Autocomplete
+    const patNameInp = $("#patientName");
+    const patAcList = $("#patientAcList");
+    if (patNameInp && patAcList) {
+      patNameInp.oninput = () => {
+        const q = patNameInp.value.trim().toLowerCase();
+        rxState.patientName = patNameInp.value;
         if (q.length < 1) {
-          autoDropdown.style.display = 'none';
-          autoDropdown.innerHTML = '';
+          patAcList.style.display = "none";
+          patAcList.innerHTML = "";
           return;
         }
+        const matches = allPatients.filter(p => getPatDisplayName(p).toLowerCase().includes(q)).slice(0, 8);
+        if (!matches.length) {
+          patAcList.style.display = "none";
+          return;
+        }
+        patAcList.innerHTML = matches.map(p => `
+          <div class="ac-item" data-id="${p.id}">
+            <strong>${escapeHtml(getPatDisplayName(p))}</strong>
+            <small style="margin-left:6px;">(${getPatAgeSex(p)})</small>
+          </div>
+        `).join('');
+        patAcList.style.display = "block";
 
+        patAcList.querySelectorAll(".ac-item").forEach(itemEl => {
+          itemEl.onclick = () => {
+            const p = allPatients.find(x => x.id === itemEl.dataset.id);
+            if (p) {
+              rxState.patientId = p.id;
+              rxState.patientName = getPatDisplayName(p);
+              rxState.ageSex = getPatAgeSex(p);
+              rxState.contact = getPatContact(p);
+              patNameInp.value = rxState.patientName;
+              if ($("#ageSex")) $("#ageSex").value = rxState.ageSex;
+              if ($("#patientContact")) $("#patientContact").value = rxState.contact;
+              if (patSelect) patSelect.value = p.id;
+            }
+            patAcList.style.display = "none";
+          };
+        });
+      };
+      document.addEventListener("click", (e) => {
+        if (!e.target.closest("#wrapPatientName")) {
+          patAcList.style.display = "none";
+        }
+      });
+    }
+
+    // Two-way binding for patient inputs
+    if ($("#ageSex")) $("#ageSex").oninput = (e) => { rxState.ageSex = e.target.value; };
+    if ($("#currentDate")) $("#currentDate").oninput = (e) => { rxState.date = e.target.value; };
+    if ($("#patientContact")) $("#patientContact").oninput = (e) => { rxState.contact = e.target.value; syncPrintDisplays(); };
+    if ($("#weight")) $("#weight").oninput = (e) => { rxState.weight = e.target.value; };
+    if ($("#bp")) $("#bp").oninput = (e) => { rxState.bp = e.target.value; };
+    if ($("#diagnosis")) $("#diagnosis").oninput = (e) => { rxState.diagnosis = e.target.value; syncPrintDisplays(); };
+    if ($("#clinicContact")) $("#clinicContact").oninput = (e) => { syncPrintDisplays(); };
+    if ($("#followUp")) $("#followUp").oninput = (e) => { rxState.followUp = e.target.value; syncPrintDisplays(); };
+
+    // Diagnosis quick chips
+    $$(".rx-diag-chip").forEach(chip => {
+      chip.onclick = () => {
+        const d = chip.dataset.diag;
+        const diagArea = $("#diagnosis");
+        if (diagArea) {
+          const cur = diagArea.value.trim();
+          diagArea.value = cur ? `${cur}, ${d}` : d;
+          rxState.diagnosis = diagArea.value;
+          syncPrintDisplays();
+        }
+      };
+    });
+
+    // Add Lab Button
+    const addLabBtn = $("#btn-add-lab");
+    if (addLabBtn) {
+      addLabBtn.onclick = () => {
+        rxState.labs.push("");
+        refreshLabsList();
+        const inputs = $$(".lab-name-input");
+        if (inputs.length) inputs[inputs.length - 1].focus();
+      };
+    }
+
+    // Quick Lab Chips
+    $$(".rx-lab-chip").forEach(chip => {
+      chip.onclick = () => {
+        const lab = chip.dataset.lab;
+        if (!rxState.labs.includes(lab)) {
+          if (rxState.labs.length === 1 && !rxState.labs[0].trim()) {
+            rxState.labs[0] = lab;
+          } else {
+            rxState.labs.push(lab);
+          }
+          refreshLabsList();
+        }
+      };
+    });
+
+    wireLabInputs();
+
+    // Add Medicine Button
+    const addMedBtn = $("#btn-add-med");
+    if (addMedBtn) {
+      addMedBtn.onclick = () => {
+        addMedicationRow(true);
+      };
+    }
+
+    // Pharmacopoeia Autocomplete Top Search
+    const topDrugSearch = $("#rx-drug-search");
+    const topAutoDropdown = $("#rx-autocomplete-dropdown");
+    if (topDrugSearch && topAutoDropdown) {
+      topDrugSearch.addEventListener("input", () => {
+        const q = topDrugSearch.value.trim().toLowerCase();
+        if (q.length < 1) {
+          topAutoDropdown.style.display = "none";
+          topAutoDropdown.innerHTML = "";
+          return;
+        }
         const matches = formulary.filter(item => {
           const haystack = (item.name + " " + (item.generic || "") + " " + (item.category || "")).toLowerCase();
           return haystack.includes(q);
         }).slice(0, 15);
 
         if (!matches.length) {
-          autoDropdown.innerHTML = `<div style="padding:0.5rem;font-size:0.8rem;color:var(--color-text-muted);">No matching drugs in formulary. Click '+ Custom Drug' to add.</div>`;
-          autoDropdown.style.display = 'block';
+          topAutoDropdown.innerHTML = `<div style="padding:0.5rem;font-size:0.8rem;color:#6b7280;">No exact match for "${escapeHtml(q)}". Click "➕ Custom Drug" to add.</div>`;
+          topAutoDropdown.style.display = "block";
           return;
         }
 
-        autoDropdown.innerHTML = matches.map((m, idx) => `
-          <div class="rx-autocomplete-item" data-idx="${idx}" style="padding:0.4rem 0.6rem;cursor:pointer;border-bottom:1px solid var(--color-border);display:flex;justify-content:space-between;align-items:center;">
-            <div>
-              <strong style="color:var(--color-primary);">${escapeHtml(m.name)}</strong>
-              ${m.strength ? `<span class="meta">&bull; ${escapeHtml(m.strength)}</span>` : ''}
-              ${m.form ? `<span class="badge badge-info" style="font-size:0.7rem;margin-left:0.3rem;">${escapeHtml(m.form)}</span>` : ''}
-            </div>
-            <div class="meta" style="font-size:0.75rem;">${escapeHtml(m.category || 'Formulary')}</div>
+        topAutoDropdown.innerHTML = matches.map((m, idx) => `
+          <div class="ac-item" data-idx="${idx}">
+            <strong style="color:#2563eb;">${escapeHtml(m.name)}</strong>
+            ${m.strength ? `<span class="meta">&bull; ${escapeHtml(m.strength)}</span>` : ''}
+            ${m.form ? `<span class="badge badge-info" style="font-size:0.7rem;margin-left:0.3rem;">${escapeHtml(m.form)}</span>` : ''}
           </div>
         `).join('');
-        autoDropdown.style.display = 'block';
+        topAutoDropdown.style.display = "block";
 
-        autoDropdown.querySelectorAll('.rx-autocomplete-item').forEach(itemEl => {
+        topAutoDropdown.querySelectorAll(".ac-item").forEach(itemEl => {
           itemEl.onclick = () => {
             const m = matches[parseInt(itemEl.dataset.idx, 10)];
-            addMedicationItem({
-              drug: m.name,
-              form: m.form || "Tab",
+            const medObj = {
+              drug: (m.name || "").toUpperCase(),
               dose: m.strength || (m.default_dose || "1 Tab"),
               freq: m.default_freq || "BD (Twice daily)",
               dur: "5 Days",
-              instr: m.default_instructions || "After food",
-            });
-            drugSearchInput.value = '';
-            autoDropdown.style.display = 'none';
+              instr: m.default_instructions || "After meals",
+            };
+            const emptyIdx = rxState.meds.findIndex(x => !x.drug || !x.drug.trim());
+            if (emptyIdx >= 0) {
+              rxState.meds[emptyIdx] = medObj;
+              refreshMedsList();
+            } else {
+              rxState.meds.push(medObj);
+              refreshMedsList();
+            }
+            topDrugSearch.value = "";
+            topAutoDropdown.style.display = "none";
           };
         });
       });
 
-      // Close dropdown when clicking outside
-      document.addEventListener('click', (e) => {
-        if (!e.target.closest('#rx-drug-search') && !e.target.closest('#rx-autocomplete-dropdown')) {
-          autoDropdown.style.display = 'none';
+      document.addEventListener("click", (e) => {
+        if (!e.target.closest("#rx-drug-search-wrap")) {
+          topAutoDropdown.style.display = "none";
         }
       });
     }
 
-    // Add Custom Drug button
+    // Custom Drug button
     $("#rx-btn-add-custom-drug").onclick = () => {
-      addMedicationItem({
-        drug: "New Medication",
-        form: "Tab",
+      const customName = topDrugSearch ? topDrugSearch.value.trim() : "";
+      const medObj = {
+        drug: (customName || "NEW MEDICINE").toUpperCase(),
         dose: "1 Tab",
         freq: "OD (Once daily)",
         dur: "5 Days",
-        instr: "After food",
-      });
+        instr: "After meals",
+      };
+      const emptyIdx = rxState.meds.findIndex(x => !x.drug || !x.drug.trim());
+      if (emptyIdx >= 0) {
+        rxState.meds[emptyIdx] = medObj;
+        refreshMedsList();
+      } else {
+        rxState.meds.push(medObj);
+        refreshMedsList();
+      }
+      if (topDrugSearch) topDrugSearch.value = "";
+      if (topAutoDropdown) topAutoDropdown.style.display = "none";
     };
 
-    // Print button
-    $("#rx-btn-print").onclick = () => {
+    wireMedInputs();
+
+    // Clear / New Rx Button
+    $("#rx-btn-new-rx").onclick = async () => {
+      if (confirm("Clear prescription pad and start fresh?")) {
+        try {
+          const s = await api.getNextRxPadSerial();
+          const sNum = (s && (s.nextSerial || s.next_serial || parseInt(s.formatted, 10))) || nextSerial;
+          nextSerial = sNum;
+        } catch {}
+        rxState.serial = nextSerial;
+        rxState.patientId = "";
+        rxState.patientName = "";
+        rxState.ageSex = "";
+        rxState.contact = "";
+        rxState.weight = "";
+        rxState.bp = "";
+        rxState.diagnosis = "";
+        rxState.followUp = "5 Days / PRN";
+        rxState.labs = [];
+        rxState.meds = [
+          { drug: "", dose: "1 Tab", freq: "OD (Once daily)", dur: "5 Days", instr: "After food" },
+          { drug: "", dose: "1 Tab", freq: "BD (Twice daily)", dur: "5 Days", instr: "After food" },
+          { drug: "", dose: "1 Tab", freq: "TDS (Thrice daily)", dur: "3 Days", instr: "After food" }
+        ];
+        renderComposer(root);
+      }
+    };
+
+    // Save PDF (Direct download via html2pdf + sync to clinic.db)
+    $("#rx-btn-save-pdf").onclick = async () => {
+      const pName = $("#patientName").value.trim() || rxState.patientName || "Patient";
+      const filename = getRxFilename(pName, rxState.serial);
+
+      const saveBtn = $("#rx-btn-save-pdf");
+      saveBtn.disabled = true;
+      saveBtn.innerHTML = "⏳ Saving PDF...";
+
+      syncPrintDisplays();
+      const containerEl = document.querySelector(".page-container");
+
+      containerEl.querySelectorAll(".med-drug").forEach(inp => {
+        inp.value = (inp.value || '').toUpperCase();
+      });
+      containerEl.querySelectorAll("input").forEach(inp => inp.setAttribute("value", inp.value));
+      containerEl.querySelectorAll("textarea").forEach(txt => { txt.textContent = txt.value; });
+
+      // In-place export mode: temporarily hide chrome/navigation, center container cleanly
+      document.body.classList.add("exporting-pdf-mode");
+      containerEl.classList.add("exporting-pdf");
+      window.scrollTo(0, 0);
+
+      let pdfBase64 = null;
+      const opt = {
+        margin: 0,
+        filename: filename,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          scrollX: 0,
+          scrollY: 0
+        },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+
+      if (typeof html2pdf !== 'undefined') {
+        try {
+          const worker = html2pdf().set(opt).from(containerEl);
+          // Post-process PDF object to guarantee strictly 1 page (delete any trailing subpixel overflow page)
+          await worker.toPdf().get('pdf').then(pdf => {
+            const pageCount = pdf.internal.getNumberOfPages();
+            if (pageCount > 1) {
+              for (let p = pageCount; p > 1; p--) {
+                pdf.deletePage(p);
+              }
+            }
+          });
+          try {
+            const dataUri = await worker.outputPdf('datauristring');
+            if (dataUri && dataUri.includes(',')) {
+              pdfBase64 = dataUri.split(',')[1];
+            }
+          } catch (bErr) {
+            console.warn('PDF base64 output error:', bErr);
+          }
+          await worker.save();
+        } catch (pdfErr) {
+          console.error('html2pdf direct export error:', pdfErr);
+          document.title = filename.replace(/\.pdf$/i, '');
+          window.print();
+        } finally {
+          document.body.classList.remove("exporting-pdf-mode");
+          containerEl.classList.remove("exporting-pdf");
+        }
+      } else {
+        document.body.classList.remove("exporting-pdf-mode");
+        containerEl.classList.remove("exporting-pdf");
+        document.title = filename.replace(/\.pdf$/i, '');
+        window.print();
+      }
+
+      await syncPrescriptionToServer(filename, pdfBase64);
+
+      try {
+        const nextS = await api.getNextRxPadSerial();
+        const sNum = (nextS && (nextS.nextSerial || nextS.next_serial || parseInt(nextS.formatted, 10))) || (rxState.serial + 1);
+        nextSerial = sNum;
+      } catch {
+        nextSerial = rxState.serial + 1;
+      }
+      rxState.serial = nextSerial;
+      if ($("#rxpad-next-badge")) $("#rxpad-next-badge").textContent = `#${String(nextSerial).padStart(4, '0')}`;
+
+      saveBtn.disabled = false;
+      saveBtn.innerHTML = "💾 Save PDF";
+      showAlert(`Prescription #${String(rxState.serial - 1).padStart(4, '0')} saved as ${filename}!`, "ok");
+    };
+
+    // Print Button
+    $("#rx-btn-print").onclick = async () => {
+      syncPrintDisplays();
+      const pName = $("#patientName").value.trim() || rxState.patientName || "Patient";
+      const filename = getRxFilename(pName, rxState.serial);
+      const origTitle = document.title;
+      document.title = filename.replace(/\.pdf$/i, '');
+
+      const rows = $$(".med-row");
+      rows.forEach(r => {
+        const drugInp = r.querySelector(".med-drug");
+        if (drugInp) {
+          drugInp.value = (drugInp.value || '').toUpperCase();
+          drugInp.setAttribute("value", drugInp.value);
+        }
+        const drugVal = drugInp?.value.trim();
+        if (!drugVal) {
+          r.style.display = "none";
+        }
+      });
+
+      syncPrescriptionToServer(filename, null).catch(e => console.warn("Background print-sync error:", e));
+
+      const restore = () => {
+        document.title = origTitle;
+        rows.forEach(r => { r.style.display = ""; });
+        window.removeEventListener('afterprint', restore);
+      };
+      window.addEventListener('afterprint', restore);
+      setTimeout(restore, 35000);
+
       window.print();
     };
 
-    // Reset button
-    $("#rx-btn-new-rx").onclick = async () => {
-      if (confirm("Reset current prescription and start a new one?")) {
-        try {
-          const s = await api.getNextRxPadSerial();
-          if (s && s.nextSerial) nextSerial = s.nextSerial;
-        } catch {}
-        rxState.serial = nextSerial;
-        rxState.meds = [];
-        rxState.labs = [];
-        rxState.diagnosis = "";
-        rxState.vitals = { bp: "", pulse: "", temp: "", spo2: "", weight: "" };
-        renderTab();
-        showAlert("Prescription reset. Next Rx #" + String(nextSerial).padStart(4, '0'), "ok");
+    // Global Ctrl+P handler
+    document.onkeydown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'p') {
+        const printBtn = $("#rx-btn-print");
+        if (printBtn && window.location.hash.startsWith("#rxpad")) {
+          e.preventDefault();
+          printBtn.click();
+        }
       }
     };
 
-    // Save & Issue Prescription
+    // Manual Save to clinic.db
     $("#rx-btn-save-issue").onclick = async () => {
-      if (!isLegalPrescriber) {
-        showAlert("ABAC Deny: You must be a verified legal prescriber to issue prescriptions.", "err");
-        return;
-      }
-
-      const pName = $("#rx-pat-name").value.trim();
-      if (!pName) {
-        showAlert("Please enter a patient name before saving.", "warn");
-        $("#rx-pat-name").focus();
-        return;
-      }
-
-      if (!rxState.meds.length && !rxState.diagnosis.trim()) {
-        showAlert("Please add at least one medication or a diagnosis.", "warn");
-        return;
-      }
-
       const saveBtn = $("#rx-btn-save-issue");
       saveBtn.disabled = true;
-      saveBtn.textContent = "Saving to clinic.db...";
+      saveBtn.textContent = "⏳ Saving...";
 
-      const payload = {
-        serial: rxState.serial,
-        date: rxState.date,
-        patient_id: rxState.patientId || undefined,
-        patient_name: pName,
-        age_sex: $("#rx-pat-age-sex").value.trim(),
-        phone: $("#rx-pat-phone").value.trim(),
-        diagnosis: $("#rx-diagnosis").value.trim(),
-        vitals: rxState.vitals,
-        meds: rxState.meds,
-        labs: rxState.labs,
-        advice: $("#rx-advice").value.trim(),
-        follow_up: $("#rx-follow-up").value.trim(),
-        prescriber: prescriberProfile.clinician_name,
-        registration_no: prescriberProfile.registration_no,
-      };
+      const pName = $("#patientName").value.trim() || rxState.patientName || "Patient";
+      const filename = getRxFilename(pName, rxState.serial);
+      const success = await syncPrescriptionToServer(filename, null);
 
-      try {
-        const res = await api.syncRxPadPrescription(payload);
-        showAlert(`Prescription #${String(rxState.serial).padStart(4, '0')} saved & issued successfully!`, "ok");
-        logAudit("Prescribe", "C", {
-          patient: pName,
-          entity: "MedicationRequest",
-          details: `Issued Rx #${rxState.serial} for ${pName} with ${rxState.meds.length} medications.`
-        });
-
-        // Update serial for next prescription
+      if (success) {
+        showAlert(`Prescription #${String(rxState.serial).padStart(4, '0')} saved to clinic.db!`, "ok");
         try {
           const nextS = await api.getNextRxPadSerial();
-          if (nextS && nextS.nextSerial) nextSerial = nextS.nextSerial;
-        } catch {}
-
+          const sNum = (nextS && (nextS.nextSerial || nextS.next_serial || parseInt(nextS.formatted, 10))) || (rxState.serial + 1);
+          nextSerial = sNum;
+        } catch {
+          nextSerial = rxState.serial + 1;
+        }
         rxState.serial = nextSerial;
         if ($("#rxpad-next-badge")) $("#rxpad-next-badge").textContent = `#${String(nextSerial).padStart(4, '0')}`;
-        
-        // Ask if doctor wants to switch to queue or print
-        saveBtn.disabled = false;
-        saveBtn.textContent = "💾 Save & Issue Prescription";
-      } catch (err) {
-        showAlert("Failed to save prescription: " + err.message, "err");
-        saveBtn.disabled = false;
-        saveBtn.textContent = "💾 Save & Issue Prescription";
+      } else {
+        showAlert("Failed to save prescription to database", "err");
       }
+      saveBtn.disabled = false;
+      saveBtn.textContent = "💾 Save to DB";
     };
   }
 
-  function addMedicationItem(med) {
-    rxState.meds.push(med);
-    updateMedsTableAndShield();
-  }
+  async function syncPrescriptionToServer(filename, pdfBase64) {
+    const pName = $("#patientName") ? $("#patientName").value.trim() : (rxState.patientName || "Patient");
+    const filledMeds = rxState.meds
+      .filter(m => m.drug && m.drug.trim())
+      .map(m => ({
+        ...m,
+        drug: (m.drug || '').toUpperCase()
+      }));
+    const validLabs = rxState.labs.filter(l => l && l.trim());
 
-  function renderMedsRows(meds) {
-    if (!meds || !meds.length) {
-      return `<tr><td colspan="7" style="text-align:center;padding:1.5rem;color:var(--color-text-muted);">No medications added yet. Search the pharmacopoeia above to add items.</td></tr>`;
+    const payload = {
+      serial: rxState.serial,
+      date: $("#currentDate") ? $("#currentDate").value.trim() : rxState.date,
+      patient_id: rxState.patientId || undefined,
+      patient_name: pName,
+      age_sex: $("#ageSex") ? $("#ageSex").value.trim() : rxState.ageSex,
+      phone: $("#patientContact") ? $("#patientContact").value.trim() : rxState.contact,
+      diagnosis: $("#diagnosis") ? $("#diagnosis").value.trim() : rxState.diagnosis,
+      vitals: {
+        bp: $("#bp") ? $("#bp").value.trim() : rxState.bp,
+        weight: $("#weight") ? $("#weight").value.trim() : rxState.weight,
+        pulse: "",
+        temp: "",
+        spo2: ""
+      },
+      meds: filledMeds,
+      labs: validLabs,
+      advice: "",
+      follow_up: $("#followUp") ? $("#followUp").value.trim() : rxState.followUp,
+      prescriber: prescriberProfile.clinician_name || "Dr. Yash Kulkarni",
+      registration_no: prescriberProfile.registration_no || "MMC-20260608539",
+      filename: filename,
+      pdf_base64: pdfBase64 || undefined
+    };
+
+    try {
+      await api.syncRxPadPrescription(payload);
+      logAudit("Prescribe", "C", {
+        patient: pName,
+        entity: "MedicationRequest",
+        details: `Issued Rx #${rxState.serial} for ${pName} with ${filledMeds.length} medications.`
+      });
+      return true;
+    } catch (err) {
+      console.warn("syncRxPadPrescription error:", err);
+      return false;
     }
-
-    return meds.map((m, idx) => `
-      <tr class="rx-med-row" data-idx="${idx}">
-        <td style="font-weight:700;color:var(--color-text-muted);">${idx + 1}</td>
-        <td>
-          <input class="rx-table-input rx-med-name" value="${escapeHtml(m.drug)}" placeholder="Drug Name" style="font-weight:700;" />
-        </td>
-        <td>
-          <input class="rx-table-input rx-med-dose" value="${escapeHtml(m.dose || '')}" placeholder="Dose (e.g. 500mg)" />
-        </td>
-        <td>
-          <select class="rx-table-select rx-med-freq">
-            ${['OD (Once daily)', 'BD (Twice daily)', 'TDS (Thrice daily)', 'QID (4 times daily)', 'SOS (As needed)', 'HS (At bedtime)', 'Stat (Immediately)', 'Weekly'].map(f => `
-              <option value="${f}" ${m.freq && m.freq.startsWith(f.slice(0,2)) ? 'selected' : ''}>${f}</option>
-            `).join('')}
-          </select>
-        </td>
-        <td>
-          <input class="rx-table-input rx-med-dur" value="${escapeHtml(m.dur || '5 Days')}" placeholder="e.g. 5 Days" />
-        </td>
-        <td>
-          <input class="rx-table-input rx-med-instr" value="${escapeHtml(m.instr || 'After food')}" placeholder="Instructions" />
-        </td>
-        <td style="text-align:center;">
-          <button type="button" class="btn btn-sm btn-danger rx-med-del" data-idx="${idx}" title="Remove drug" style="padding:0.15rem 0.4rem;font-size:0.75rem;">✕</button>
-        </td>
-      </tr>
-    `).join('');
   }
 
-  function updateMedsTableAndShield() {
-    const tbody = $("#rx-meds-body");
-    if (tbody) {
-      tbody.innerHTML = renderMedsRows(rxState.meds);
-      wireMedsInputs();
+  function addMedicationRow(focus = true) {
+    rxState.meds.push({
+      drug: "",
+      dose: "1 Tab",
+      freq: "OD (Once daily)",
+      dur: "5 Days",
+      instr: "After food"
+    });
+    refreshMedsList();
+    if (focus) {
+      const rows = $$(".med-row");
+      if (rows.length) {
+        const lastInp = rows[rows.length - 1].querySelector(".med-drug");
+        if (lastInp) lastInp.focus();
+      }
+    }
+  }
+
+  function refreshMedsList() {
+    const medListEl = $("#medList");
+    if (medListEl) {
+      medListEl.innerHTML = renderMedRowsHtml();
+      wireMedInputs();
     }
     const shield = $("#rx-interaction-shield");
     if (shield) {
@@ -4927,60 +5923,129 @@ views.rxpad = async (params = {}) => {
     }
   }
 
-  function wireMedsInputs() {
-    const rows = $$(".rx-med-row");
-    rows.forEach(row => {
-      const idx = parseInt(row.dataset.idx, 10);
-      const nameInp = row.querySelector(".rx-med-name");
-      const doseInp = row.querySelector(".rx-med-dose");
-      const freqInp = row.querySelector(".rx-med-freq");
-      const durInp = row.querySelector(".rx-med-dur");
-      const instrInp = row.querySelector(".rx-med-instr");
-      const delBtn = row.querySelector(".rx-med-del");
+  function refreshLabsList() {
+    const labListEl = $("#labList");
+    if (labListEl) {
+      labListEl.innerHTML = renderLabsListHtml();
+      wireLabInputs();
+    }
+  }
 
-      if (nameInp) nameInp.oninput = () => { rxState.meds[idx].drug = nameInp.value; $("#rx-interaction-shield").innerHTML = checkDrugInteractions(rxState.meds); };
-      if (doseInp) doseInp.oninput = () => { rxState.meds[idx].dose = doseInp.value; };
-      if (freqInp) freqInp.onchange = () => { rxState.meds[idx].freq = freqInp.value; };
-      if (durInp) durInp.oninput = () => { rxState.meds[idx].dur = durInp.value; };
-      if (instrInp) instrInp.oninput = () => { rxState.meds[idx].instr = instrInp.value; };
-      if (delBtn) delBtn.onclick = () => {
-        rxState.meds.splice(idx, 1);
-        updateMedsTableAndShield();
+  function wireLabInputs() {
+    $$(".lab-name-input").forEach(inp => {
+      const idx = parseInt(inp.dataset.idx, 10);
+      inp.oninput = () => {
+        rxState.labs[idx] = inp.value;
+      };
+    });
+    $$(".btn-del-lab").forEach(btn => {
+      const idx = parseInt(btn.dataset.idx, 10);
+      btn.onclick = () => {
+        rxState.labs.splice(idx, 1);
+        refreshLabsList();
       };
     });
   }
 
-  function checkDrugInteractions(meds) {
-    if (!meds || meds.length < 2) return '';
-    const drugNames = meds.map(m => (m.drug || "").toLowerCase());
-    const alerts = [];
+  function wireMedInputs() {
+    const rows = $$(".med-row");
+    rows.forEach(row => {
+      const idx = parseInt(row.dataset.idx, 10);
+      const drugInp = row.querySelector(".med-drug");
+      const doseInp = row.querySelector(".med-dose");
+      const freqInp = row.querySelector(".med-freq");
+      const durInp = row.querySelector(".med-dur");
+      const instrInp = row.querySelector(".med-instr");
+      const delBtn = row.querySelector(".med-del");
+      const acList = row.querySelector(".med-row-ac-list");
 
-    for (const rule of DRUG_INTERACTION_RULES) {
-      const a = rule.drugA.toLowerCase();
-      const b = rule.drugB.toLowerCase();
-      const hasA = drugNames.some(d => d.includes(a));
-      const hasB = drugNames.some(d => d.includes(b));
+      if (drugInp && acList) {
+        drugInp.oninput = () => {
+          const start = drugInp.selectionStart;
+          const end = drugInp.selectionEnd;
+          const upVal = drugInp.value.toUpperCase();
+          if (drugInp.value !== upVal) {
+            drugInp.value = upVal;
+            if (start !== null && end !== null) {
+              drugInp.setSelectionRange(start, end);
+            }
+          }
+          if (rxState.meds[idx]) {
+            rxState.meds[idx].drug = upVal;
+            const shield = $("#rx-interaction-shield");
+            if (shield) shield.innerHTML = checkDrugInteractions(rxState.meds);
+          }
+          const q = upVal.trim().toLowerCase();
+          if (q.length < 1) {
+            acList.style.display = "none";
+            acList.innerHTML = "";
+            return;
+          }
+          const matches = formulary.filter(item => {
+            const haystack = (item.name + " " + (item.generic || "") + " " + (item.category || "")).toLowerCase();
+            return haystack.includes(q);
+          }).slice(0, 10);
 
-      if (hasA && hasB) {
-        alerts.push(rule);
+          if (!matches.length) {
+            acList.style.display = "none";
+            return;
+          }
+
+          acList.innerHTML = matches.map((m, mIdx) => `
+            <div class="ac-item" data-midx="${mIdx}">
+              <strong style="color:#2563eb;">${escapeHtml(m.name.toUpperCase())}</strong>
+              ${m.strength ? `<small style="margin-left:6px;">(${escapeHtml(m.strength)})</small>` : ''}
+              ${m.form ? `<span class="badge badge-info" style="font-size:0.7rem;margin-left:0.3rem;">${escapeHtml(m.form)}</span>` : ''}
+            </div>
+          `).join('');
+          acList.style.display = "block";
+
+          acList.querySelectorAll(".ac-item").forEach(itemEl => {
+            itemEl.onclick = () => {
+              const m = matches[parseInt(itemEl.dataset.midx, 10)];
+              rxState.meds[idx] = {
+                drug: (m.name || '').toUpperCase(),
+                dose: m.strength || (m.default_dose || "1 Tab"),
+                freq: m.default_freq || "BD (Twice daily)",
+                dur: "5 Days",
+                instr: m.default_instructions || "After meals"
+              };
+              acList.style.display = "none";
+              refreshMedsList();
+            };
+          });
+        };
+
+        document.addEventListener("click", (e) => {
+          if (!e.target.closest(`.med-row[data-idx="${idx}"] .ac-wrap`)) {
+            acList.style.display = "none";
+          }
+        });
       }
-    }
 
-    if (!alerts.length) return '';
+      if (doseInp) doseInp.oninput = () => { if (rxState.meds[idx]) rxState.meds[idx].dose = doseInp.value; };
+      if (freqInp) freqInp.oninput = () => { if (rxState.meds[idx]) rxState.meds[idx].freq = freqInp.value; };
+      if (durInp) durInp.oninput = () => { if (rxState.meds[idx]) rxState.meds[idx].dur = durInp.value; };
+      if (instrInp) {
+        instrInp.oninput = () => { if (rxState.meds[idx]) rxState.meds[idx].instr = instrInp.value; };
+        instrInp.onkeydown = (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            addMedicationRow(true);
+          }
+        };
+      }
 
-    return `
-      <div style="background:#fef2f2;border:1px solid #f87171;border-radius:0.4rem;padding:0.75rem;margin-top:0.5rem;animation:pulse-alert 2s infinite ease-in-out;">
-        <div style="display:flex;align-items:center;gap:0.5rem;color:#b91c1c;font-weight:700;font-size:0.88rem;">
-          <span>🚨 CLINICAL SAFETY WARNING: Drug-Drug Interaction Detected!</span>
-        </div>
-        ${alerts.map(al => `
-          <div style="margin-top:0.4rem;font-size:0.8rem;color:#7f1d1d;">
-            <div><strong>${escapeHtml(al.drugA)} + ${escapeHtml(al.drugB)}:</strong> ${escapeHtml(al.effect)}</div>
-            <div style="margin-top:0.15rem;font-size:0.75rem;color:#991b1b;"><strong>Management:</strong> ${escapeHtml(al.management)} (${escapeHtml(al.evidence)})</div>
-          </div>
-        `).join('')}
-      </div>
-    `;
+      if (delBtn) {
+        delBtn.onclick = () => {
+          rxState.meds.splice(idx, 1);
+          if (!rxState.meds.length) {
+            rxState.meds.push({ drug: "", dose: "1 Tab", freq: "OD (Once daily)", dur: "5 Days", instr: "After food" });
+          }
+          refreshMedsList();
+        };
+      }
+    });
   }
 
   /* --- QUEUE SUB-VIEW (Existing Prescriptions & Dispensing) --- */
@@ -5117,6 +6182,7 @@ views.rxpad = async (params = {}) => {
                     </td>
                     <td style="white-space:nowrap;">
                       <div style="display:flex;gap:0.35rem;">
+                        <button class="btn btn-sm btn-secondary rx-load-btn" data-id="${p.id}" title="Load this prescription into pad">📝 Load</button>
                         ${!isDisp ? `<button class="btn btn-sm btn-primary rx-dispense-btn" data-id="${p.id}" data-serial="${p.serial}" data-patient="${escapeHtml(p.patient_name)}">💊 Dispense</button>` : ''}
                         <button class="btn btn-sm btn-secondary rx-view-btn" data-id="${p.id}">👁️ View</button>
                         ${p.patient_id ? `<button class="btn btn-sm btn-secondary rx-chart-btn" data-pid="${p.patient_id}">Chart</button>` : ''}
@@ -5128,6 +6194,20 @@ views.rxpad = async (params = {}) => {
           </table>
         </div>
       </div>`;
+
+    // Wire Load into Pad button in queue
+    listContainer.querySelectorAll('.rx-load-btn').forEach(btn => {
+      btn.onclick = () => {
+        const id = btn.dataset.id;
+        const rx = allPrescriptions.find(x => x.id === id);
+        if (rx) {
+          applyPrescriptionToState(rx);
+          currentTab = "composer";
+          renderTab();
+          showAlert(`Loaded Rx #${String(rx.serial).padStart(4, '0')} (${rx.patient_name}) into pad!`, "ok");
+        }
+      };
+    });
 
     // Wire chart buttons
     listContainer.querySelectorAll('.rx-chart-btn').forEach(btn => {
@@ -5152,127 +6232,126 @@ views.rxpad = async (params = {}) => {
                 </div>
                 <div>
                   ${detail.dispense_status === 'dispensed'
-                    ? '<span class="badge badge-ok">💊 Dispensed / Filled</span>'
-                    : '<span class="badge badge-warn">🟡 Prescribed (Pending Dispense)</span>'}
+                    ? '<span class="badge badge-ok">Dispensed</span>'
+                    : '<span class="badge badge-warn">Prescribed (Pending Dispense)</span>'}
                 </div>
               </div>
-              <div style="margin-top:0.5rem;">
-                <strong>Provisional Diagnosis:</strong>
-                <p style="white-space:pre-wrap;background:var(--color-bg);padding:0.5rem;border-radius:0.35rem;margin-top:0.25rem;">${escapeHtml(detail.diagnosis || '—')}</p>
-              </div>
-              ${detail.follow_up ? `<p><strong>Follow Up:</strong> ${escapeHtml(detail.follow_up)}</p>` : ''}
-              ${detail.filename ? `<p class="meta"><strong>PDF Archive:</strong> ${escapeHtml(detail.filename)}</p>` : ''}
             </div>
-
             <div class="card" style="margin-bottom:0.75rem;">
-              <h3>Prescribed Medications</h3>
-              <div class="table-wrap" style="margin-top:0.5rem;">
-                <table class="table">
-                  <thead><tr><th>Drug</th><th>Dose</th><th>Frequency</th><th>Duration</th><th>Instructions</th></tr></thead>
-                  <tbody>
-                    ${(detail.meds || []).map(m => `
-                      <tr>
-                        <td><strong>${escapeHtml(m.drug)}</strong></td>
-                        <td>${escapeHtml(m.dose || '—')}</td>
-                        <td>${escapeHtml(m.freq || '—')}</td>
-                        <td>${escapeHtml(m.dur || '—')}</td>
-                        <td>${escapeHtml(m.instr || '—')}</td>
-                      </tr>
-                    `).join('')}
-                  </tbody>
-                </table>
+              <h4>Diagnosis / Chief Complaint</h4>
+              <p style="white-space:pre-wrap;">${escapeHtml(detail.diagnosis || 'None specified')}</p>
+            </div>
+            <div class="card" style="margin-bottom:0.75rem;">
+              <h4>Medications (${detail.meds ? detail.meds.length : 0})</h4>
+              <ul style="padding-left:1.25rem;">
+                ${(detail.meds || []).map(m => `
+                  <li style="margin-bottom:0.35rem;">
+                    <strong>${escapeHtml(m.drug)}</strong> ${m.dose ? '&bull; ' + escapeHtml(m.dose) : ''} ${m.freq ? '&bull; ' + escapeHtml(m.freq) : ''} ${m.dur ? '&bull; ' + escapeHtml(m.dur) : ''}
+                    ${m.instr ? `<div class="meta" style="font-style:italic;">${escapeHtml(m.instr)}</div>` : ''}
+                  </li>
+                `).join('')}
+              </ul>
+            </div>
+            ${detail.labs && detail.labs.length ? `
+              <div class="card" style="margin-bottom:0.75rem;">
+                <h4>Laboratory Tests Advised</h4>
+                <p>${escapeHtml(detail.labs.join(' • '))}</p>
+              </div>` : ''}
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:1rem;">
+              <button class="btn btn-primary btn-sm" id="modal-view-load-rx-btn">📝 Load into Pad</button>
+              <div style="display:flex;gap:0.5rem;">
+                ${detail.filename ? `<a class="btn btn-secondary btn-sm" href="/api/rxpad/prescriptions/${encodeURIComponent(detail.id)}/pdf" target="_blank">📄 View PDF</a>` : ''}
+                <button class="btn btn-danger btn-sm" id="modal-view-del-rx-btn">🗑️ Delete</button>
               </div>
             </div>
+          `);
 
-            ${detail.labs && detail.labs.length ? `
-              <div class="card">
-                <h3>Ordered Laboratory &amp; Diagnostic Tests</h3>
-                <ul style="padding-left:1.25rem;margin-top:0.5rem;">
-                  ${detail.labs.map(l => `<li>${escapeHtml(l)}</li>`).join('')}
-                </ul>
-              </div>` : ''}
-
-            <div style="display:flex;gap:0.5rem;justify-content:flex-end;margin-top:1rem;">
-              <button class="btn btn-secondary" onclick="closeModal()">Close</button>
-              ${detail.dispense_status !== 'dispensed' ? `<button class="btn btn-primary" id="modal-rx-dispense">💊 Fill &amp; Dispense Now</button>` : ''}
-            </div>`,
-            (body) => {
-              const dBtn = body.querySelector('#modal-rx-dispense');
-              if (dBtn) {
-                dBtn.onclick = () => {
-                  closeModal();
-                  openDispenseModal(detail.id, detail.serial, detail.patient_name, detail.meds);
-                };
-              }
+          const body = document.getElementById('modal-body');
+          if (body) {
+            const loadBtn = body.querySelector('#modal-view-load-rx-btn');
+            if (loadBtn) {
+              loadBtn.onclick = () => {
+                applyPrescriptionToState(detail);
+                closeModal();
+                currentTab = "composer";
+                renderTab();
+                showAlert(`Loaded Rx #${String(detail.serial).padStart(4, '0')} (${detail.patient_name}) into pad!`, "ok");
+              };
             }
-          );
+            const delBtn = body.querySelector('#modal-view-del-rx-btn');
+            if (delBtn) {
+              delBtn.onclick = async () => {
+                if (confirm(`Delete Prescription #${detail.serial}? This will cascade delete linked records.`)) {
+                  try {
+                    await api.deleteRxPadPrescription(detail.id);
+                    closeModal();
+                    showAlert(`Prescription #${detail.serial} deleted.`, "ok");
+                    await renderQueueList();
+                  } catch (err) {
+                    showAlert("Delete failed: " + err.message, "err");
+                  }
+                }
+              };
+            }
+          }
         } catch (err) {
-          showAlert("Failed to load prescription: " + err.message, "err");
+          showAlert("Could not load prescription details: " + err.message, "err");
         }
       };
     });
 
-    // Wire dispense buttons
+    // Wire dispense modal
     listContainer.querySelectorAll('.rx-dispense-btn').forEach(btn => {
       btn.onclick = () => {
         const id = btn.dataset.id;
-        const p = allPrescriptions.find(x => x.id === id);
-        openDispenseModal(id, btn.dataset.serial, btn.dataset.patient, p?.meds || []);
+        const serial = btn.dataset.serial;
+        const patientName = btn.dataset.patient;
+        openModal(`Dispense Prescription #${String(serial).padStart(4, '0')} — ${escapeHtml(patientName)}`, `
+          <div style="margin-bottom:0.75rem;">
+            <p>Confirm fulfillment and dispensing of prescribed medications for <strong>${escapeHtml(patientName)}</strong>.</p>
+          </div>
+          <div class="field" style="margin-bottom:0.75rem;">
+            <label class="label">Dispensed By (Pharmacist / Clinician Name):</label>
+            <input class="input" id="modal-disp-by" value="Pharmacy Dispensary" />
+          </div>
+          <div class="field" style="margin-bottom:1rem;">
+            <label class="label">Dispensing Notes / Lot Numbers (Optional):</label>
+            <input class="input" id="modal-disp-notes" placeholder="e.g. Dispensed generic equivalents as per formulary" />
+          </div>
+          <div style="display:flex;justify-content:flex-end;gap:0.5rem;">
+            <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+            <button class="btn btn-primary" id="modal-confirm-dispense">✅ Confirm &amp; Dispense</button>
+          </div>
+        `);
+
+        const body = document.getElementById('modal-body');
+        if (body) {
+          body.querySelector('#modal-confirm-dispense').onclick = async () => {
+            const b = body.querySelector('#modal-confirm-dispense');
+            b.disabled = true;
+            b.textContent = "Dispensing...";
+            const by = body.querySelector('#modal-disp-by').value.trim();
+            const notes = body.querySelector('#modal-disp-notes').value.trim();
+            try {
+              await api.dispenseRxPadPrescription(id, notes, by);
+              closeModal();
+              showAlert(`Prescription #${String(serial).padStart(4, '0')} successfully dispensed!`, "ok");
+              logAudit("Dispense", "C", {
+                patient: patientName,
+                entity: "MedicationDispense",
+                details: `Dispensed Rx #${serial} for ${patientName} by ${by}`
+              });
+              await renderQueueList();
+            } catch (err) {
+              showAlert("Dispense failed: " + err.message, "err");
+              b.disabled = false;
+              b.textContent = "✅ Confirm & Dispense";
+            }
+          };
+        }
       };
     });
   }
-
-  function openDispenseModal(id, serial, patientName, meds) {
-    openModal(`Dispense Prescription #${String(serial).padStart(4, '0')} — ${escapeHtml(patientName)}`, `
-      <div class="card" style="margin-bottom:1rem;background:var(--color-bg);">
-        <p><strong>Confirm Medication Dispense for:</strong> ${escapeHtml(patientName)}</p>
-        <p class="meta">Filling this prescription will mark all corresponding FHIR MedicationRequests as completed and create immutable MedicationDispense records in clinic.db.</p>
-        <div style="margin-top:0.5rem;">
-          <strong>Medications to be dispensed:</strong>
-          <ul style="padding-left:1.25rem;margin-top:0.25rem;">
-            ${(meds || []).map(m => `<li><strong>${escapeHtml(m.drug)}</strong> &bull; ${escapeHtml(m.dose || '')} &bull; ${escapeHtml(m.freq || '')} ${m.dur ? '('+escapeHtml(m.dur)+')' : ''}</li>`).join('')}
-          </ul>
-        </div>
-      </div>
-
-      <label class="label">Dispensed By / Pharmacist</label>
-      <input class="input" id="modal-disp-by" value="${escapeHtml(cfg.sessionUser || prescriberProfile.clinician_name)}" />
-
-      <label class="label">Dispensing Notes / Lot &amp; Batch Numbers (Optional)</label>
-      <textarea class="input" id="modal-disp-notes" placeholder="e.g. Verified contraindications. Batch #LOT-2026-A1 dispensed. Patient counseled on administration with meals." style="height:70px;"></textarea>
-
-      <div style="display:flex;gap:0.5rem;justify-content:flex-end;margin-top:1.25rem;">
-        <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-        <button class="btn btn-primary" id="modal-confirm-dispense">✅ Confirm &amp; Dispense</button>
-      </div>`,
-      (body) => {
-        body.querySelector('#modal-confirm-dispense').onclick = async () => {
-          const btn = body.querySelector('#modal-confirm-dispense');
-          btn.disabled = true;
-          btn.textContent = "Dispensing...";
-          const by = body.querySelector('#modal-disp-by').value.trim();
-          const notes = body.querySelector('#modal-disp-notes').value.trim();
-          try {
-            await api.dispenseRxPadPrescription(id, notes, by);
-            closeModal();
-            showAlert(`Prescription #${String(serial).padStart(4, '0')} successfully dispensed!`, "ok");
-            logAudit("Dispense", "C", {
-              patient: patientName,
-              entity: "MedicationDispense",
-              details: `Dispensed Rx #${serial} for ${patientName} by ${by}`
-            });
-            await renderQueueList();
-          } catch (err) {
-            showAlert("Dispense failed: " + err.message, "err");
-            btn.disabled = false;
-            btn.textContent = "✅ Confirm & Dispense";
-          }
-        };
-      }
-    );
-  }
-
-  renderView();
 
   // Real-time synchronization with clinic.db
   let sse = null;
@@ -5289,7 +6368,6 @@ views.rxpad = async (params = {}) => {
     }
   }
 
-  // Auto clean-up when navigating away from #rxpad
   const hashListener = () => {
     if (!window.location.hash.startsWith("#rxpad")) {
       stopLiveSync();
@@ -5303,32 +6381,20 @@ views.rxpad = async (params = {}) => {
     sse.onmessage = () => {
       if (currentTab === "queue") renderQueueList();
       api.getNextRxPadSerial().then(s => {
-        if (s && s.nextSerial && $("#rxpad-next-badge")) {
-          nextSerial = s.nextSerial;
-          $("#rxpad-next-badge").textContent = `#${String(s.nextSerial).padStart(4, '0')}`;
+        const sNum = (s && (s.nextSerial || s.next_serial || parseInt(s.formatted, 10)));
+        if (sNum && $("#rxpad-next-badge")) {
+          nextSerial = sNum;
+          $("#rxpad-next-badge").textContent = `#${String(sNum).padStart(4, '0')}`;
         }
       }).catch(() => {});
     };
-  } catch (err) {
-    console.warn("SSE connection error:", err);
-  }
+  } catch {}
 
-  // Active polling fallback (every 4 seconds)
-  pollTimer = setInterval(async () => {
-    if (!window.location.hash.startsWith("#rxpad") && window.location.hash !== "") {
-      stopLiveSync();
-      return;
-    }
-    try {
-      const s = await api.getNextRxPadSerial();
-      if (s && s.nextSerial && s.nextSerial !== nextSerial) {
-        nextSerial = s.nextSerial;
-        if ($("#rxpad-next-badge")) $("#rxpad-next-badge").textContent = `#${String(nextSerial).padStart(4, '0')}`;
-        if (currentTab === "queue") await renderQueueList();
-      }
-    } catch {}
-  }, 4000);
+  pollTimer = setInterval(() => {
+    if (currentTab === "queue") renderQueueList();
+  }, 10000);
 };
+
 
 
 /* ---------- INPATIENT REGISTER (Senior Resident Ward Census & Bed List) ---------- */
@@ -5341,54 +6407,6 @@ views.inpatientRegister = async () => {
     censusData = await api.getInpatientCensus();
   } catch (err) {
     censusData = [];
-  }
-
-  // Fallback seed if empty
-  if (!censusData.length) {
-    censusData = [
-      {
-        id: "bed-101",
-        bed_number: "Bed 101",
-        ward: "Male Medical Ward",
-        patient_id: "pat-001",
-        patient_name: "Ramesh Sharma",
-        admission_date: "2026-11-10",
-        diagnosis: "Community Acquired Pneumonia (CURB-65: 1)",
-        news2_score: 3,
-        acuity: "Stable",
-        senior_resident_notes: "Afebrile for 24h. Complete 5-day course of IV Ceftriaxone. Repeat CXR before planned discharge tomorrow.",
-        attending_physician: "Dr. Yash Kulkarni",
-        senior_resident: "Dr. Yash Kulkarni (Senior Resident)",
-      },
-      {
-        id: "bed-102",
-        bed_number: "Bed 102",
-        ward: "Male Medical Ward",
-        patient_id: "pat-002",
-        patient_name: "Anita Deshmukh",
-        admission_date: "2026-11-12",
-        diagnosis: "Type 2 DM with Diabetic Foot Ulcer (Wagner Grade 2)",
-        news2_score: 2,
-        acuity: "Guarded",
-        senior_resident_notes: "Daily sterile dressing. Glycemic chart strictly QID. HbA1c 9.2%. Regular insulin sliding scale active.",
-        attending_physician: "Dr. Yash Kulkarni",
-        senior_resident: "Dr. Yash Kulkarni (Senior Resident)",
-      },
-      {
-        id: "bed-icu-01",
-        bed_number: "ICU Bed 1",
-        ward: "Intensive Care Unit",
-        patient_id: "pat-003",
-        patient_name: "Vikram Patil",
-        admission_date: "2026-11-13",
-        diagnosis: "Acute Coronary Syndrome (NSTEMI) &bull; Acute Pulmonary Edema",
-        news2_score: 7,
-        acuity: "Critical",
-        senior_resident_notes: "High-acuity monitoring. BiPAP nocturnal support. Dual antiplatelets & IV furosemide titration. Echo scheduled 09:00.",
-        attending_physician: "Dr. Yash Kulkarni",
-        senior_resident: "Dr. Yash Kulkarni (Senior Resident)",
-      }
-    ];
   }
 
   function render() {
@@ -5438,7 +6456,14 @@ views.inpatientRegister = async () => {
               </tr>
             </thead>
             <tbody>
-              ${censusData.map(b => {
+              ${censusData.length === 0 ? `
+                <tr>
+                  <td colspan="6" style="text-align:center;padding:2.5rem 1rem;color:var(--color-text-muted);">
+                    <div style="font-size:1.05rem;font-weight:600;margin-bottom:0.35rem;">No active inpatients in ward census</div>
+                    <div style="font-size:0.85rem;">Click <strong>➕ Admit Inpatient</strong> to admit a patient to the ward roster.</div>
+                  </td>
+                </tr>
+              ` : censusData.map(b => {
                 let badgeClass = "acuity-stable";
                 if (b.acuity === "Critical" || b.news2_score >= 7) badgeClass = "acuity-critical";
                 else if (b.acuity === "Guarded" || b.news2_score >= 5) badgeClass = "acuity-guarded";
@@ -5455,7 +6480,7 @@ views.inpatientRegister = async () => {
                     </td>
                     <td>
                       <div style="font-size:0.85rem;font-weight:600;line-height:1.4;">${b.diagnosis}</div>
-                      <div class="meta" style="font-size:0.75rem;">Attending: ${escapeHtml(b.attending_physician || 'Dr. Yash Kulkarni')}</div>
+                      ${b.attending_physician ? `<div class="meta" style="font-size:0.75rem;">Attending: ${escapeHtml(b.attending_physician)}</div>` : ''}
                     </td>
                     <td>
                       <span class="acuity-badge ${badgeClass}">
@@ -5614,8 +6639,8 @@ views.inpatientRegister = async () => {
               news2_score: parseInt(body.querySelector('#modal-admit-news2').value, 10) || 0,
               acuity: body.querySelector('#modal-admit-acuity').value,
               senior_resident_notes: body.querySelector('#modal-admit-note').value.trim() || "Admitted. Orders placed.",
-              attending_physician: "Dr. Yash Kulkarni",
-              senior_resident: "Dr. Yash Kulkarni (Senior Resident)",
+              attending_physician: cfg.sessionUser || "",
+              senior_resident: cfg.sessionUser ? `${cfg.sessionUser} (Senior Resident)` : "",
             };
 
             censusData.unshift(newBed);
@@ -5655,51 +6680,19 @@ views.billing = async () => {
   const userRole = cfg.userRole || "billing";
   const isBillingRole = (userRole === "billing");
 
+  let clinicName = "";
+  try {
+    const sysConf = await api.getSystemConfig().catch(() => null);
+    if (sysConf) {
+      clinicName = sysConf.clinic?.name || sysConf.clinic_name || "";
+    }
+  } catch {}
+
   let invoices = [];
   try {
     invoices = await api.getBillingInvoices();
   } catch (err) {
     invoices = [];
-  }
-
-  // Fallback seed if empty
-  if (!invoices.length) {
-    invoices = [
-      {
-        id: "inv-2026-001",
-        invoice_number: "INV-2026-001",
-        date: "2026-11-14",
-        patient_id: "pat-001",
-        patient_name: "Ramesh Sharma",
-        clinical_diagnosis: isBillingRole ? "🔒 [CLINICAL DATA REDACTED - ABAC CONFIDENTIALITY]" : "Acute Bronchitis & Respiratory Infection",
-        items: [
-          { description: "General Consultation (Dr. Yash Kulkarni)", amount: 500 },
-          { description: "Pharmacy Dispense (Amoxicillin + Cough Syrups)", amount: 320 },
-          { description: "Complete Blood Count (CBC)", amount: 250 }
-        ],
-        total_amount: 1070,
-        paid_amount: 1070,
-        status: "paid",
-        payment_method: "UPI / Digital"
-      },
-      {
-        id: "inv-2026-002",
-        invoice_number: "INV-2026-002",
-        date: "2026-11-14",
-        patient_id: "pat-002",
-        patient_name: "Anita Deshmukh",
-        clinical_diagnosis: isBillingRole ? "🔒 [CLINICAL DATA REDACTED - ABAC CONFIDENTIALITY]" : "Type 2 Diabetes Mellitus with Neuropathy",
-        items: [
-          { description: "Specialist Follow-up Consultation", amount: 600 },
-          { description: "Glycemic Profile & HbA1c Panel", amount: 550 },
-          { description: "Pharmacy Dispense (Metformin + Glimepiride)", amount: 480 }
-        ],
-        total_amount: 1630,
-        paid_amount: 0,
-        status: "pending",
-        payment_method: "Unpaid"
-      }
-    ];
   }
 
   function render() {
@@ -5752,9 +6745,16 @@ views.billing = async () => {
               </tr>
             </thead>
             <tbody>
-              ${invoices.map(inv => {
+              ${invoices.length === 0 ? `
+                <tr>
+                  <td colspan="8" style="text-align:center;padding:2.5rem 1rem;color:var(--color-text-muted);">
+                    <div style="font-size:1.05rem;font-weight:600;margin-bottom:0.35rem;">No invoices generated</div>
+                    <div style="font-size:0.85rem;">Click <strong>➕ New Invoice</strong> to create a patient bill or dispense receipt.</div>
+                  </td>
+                </tr>
+              ` : invoices.map(inv => {
                 const isPaid = inv.status === "paid";
-                const isRedacted = inv.clinical_diagnosis.includes("REDACTED");
+                const isRedacted = (inv.clinical_diagnosis || "").includes("REDACTED");
 
                 return `
                   <tr>
@@ -5851,7 +6851,7 @@ views.billing = async () => {
         openModal(`Receipt — ${escapeHtml(inv.invoice_number)}`, `
           <div style="padding:1rem;border:1px dashed var(--color-border);background:var(--color-bg);border-radius:0.4rem;" id="printable-receipt">
             <div style="text-align:center;border-bottom:1px solid var(--color-border);padding-bottom:0.5rem;margin-bottom:0.75rem;">
-              <h3 style="margin:0;">Dr. Yash Kulkarni Clinic</h3>
+              <h3 style="margin:0;">${escapeHtml(clinicName)}</h3>
               <p class="meta" style="margin:0.2rem 0;">Receipt &amp; Payment Acknowledgment</p>
               <p style="font-family:monospace;font-size:0.8rem;margin:0;">${escapeHtml(inv.invoice_number)} &bull; ${escapeHtml(inv.date)}</p>
             </div>
@@ -6601,19 +7601,19 @@ views.settings = () => {
         <p class="meta" style="margin:0.25rem 0 0.75rem;">Configures clinician credentials, letterhead signature, and legal prescription rights.</p>
         
         <label class="label">Clinician Full Name</label>
-        <input class="input" id="set-prescriber-name" value="Dr. Yash Kulkarni" />
+        <input class="input" id="set-prescriber-name" value="" placeholder="e.g. Dr. Jane Doe" />
 
         <label class="label">Medical Registration / License No.</label>
-        <input class="input" id="set-prescriber-reg" value="MMC-20260608539" />
+        <input class="input" id="set-prescriber-reg" value="" placeholder="e.g. State Medical Council Reg No." />
 
         <label class="label">Qualifications &amp; Degrees</label>
-        <input class="input" id="set-prescriber-qual" value="MBBS, MD (Medicine)" />
+        <input class="input" id="set-prescriber-qual" value="" placeholder="e.g. MBBS, MD" />
 
         <label class="label">Clinical Department</label>
-        <input class="input" id="set-prescriber-dept" value="General Medicine" />
+        <input class="input" id="set-prescriber-dept" value="" placeholder="Leave blank to hide" />
 
         <label class="label">Digital Signature Text / Stamp</label>
-        <input class="input" id="set-prescriber-sig" value="Dr. Yash Kulkarni, MBBS" />
+        <input class="input" id="set-prescriber-sig" value="" placeholder="e.g. Dr. Jane Doe, MBBS, MD" />
 
         <div style="margin-top:0.6rem;padding:0.5rem;background:var(--color-bg);border-radius:0.35rem;border:1px solid var(--color-border);">
           <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-weight:600;font-size:0.85rem;">
@@ -6634,22 +7634,22 @@ views.settings = () => {
         <p class="meta" style="margin:0.2rem 0 0.6rem;">Displayed on printed prescriptions, receipts, and clinical reports.</p>
 
         <label class="label">Clinic / Hospital Name</label>
-        <input class="input" id="set-clinic-name" value="Dr. Yash Kulkarni Clinic" />
+        <input class="input" id="set-clinic-name" value="" placeholder="e.g. City Health Clinic" />
 
         <label class="label">Subtitle / Practice Focus</label>
-        <input class="input" id="set-clinic-sub" value="Comprehensive Clinical Care & Family Practice" />
+        <input class="input" id="set-clinic-sub" value="" placeholder="e.g. Internal Medicine &amp; Primary Care" />
 
         <label class="label">Address Line</label>
-        <input class="input" id="set-clinic-addr" value="Clinic Suite 4B, Health Hub" />
+        <input class="input" id="set-clinic-addr" value="" placeholder="e.g. 123 Healthcare Blvd, Suite 100" />
 
         <div class="row" style="margin:0.25rem 0 0;">
           <div class="col" style="padding-left:0;">
             <label class="label">Phone / WhatsApp</label>
-            <input class="input" id="set-clinic-phone" value="+91 98765 43210" />
+            <input class="input" id="set-clinic-phone" value="" placeholder="e.g. +1 (555) 012-3456" />
           </div>
           <div class="col" style="padding-right:0;">
             <label class="label">Email Address</label>
-            <input class="input" id="set-clinic-email" value="clinic@newloka.local" />
+            <input class="input" id="set-clinic-email" value="" placeholder="e.g. info@clinic.org" />
           </div>
         </div>
 
@@ -6811,22 +7811,23 @@ views.settings = () => {
   // Load Prescriber Profile & Clinic Config in Settings
   api.getPrescriberProfile().then(prof => {
     if (prof) {
-      if ($("#set-prescriber-name")) $("#set-prescriber-name").value = prof.clinician_name || "Dr. Yash Kulkarni";
-      if ($("#set-prescriber-reg")) $("#set-prescriber-reg").value = prof.registration_no || "MMC-20260608539";
-      if ($("#set-prescriber-qual")) $("#set-prescriber-qual").value = prof.qualifications || "MBBS, MD (Medicine)";
-      if ($("#set-prescriber-dept")) $("#set-prescriber-dept").value = prof.department || "General Medicine";
-      if ($("#set-prescriber-sig")) $("#set-prescriber-sig").value = prof.signature || "Dr. Yash Kulkarni, MBBS";
+      if ($("#set-prescriber-name")) $("#set-prescriber-name").value = prof.clinician_name || prof.clinicianName || "";
+      if ($("#set-prescriber-reg")) $("#set-prescriber-reg").value = prof.registration_no || prof.regNo || "";
+      if ($("#set-prescriber-qual")) $("#set-prescriber-qual").value = prof.qualifications || "";
+      if ($("#set-prescriber-dept")) $("#set-prescriber-dept").value = prof.department || "";
+      if ($("#set-prescriber-sig")) $("#set-prescriber-sig").value = prof.signature || "";
       if ($("#set-prescriber-legal")) $("#set-prescriber-legal").checked = (prof.is_legal_prescriber !== false);
     }
   }).catch(() => {});
 
   api.getSystemConfig().then(sysConf => {
     if (sysConf) {
-      if ($("#set-clinic-name")) $("#set-clinic-name").value = sysConf.clinic_name || "Dr. Yash Kulkarni Clinic";
-      if ($("#set-clinic-sub")) $("#set-clinic-sub").value = sysConf.clinic_subtitle || "Comprehensive Clinical Care & Family Practice";
-      if ($("#set-clinic-addr")) $("#set-clinic-addr").value = sysConf.address || "Clinic Suite 4B, Health Hub";
-      if ($("#set-clinic-phone")) $("#set-clinic-phone").value = sysConf.phone || "+91 98765 43210";
-      if ($("#set-clinic-email")) $("#set-clinic-email").value = sysConf.email || "clinic@newloka.local";
+      const c = sysConf.clinic || sysConf;
+      if ($("#set-clinic-name")) $("#set-clinic-name").value = c.name || c.clinic_name || "";
+      if ($("#set-clinic-sub")) $("#set-clinic-sub").value = c.subtitle !== undefined ? c.subtitle : (c.clinic_subtitle || "");
+      if ($("#set-clinic-addr")) $("#set-clinic-addr").value = c.address || "";
+      if ($("#set-clinic-phone")) $("#set-clinic-phone").value = c.phone || "";
+      if ($("#set-clinic-email")) $("#set-clinic-email").value = c.email || "";
     }
   }).catch(() => {});
 
@@ -6838,11 +7839,11 @@ views.settings = () => {
   if (savePrescBtn) {
     savePrescBtn.onclick = async () => {
       const p = {
-        clinician_name: $("#set-prescriber-name").value.trim() || "Dr. Yash Kulkarni",
-        registration_no: $("#set-prescriber-reg").value.trim() || "MMC-20260608539",
-        qualifications: $("#set-prescriber-qual").value.trim() || "MBBS, MD (Medicine)",
-        department: $("#set-prescriber-dept").value.trim() || "General Medicine",
-        signature: $("#set-prescriber-sig").value.trim() || "Dr. Yash Kulkarni, MBBS",
+        clinician_name: $("#set-prescriber-name").value.trim(),
+        registration_no: $("#set-prescriber-reg").value.trim(),
+        qualifications: $("#set-prescriber-qual").value.trim(),
+        department: $("#set-prescriber-dept").value.trim(),
+        signature: $("#set-prescriber-sig").value.trim(),
         is_legal_prescriber: $("#set-prescriber-legal").checked,
       };
       try {
@@ -8317,10 +9318,32 @@ views.federation = async () => {
 
 
 /* ---------- ROUTING & BOOTSTRAP ---------- */
+function parseHash(hashStr) {
+  const clean = (hashStr || "").replace(/^#/, "");
+  const [pathPart, queryPart] = clean.split("?");
+  const segments = (pathPart || "").split("/").filter(Boolean);
+  const target = segments[0] || "";
+  const args = {};
+  if (segments[1]) args.id = segments[1];
+  if (queryPart) {
+    const searchParams = new URLSearchParams(queryPart);
+    for (const [k, v] of searchParams.entries()) {
+      args[k] = v;
+    }
+  }
+  return { target, args };
+}
+
 function route(viewName, args = {}) {
   const fn = views[viewName];
   if (!fn) return route("dashboard");
-  window.location.hash = viewName + (args.id ? "/" + args.id : "");
+  let hash = viewName;
+  if (args.id) {
+    hash += "/" + encodeURIComponent(args.id);
+  } else if (args.patientId || args.patient_id) {
+    hash += "?patientId=" + encodeURIComponent(args.patientId || args.patient_id);
+  }
+  window.location.hash = hash;
   fn(args);
 }
 
@@ -8336,13 +9359,13 @@ function bootstrap() {
     views.login();
   } else {
     $("#app-header").classList.remove("hidden");
-    const hashParts = window.location.hash.replace("#","").split("/");
-    let target = hashParts[0];
-    if (!target) {
+    const { target, args } = parseHash(window.location.hash);
+    let viewTarget = target;
+    if (!viewTarget) {
       const role = cfg.userRole || "doctor";
-      target = cfg.userLandingView || cfg.roleLandingViews?.[role] || cfg.defaultLandingView || "rxpad";
+      viewTarget = cfg.userLandingView || cfg.roleLandingViews?.[role] || cfg.defaultLandingView || "rxpad";
     }
-    route(target, hashParts[1] ? { id: hashParts[1] } : {});
+    route(viewTarget, args);
   }
 }
 
@@ -8371,14 +9394,17 @@ document.addEventListener("keydown", (e) => {
 });
 
 window.addEventListener("hashchange", () => {
-  const hashParts = window.location.hash.replace("#","").split("/");
-  let target = hashParts[0];
-  if (!target) {
+  const { target, args } = parseHash(window.location.hash);
+  let viewTarget = target;
+  if (!viewTarget) {
     const role = cfg.userRole || "doctor";
-    target = cfg.userLandingView || cfg.roleLandingViews?.[role] || cfg.defaultLandingView || "rxpad";
+    viewTarget = cfg.userLandingView || cfg.roleLandingViews?.[role] || cfg.defaultLandingView || "rxpad";
   }
-  if (views[target]) { views[target](hashParts[1] ? { id: hashParts[1] } : {}); }
-  else { route("dashboard"); }
+  if (views[viewTarget]) {
+    views[viewTarget](args);
+  } else {
+    route("dashboard");
+  }
 });
 
 window.views = views;

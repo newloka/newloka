@@ -85,13 +85,14 @@ cargo test --test integration_tests
 # With output
 cargo test -- --nocapture
 
-## Code Style
+## Code & Architectural Style
 
-- Follow Rust API Guidelines
-- All public functions documented with rustdoc
-- Error types use thiserror derive macros
-- Async functions use tokio runtime
-- Tests use in-memory SQLite to avoid disk state
+See the definitive and comprehensive **[New Loka Code & Architectural Style Guide](file:///d:/GitRepos/newloka/docs/STYLE_GUIDE.md)** for our complete engineering standards, including:
+- **WATER Pattern Management Strategy:** WET on 1 and 2, DRY on 3+ to prevent both premature abstraction and boilerplate rot.
+- **Pure Functions First:** Clinical calculations, safety checks, scoring algorithms, and data transformations are strictly pure functions with zero side-effects.
+- **Rust Systems Engineering:** High-assurance domain modeling, `thiserror`/`anyhow` error boundaries, zero-cost embedded indexes, and async Tokio hygiene.
+- **Web & UX Standards:** 100% air-gapped zero-CDN vanilla ES6 SPA, 260px Epic Storyboard rail, and the 3-Tap Invariant for clinical safety.
+- **HL7 FHIR R4 & CPOE:** 5-stage order lifecycle, Indian Pharmacopoeia (IP 2022) drug safety shield, and non-dangerous merge rules.
 
 ## Contributing
 

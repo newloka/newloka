@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "name": "New Loka Knowledge Graph",
   "domain": "Healthcare Systems Engineering & Clinical Data Sovereignty",
-  "updated_at": "2026-11-14",
+  "updated_at": "2026-11-16",
   "nodes": [
     {
       "id": "philosophy-and-principles",
@@ -10,7 +10,7 @@
       "label": "System Philosophy & Foundational Axioms",
       "layer": "Layer 0: Ontological",
       "epistemic_status": "SHIPPED",
-      "summary": "Platform-agnostic core, local-first, CRDT sync, single core, adaptive engineering (ideological debt avoidance)"
+      "summary": "Platform-agnostic core, local-first, CRDT sync, single core, adaptive engineering, style guide & WATER pattern management"
     },
     {
       "id": "deployment-tiers",
@@ -53,6 +53,14 @@
       "summary": "Tamper-evident append-only ledger, Ed25519 cryptographic signing, human review mandatory, HIPAA/DISHA/GDPR"
     },
     {
+      "id": "pharmacopoeia-and-order-sets",
+      "file": "pharmacopoeia-and-order-sets.md",
+      "label": "Indian Pharmacopoeia & Standardized Clinical Order Sets",
+      "layer": "Layer 1: Structural",
+      "epistemic_status": "SHIPPED",
+      "summary": "Indian Pharmacopoeia (IP 2022) / NFI / NLEM embedded index, brand auto-resolution, 10 evidence order sets, allergy/NSAID shield"
+    },
+    {
       "id": "cpoe-and-diagnostics",
       "file": "cpoe-and-diagnostics.md",
       "label": "CPOE & Diagnostics",
@@ -66,7 +74,7 @@
       "label": "eRx Pad Pro & Formulary",
       "layer": "Layer 2: Operational",
       "epistemic_status": "SHIPPED",
-      "summary": "Native A4 prescription pad, 61k+ drug formulary, digital signature setup, offline sync"
+      "summary": "Full-fidelity embedded eRx Pad Pro, authentic logo & signature preservation, 61k+ formulary, offline sync"
     },
     {
       "id": "server-and-api",
@@ -82,7 +90,7 @@
       "label": "Web Clinical Interface",
       "layer": "Layer 2: Operational",
       "epistemic_status": "SHIPPED",
-      "summary": "Zero-dependency ES6 vanilla SPA, 35 clinical views (T3/T4 modules), Epic Storyboard rail, PRESET_REGISTRY"
+      "summary": "Zero-dependency ES6 vanilla SPA, 35 clinical views (T3/T4 modules), Epic Storyboard rail, PRESET_REGISTRY, full FHIR bedside bridges"
     },
     {
       "id": "cli-tooling",
@@ -122,7 +130,7 @@
       "label": "Amethyst Sovereign Agent",
       "layer": "Layer 5: Sovereign Agentics",
       "epistemic_status": "ACTIVE",
-      "summary": "Sovereign systems engineer & architect, Clinical Invariant Doctrine, memory/skill self-evolution loop"
+      "summary": "Senior architect & systems engineer, Clinical Invariant Doctrine, WATER pattern management, memory/skill self-evolution loop"
     }
   ],
   "edges": [
@@ -137,6 +145,12 @@
       "relation": "orchestrates",
       "target": "server-and-api.md",
       "description": "Amethyst plans, iterates, and compiles the Axum server architecture"
+    },
+    {
+      "source": "amethyst-agent.md",
+      "relation": "orchestrates",
+      "target": "pharmacopoeia-and-order-sets.md",
+      "description": "Amethyst curates the IP 2022 monographs, order sets, and clinical safety shield"
     },
     {
       "source": "amethyst-agent.md",
@@ -265,6 +279,24 @@
       "description": "Prescriptions translate into FHIR MedicationRequest and Dispense"
     },
     {
+      "source": "erx-pad-pro.md",
+      "relation": "integrates",
+      "target": "pharmacopoeia-and-order-sets.md",
+      "description": "Prescribing pad queries pharmacopoeia database for brands, routes, strengths, and regulatory schedules"
+    },
+    {
+      "source": "pharmacopoeia-and-order-sets.md",
+      "relation": "implements",
+      "target": "fhir-clinical-models.md",
+      "description": "Pharmacopoeia entries and order sets map to FHIR MedicationRequest and PlanDefinition"
+    },
+    {
+      "source": "server-and-api.md",
+      "relation": "serves",
+      "target": "pharmacopoeia-and-order-sets.md",
+      "description": "Axum routes /api/pharmacopoeia/* queries, safety checks, and monograph retrieval"
+    },
+    {
       "source": "web-clinical-spa.md",
       "relation": "implements",
       "target": "deployment-tiers.md",
@@ -274,7 +306,13 @@
       "source": "web-clinical-spa.md",
       "relation": "integrates",
       "target": "erx-pad-pro.md",
-      "description": "Embedded prescription pad view inside clinical navigation"
+      "description": "Native and embedded prescription pad views inside clinical navigation"
+    },
+    {
+      "source": "web-clinical-spa.md",
+      "relation": "integrates",
+      "target": "pharmacopoeia-and-order-sets.md",
+      "description": "Clinical CPOE orders and prescription pad leverage pharmacopoeia autocomplete and safety shield"
     },
     {
       "source": "self-updater-and-releases.md",

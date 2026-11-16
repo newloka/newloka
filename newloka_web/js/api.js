@@ -471,6 +471,39 @@ export const deleteMedicationStatement   = medStmtApi.remove;
 
 /* Local helpers for filtering / sorting */
 
+/**
+ * Retrieve all patients across clinic database and local storage.
+ * Normalized to both FHIR and lightweight clinic formats.
+ */
+export async function getPatients() {
+    try {
+        const rxPatients = await searchRxPadPatients('');
+        if (Array.isArray(rxPatients) && rxPatients.length) {
+            return rxPatients.map(p => ({
+                id: p.id,
+                name: typeof p.name === 'string' ? [{ text: p.name }] : (p.name || [{ text: 'Unnamed' }]),
+                displayName: typeof p.name === 'string' ? p.name : (p.name?.[0]?.text || 'Unnamed'),
+                gender: (p.age_sex || '').split('/')[1]?.trim() || '',
+                birthDate: '',
+                telecom: p.contact ? [{ value: p.contact }] : [],
+                contact: p.contact || '',
+                age_sex: p.age_sex || ''
+            }));
+        }
+    } catch {}
+    try {
+        const bundle = await searchPatients();
+        if (bundle && bundle.entry && bundle.entry.length) {
+            return bundle.entry.map(e => e.resource).filter(Boolean);
+        }
+    } catch {}
+    try {
+        return await getLocalPatients();
+    } catch {
+        return [];
+    }
+}
+
 export async function getLocalPatients() {
     return dbGetAll('patients');
 }
@@ -624,7 +657,13 @@ export async function getNextRxPadSerial() {
     if (!res.ok) {
         throw new Error(`Failed to get next serial (${res.status})`);
     }
-    return res.json();
+    const data = await res.json();
+    const num = data.nextSerial || data.next_serial || parseInt(data.formatted, 10) || 1;
+    return {
+        next_serial: num,
+        nextSerial: num,
+        formatted: data.formatted || String(num).padStart(4, '0')
+    };
 }
 
 export async function searchRxPadPatients(q = '') {
@@ -688,6 +727,28 @@ export async function syncRxPadPrescription(payload) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || `Failed to sync prescription (${res.status})`);
     }
+    return res.json();
+}
+
+export async function getRxPadTemplate() {
+    const res = await fetchWithRetry(url('/api/rxpad/template'), {
+        method: 'GET',
+        headers: headers()
+    }, 2, 8000);
+    if (!res.ok) throw new Error(`Failed to fetch RxPad template (${res.status})`);
+    return res.json();
+}
+
+export async function saveRxPadTemplate(template) {
+    const res = await fetchWithRetry(url('/api/rxpad/template'), {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            ...(headers())
+        },
+        body: JSON.stringify(template)
+    }, 1, 15000);
+    if (!res.ok) throw new Error(`Failed to save RxPad template (${res.status})`);
     return res.json();
 }
 
@@ -974,4 +1035,75 @@ export async function verifyConsent(patientId, recipientNodeId, purpose, resourc
     if (!res.ok) throw new Error(`Failed to verify consent (${res.status})`);
     return res.json();
 }
+
+/* ------------------------------------------------------------------ */
+/* Indian Pharmacopoeia & Standardized Order Sets                     */
+/* ------------------------------------------------------------------ */
+
+export async function getPharmacopoeiaInfo() {
+    const res = await fetchWithRetry(url('/api/pharmacopoeia/info'), {
+        method: 'GET',
+        headers: headers()
+    }, 2, 8000);
+    if (!res.ok) throw new Error(`Failed to fetch pharmacopoeia info (${res.status})`);
+    return res.json();
+}
+
+export async function searchPharmacopoeia(q = '', category = null, limit = 25) {
+    let endpoint = `/api/pharmacopoeia/search?q=${encodeURIComponent(q)}&limit=${limit}`;
+    if (category) endpoint += `&category=${encodeURIComponent(category)}`;
+    const res = await fetchWithRetry(url(endpoint), {
+        method: 'GET',
+        headers: headers()
+    }, 2, 8000);
+    if (!res.ok) throw new Error(`Failed to search pharmacopoeia (${res.status})`);
+    return res.json();
+}
+
+export async function getPharmacopoeiaEntry(id) {
+    const res = await fetchWithRetry(url(`/api/pharmacopoeia/entry/${encodeURIComponent(id)}`), {
+        method: 'GET',
+        headers: headers()
+    }, 2, 8000);
+    if (!res.ok) throw new Error(`Failed to fetch pharmacopoeia entry (${res.status})`);
+    return res.json();
+}
+
+export async function getPharmacopoeiaCategories() {
+    const res = await fetchWithRetry(url('/api/pharmacopoeia/categories'), {
+        method: 'GET',
+        headers: headers()
+    }, 2, 8000);
+    if (!res.ok) throw new Error(`Failed to fetch pharmacopoeia categories (${res.status})`);
+    return res.json();
+}
+
+export async function getPharmacopoeiaOrderSets() {
+    const res = await fetchWithRetry(url('/api/pharmacopoeia/order-sets'), {
+        method: 'GET',
+        headers: headers()
+    }, 2, 8000);
+    if (!res.ok) throw new Error(`Failed to fetch pharmacopoeia order sets (${res.status})`);
+    return res.json();
+}
+
+export async function getPharmacopoeiaOrderSet(id) {
+    const res = await fetchWithRetry(url(`/api/pharmacopoeia/order-sets/${encodeURIComponent(id)}`), {
+        method: 'GET',
+        headers: headers()
+    }, 2, 8000);
+    if (!res.ok) throw new Error(`Failed to fetch order set (${res.status})`);
+    return res.json();
+}
+
+export async function checkPharmacopoeiaSafety(drugs = [], allergies = []) {
+    const res = await fetchWithRetry(url('/api/pharmacopoeia/check-safety'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers() },
+        body: JSON.stringify({ drugs, allergies })
+    }, 1, 8000);
+    if (!res.ok) throw new Error(`Failed to check safety (${res.status})`);
+    return res.json();
+}
+
 

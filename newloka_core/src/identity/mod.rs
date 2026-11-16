@@ -328,7 +328,7 @@ impl EnterpriseDirectoryConfig {
             return None;
         }
 
-        // Standard enterprise user parsing: e.g. "dr.kulkarni@hospital.local" or "dr.kulkarni"
+        // Standard enterprise user parsing: e.g. "dr.mercer@hospital.local" or "dr.mercer"
         let clean_user = username.split('@').next().unwrap_or(username);
         let display_name = format!("Dr. {} (AD Enterprise)", clean_user);
 

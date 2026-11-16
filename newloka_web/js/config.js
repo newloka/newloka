@@ -18,7 +18,7 @@ const PRESET_REGISTRY = {
         description: "Comprehensive ambulatory & inpatient clinical suite with native prescription pad, formulary autocomplete, and clinical CPOE.",
         defaultLandingView: "rxpad",
         enabledModules: [
-            'dashboard', 'rxpad', 'patientChart', 'clinicalNotes', 'cpoeOrders',
+            'dashboard', 'rxpad', 'pharmacopoeia', 'patientChart', 'clinicalNotes', 'cpoeOrders',
             'inpatientRegister', 'resultsReview', 'vitalsFlowsheet', 'documents',
             'appointmentSchedule', 'patients', 'conditions', 'medications', 'procedures', 'alerts'
         ],
@@ -36,7 +36,7 @@ const PRESET_REGISTRY = {
         defaultLandingView: "inpatientRegister",
         enabledModules: [
             'inpatientRegister', 'patientChart', 'clinicalNotes', 'cpoeOrders',
-            'rxpad', 'vitalsFlowsheet', 'resultsReview', 'handoffSbar', 'whiteboard',
+            'rxpad', 'pharmacopoeia', 'vitalsFlowsheet', 'resultsReview', 'handoffSbar', 'whiteboard',
             'mar', 'alerts', 'patients', 'conditions', 'procedures'
         ],
         abacRules: { canPrescribe: true, clinicalNotesAccess: "full", billingAccess: "none", redactDiagnoses: false },
@@ -53,7 +53,7 @@ const PRESET_REGISTRY = {
         defaultLandingView: "inpatientRegister",
         enabledModules: [
             'inpatientRegister', 'patientChart', 'clinicalNotes', 'cpoeOrders',
-            'rxpad', 'vitalsFlowsheet', 'resultsReview', 'mar', 'alerts', 'patients'
+            'rxpad', 'pharmacopoeia', 'vitalsFlowsheet', 'resultsReview', 'mar', 'alerts', 'patients'
         ],
         abacRules: { canPrescribe: true, clinicalNotesAccess: "full", billingAccess: "none", redactDiagnoses: false },
         pipelines: ['/api/inpatient/census', '/api/rxpad/prescriptions'],
@@ -68,7 +68,7 @@ const PRESET_REGISTRY = {
         description: "Supervised ward orders, vitals tracking, draft progress notes, and routine lab requisitions with supervising doctor tagged.",
         defaultLandingView: "inpatientRegister",
         enabledModules: [
-            'inpatientRegister', 'patientChart', 'clinicalNotes', 'vitalsFlowsheet',
+            'inpatientRegister', 'patientChart', 'clinicalNotes', 'pharmacopoeia', 'vitalsFlowsheet',
             'resultsReview', 'patients', 'alerts'
         ],
         abacRules: { canPrescribe: false, clinicalNotesAccess: "draft", billingAccess: "none", redactDiagnoses: false },
@@ -84,7 +84,7 @@ const PRESET_REGISTRY = {
         description: "Autonomous single-practitioner workflow: outpatient appointments, native prescription pad with printed branding, and instant cashier billing.",
         defaultLandingView: "rxpad",
         enabledModules: [
-            'rxpad', 'patients', 'billing', 'appointmentSchedule', 'clinicalNotes',
+            'rxpad', 'pharmacopoeia', 'patients', 'billing', 'appointmentSchedule', 'clinicalNotes',
             'cpoeOrders', 'drugInteraction', 'patientChart', 'documents', 'settings'
         ],
         abacRules: { canPrescribe: true, clinicalNotesAccess: "full", billingAccess: "full", redactDiagnoses: false },
@@ -100,7 +100,7 @@ const PRESET_REGISTRY = {
         description: "Department command center with live activity metrics, critical stockout alerts, inpatient census overview, and audit explorer.",
         defaultLandingView: "deptSummary",
         enabledModules: [
-            'deptSummary', 'inpatientRegister', 'rxpad', 'patientChart', 'clinicalNotes',
+            'deptSummary', 'inpatientRegister', 'rxpad', 'pharmacopoeia', 'patientChart', 'clinicalNotes',
             'dashboard', 'audit', 'appointmentSchedule', 'settings'
         ],
         abacRules: { canPrescribe: true, clinicalNotesAccess: "full", billingAccess: "summary", redactDiagnoses: false },
@@ -116,7 +116,7 @@ const PRESET_REGISTRY = {
         description: "Surgical procedure notes, pre-op safety checklists, intra-operative documentation, implant logs, and post-op order sets.",
         defaultLandingView: "procedures",
         enabledModules: [
-            'procedures', 'patientChart', 'clinicalNotes', 'cpoeOrders', 'rxpad',
+            'procedures', 'patientChart', 'clinicalNotes', 'cpoeOrders', 'rxpad', 'pharmacopoeia',
             'inpatientRegister', 'resultsReview', 'documents', 'alerts'
         ],
         abacRules: { canPrescribe: true, clinicalNotesAccess: "full", billingAccess: "none", redactDiagnoses: false },
@@ -132,7 +132,7 @@ const PRESET_REGISTRY = {
         description: "Rapid acute care track board, emergency resuscitation orders, high-acuity deterioration flags, and stat diagnostic review.",
         defaultLandingView: "dashboard",
         enabledModules: [
-            'dashboard', 'inpatientRegister', 'patientChart', 'cpoeOrders', 'rxpad',
+            'dashboard', 'inpatientRegister', 'patientChart', 'cpoeOrders', 'rxpad', 'pharmacopoeia',
             'vitalsFlowsheet', 'resultsReview', 'alerts'
         ],
         abacRules: { canPrescribe: true, clinicalNotesAccess: "full", emergencyOverride: true, redactDiagnoses: false },
@@ -215,7 +215,7 @@ const PRESET_REGISTRY = {
         description: "Department command center: flashing alert bar for critical stockouts, dispensing volume telemetry, and formulary curation.",
         defaultLandingView: "deptSummary",
         enabledModules: [
-            'deptSummary', 'rxpad', 'medications', 'drugInteraction', 'patients',
+            'deptSummary', 'rxpad', 'pharmacopoeia', 'medications', 'drugInteraction', 'patients',
             'audit', 'settings'
         ],
         abacRules: { canPrescribe: false, clinicalNotesAccess: "none", billingAccess: "pharmacy_only", redactDiagnoses: true },
@@ -231,7 +231,7 @@ const PRESET_REGISTRY = {
         description: "Outpatient and ward prescription fill queue, drug interaction safety screening, batch/lot tracking, and dispense sign-off.",
         defaultLandingView: "rxpad",
         enabledModules: [
-            'rxpad', 'deptSummary', 'drugInteraction', 'patientChart', 'patients'
+            'rxpad', 'pharmacopoeia', 'deptSummary', 'drugInteraction', 'patientChart', 'patients'
         ],
         abacRules: { canPrescribe: false, clinicalNotesAccess: "none", billingAccess: "none", redactDiagnoses: false },
         pipelines: ['/api/rxpad/prescriptions', '/api/rxpad/formulary'],
@@ -362,6 +362,7 @@ const CLINIC_PROFILES = {
 const ALL_MODULES = [
     { key: 'dashboard', label: 'Clinical Dashboard', category: 'Core' },
     { key: 'rxpad', label: 'Prescription Pad & Dispensing (eRx)', category: 'Pharmacy' },
+    { key: 'pharmacopoeia', label: 'Indian Pharmacopoeia & Order Sets', category: 'Pharmacy' },
     { key: 'inpatientRegister', label: 'Inpatient Register & Ward Census', category: 'Inpatient Ward' },
     { key: 'billing', label: 'Billing, Invoicing & Cashier Desk', category: 'Operations & Finance' },
     { key: 'deptSummary', label: 'Department Activity & Alert Center', category: 'Operations' },
@@ -406,12 +407,12 @@ const DEFAULTS = {
     nodeId: 'solo-clinic-node',
     syncEnabled: false,
     meshEnabled: false,
-    department: 'General Medicine',
+    department: '',
     offlineAuth: 'pin',
     sessionPin: '1234',
     language: 'en',
     emergencyAccess: false,
-    sessionUser: 'Dr. Yash Kulkarni',
+    sessionUser: '',
     sessionUserRole: 'doctor',
     theme: 'newloka',
     customTheme: {},
@@ -437,20 +438,21 @@ const DEFAULTS = {
     },
     userLandingView: '',
     prescriber: {
-        clinicianName: 'Dr. Yash Kulkarni',
-        qualifications: 'MBBS, MD (Medicine)',
-        regNo: 'MMC-20260608539',
-        specialty: 'General & Internal Medicine',
+        clinicianName: '',
+        qualifications: '',
+        regNo: '',
+        specialty: '',
         isLegalPrescriber: true,
-        signatureBase64: 'Dr. Yash Kulkarni, MBBS'
+        signatureBase64: ''
     },
     clinic: {
-        name: 'Dr. Yash Kulkarni Clinic',
-        subtitle: 'Comprehensive Clinical Care & Family Practice',
-        regNo: 'CLI-2026-9901',
-        address: 'Clinic Suite 4B, Health Hub',
-        phone: '+91 98765 43210',
-        email: 'clinic@newloka.local'
+        name: '',
+        subtitle: '',
+        regNo: '',
+        address: '',
+        phone: '',
+        email: '',
+        logoBase64: ''
     }
 };
 
@@ -474,13 +476,13 @@ function reset() { localStorage.removeItem('nl_config'); }
 
 const FEATURES = {
     T0: [
-        'dashboard','rxpad','billing','patients','encounters','observations','conditions','medications',
+        'dashboard','rxpad','pharmacopoeia','billing','patients','encounters','observations','conditions','medications',
         'procedures','ingest','audit','settings','patientChart','clinicalNotes',
         'cpoeOrders','resultsReview','vitalsFlowsheet','alerts','carePlans','familyHistory',
         'immunizations','documents','appointmentSchedule','drugInteraction'
     ],
     T1: [
-        'dashboard','rxpad','inpatientRegister','billing','deptSummary',
+        'dashboard','rxpad','pharmacopoeia','inpatientRegister','billing','deptSummary',
         'patients','encounters','observations','conditions','medications',
         'procedures','ingest','audit','settings','patientChart','clinicalNotes',
         'cpoeOrders','resultsReview','mar','vitalsFlowsheet','alerts','carePlans',
@@ -488,7 +490,7 @@ const FEATURES = {
         'handoffSbar','whiteboard','mesh','sync'
     ],
     T2: [
-        'dashboard','rxpad','inpatientRegister','billing','deptSummary',
+        'dashboard','rxpad','pharmacopoeia','inpatientRegister','billing','deptSummary',
         'patients','encounters','observations','conditions','medications',
         'procedures','ingest','audit','settings','patientChart','clinicalNotes',
         'cpoeOrders','resultsReview','mar','vitalsFlowsheet','alerts','carePlans',
@@ -496,7 +498,7 @@ const FEATURES = {
         'handoffSbar','whiteboard','mesh','sync','server'
     ],
     T3: [
-        'dashboard','rxpad','inpatientRegister','billing','deptSummary',
+        'dashboard','rxpad','pharmacopoeia','inpatientRegister','billing','deptSummary',
         'patients','encounters','observations','conditions','medications',
         'procedures','ingest','audit','settings','patientChart','clinicalNotes',
         'cpoeOrders','resultsReview','mar','vitalsFlowsheet','alerts','carePlans',
@@ -504,7 +506,7 @@ const FEATURES = {
         'handoffSbar','whiteboard','mesh','sync','server','departments','reports'
     ],
     T4: [
-        'dashboard','rxpad','inpatientRegister','billing','deptSummary',
+        'dashboard','rxpad','pharmacopoeia','inpatientRegister','billing','deptSummary',
         'patients','encounters','observations','conditions','medications',
         'procedures','ingest','audit','settings','patientChart','clinicalNotes',
         'cpoeOrders','resultsReview','mar','vitalsFlowsheet','alerts','carePlans',
