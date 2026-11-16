@@ -655,4 +655,41 @@ mod tests {
         // Empty password should fail
         assert!(config.authenticate("dr.sharma@hospital.local", "").is_none());
     }
+
+    #[test]
+    fn test_pure_clinical_scoring_invariants() {
+        use newloka_core::clinical::{
+            calculate_egfr_ckd_epi, calculate_news2, calculate_pediatric_dose, evaluate_dka_risk,
+            AvpuScore, BiologicalSex, ClinicalRiskTier, DkaSeverity,
+        };
+
+        // Strict deterministic NEWS2 calculation
+        let normal = calculate_news2(16, 99, false, 120, 70, AvpuScore::Alert, 36.6);
+        assert_eq!(normal.total_score, 0);
+        assert_eq!(normal.risk_tier, ClinicalRiskTier::Low);
+        assert!(!normal.triggers_stat_alert);
+
+        let acute = calculate_news2(25, 91, true, 88, 125, AvpuScore::Voice, 39.2);
+        // RR 25 (3), SpO2 91 (3), O2 (2), SBP 88 (3), HR 125 (2), AVPU Voice (3), Temp 39.2 (2) = 18
+        assert_eq!(acute.total_score, 18);
+        assert_eq!(acute.risk_tier, ClinicalRiskTier::High);
+        assert!(acute.triggers_stat_alert);
+
+        // eGFR calculations
+        let normal_male = calculate_egfr_ckd_epi(0.9, 40, BiologicalSex::Male).unwrap();
+        assert!(normal_male.egfr_value >= 90.0);
+        assert!(!normal_male.requires_dose_adjustment);
+
+        let renal_failure = calculate_egfr_ckd_epi(4.0, 70, BiologicalSex::Female).unwrap();
+        assert!(renal_failure.egfr_value < 15.0);
+        assert!(renal_failure.requires_dose_adjustment);
+
+        // Pediatric dosing
+        assert_eq!(calculate_pediatric_dose(10.0, 15.0, 500.0), 150.0);
+        assert_eq!(calculate_pediatric_dose(40.0, 15.0, 500.0), 500.0); // capped at 500
+
+        // DKA triage
+        assert_eq!(evaluate_dka_risk(400.0, 6.90, 6.0, true), DkaSeverity::Severe);
+        assert_eq!(evaluate_dka_risk(120.0, 7.40, 24.0, false), DkaSeverity::None);
+    }
 }

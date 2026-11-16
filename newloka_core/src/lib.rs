@@ -6,6 +6,7 @@
 
 pub mod abac;
 pub mod audit;
+pub mod clinical;
 pub mod consent;
 pub mod cpoe;
 pub mod crypto;
