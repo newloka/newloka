@@ -645,8 +645,10 @@ mod tests {
     fn test_enterprise_directory_ldap_auth() {
         use newloka_core::identity::EnterpriseDirectoryConfig;
 
-        let mut config = EnterpriseDirectoryConfig::default();
-        config.enabled = true;
+        let config = EnterpriseDirectoryConfig {
+            enabled: true,
+            ..Default::default()
+        };
 
         // Valid doctor authentication
         let auth_doc = config
