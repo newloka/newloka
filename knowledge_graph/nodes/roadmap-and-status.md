@@ -7,7 +7,7 @@
 - **Domain**: Delivery Lifecycle, Phase Tracking & Milestones
 
 ## Facts
-- Current Version Milestone: New Loka is at v0.2.0, compiling cleanly under Rust 2021 Edition with 71 passing unit, integration, and server tests across all deployment tiers T0–T4 with pure functional core scoring and decoupled router architecture. [valid_from: 2026-11-16, recorded: 2026-11-16, source: Cargo.toml & workspace cargo test run]
+- Current Version Milestone: New Loka is at v0.2.0, compiling cleanly under Rust 2021 Edition with 71 passing unit, integration, and server tests across 7 decoupled workspace crates (core, clinical, pharmacopoeia, storage, demo, server, cli). [valid_from: 2026-11-17, recorded: 2026-11-17, source: Cargo.toml & workspace cargo test run]
 - Roadmap Phase 1 (Shipped): Core Offline Clinician Workflow providing encrypted local storage, FHIR R4 resource model, patient CRUD, encounter timelines, offline auth, and signed audit logs. [valid_from: 2026-06-11, recorded: 2026-11-13, source: D:\GitRepos\site\team.html]
 - Roadmap Phase 2 (Shipped): Local Sync and Mesh providing LAN peer discovery, delta sync with vector clocks, and automatic conflict detection for clinics operating as a connected mesh. [valid_from: 2026-06-15, recorded: 2026-11-13, source: D:\GitRepos\site\team.html]
 - Roadmap Phase 3 (Shipped): Institutional Access Control delivering ABAC policy engine, department silos for Radiology, Biochemistry, Pathology, and Microbiology, emergency override workflows, and LDAP hooks. [valid_from: 2026-06-20, recorded: 2026-11-13, source: D:\GitRepos\site\team.html]

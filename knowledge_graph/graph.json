@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "name": "New Loka Knowledge Graph",
   "domain": "Healthcare Systems Engineering & Clinical Data Sovereignty",
-  "updated_at": "2026-11-16",
+  "updated_at": "2026-11-17",
   "nodes": [
     {
       "id": "philosophy-and-principles",
@@ -10,7 +10,7 @@
       "label": "System Philosophy & Foundational Axioms",
       "layer": "Layer 0: Ontological",
       "epistemic_status": "SHIPPED",
-      "summary": "Platform-agnostic core, local-first, CRDT sync, single core, pure functional clinical core, adaptive engineering, style guide & WATER pattern management"
+      "summary": "Platform-agnostic core, local-first, CRDT sync, single core, pure clinical engine (newloka_clinical), style guide & WATER pattern management"
     },
     {
       "id": "deployment-tiers",
@@ -34,7 +34,7 @@
       "label": "Storage, CRDT & Crypto",
       "layer": "Layer 1: Structural",
       "epistemic_status": "SHIPPED",
-      "summary": "SQLite engine via SQLx, AES-256-GCM AEAD at rest, DMK/PRK key hierarchy, vector clocks, delta sync"
+      "summary": "Decoupled newloka_storage SQLite engine via SQLx, AES-256-GCM AEAD at rest, DMK/PRK key hierarchy, vector clocks, delta sync"
     },
     {
       "id": "abac-and-identity",
@@ -58,7 +58,7 @@
       "label": "Indian Pharmacopoeia & Standardized Clinical Order Sets",
       "layer": "Layer 1: Structural",
       "epistemic_status": "SHIPPED",
-      "summary": "Indian Pharmacopoeia (IP 2022) / NFI / NLEM embedded index, brand auto-resolution, 10 evidence order sets, allergy/NSAID shield"
+      "summary": "Decoupled newloka_pharmacopoeia IP 2022 embedded index, brand auto-resolution, 10 evidence order sets, allergy/NSAID shield"
     },
     {
       "id": "cpoe-and-diagnostics",
@@ -122,7 +122,7 @@
       "label": "Roadmap & Engineering Telemetry",
       "layer": "Layer 3: Roadmap",
       "epistemic_status": "ACTIVE",
-      "summary": "Current v0.2.0, 71 passing tests, 11-phase roadmap: Phases 1-3, 6, 9 Shipped, living requirements gap doc"
+      "summary": "Current v0.2.0, 71 passing tests across 7 decoupled workspace crates, 11-phase roadmap: Phases 1-3, 6, 9 Shipped"
     },
     {
       "id": "amethyst-agent",

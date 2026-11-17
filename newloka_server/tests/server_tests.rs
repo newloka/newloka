@@ -20,7 +20,7 @@ async fn test_app() -> (axum::Router, Arc<RwLock<newloka_server::AppState>>) {
         key: newloka_demo::DEMO_MASTER_KEY_BYTES,
     };
     let storage =
-        newloka_core::storage::StorageEngine::open(&db_path(), "test-node".to_string(), dmk)
+        newloka_storage::StorageEngine::open(&db_path(), "test-node".to_string(), dmk)
             .await
             .unwrap();
     newloka_server::demo::seed_demo_data(&storage, "test-node")
@@ -38,7 +38,7 @@ async fn test_app() -> (axum::Router, Arc<RwLock<newloka_server::AppState>>) {
 async fn test_app_unseeded() -> (axum::Router, Arc<RwLock<newloka_server::AppState>>) {
     let dmk = newloka_core::crypto::DeviceMasterKey::generate();
     let storage =
-        newloka_core::storage::StorageEngine::open(&db_path(), "test-node".to_string(), dmk)
+        newloka_storage::StorageEngine::open(&db_path(), "test-node".to_string(), dmk)
             .await
             .unwrap();
     let storage = Arc::new(storage);
@@ -172,7 +172,7 @@ async fn test_demo_seed_data() {
         key: newloka_demo::DEMO_MASTER_KEY_BYTES,
     };
     let storage =
-        newloka_core::storage::StorageEngine::open(&db_path(), "test-node".to_string(), dmk)
+        newloka_storage::StorageEngine::open(&db_path(), "test-node".to_string(), dmk)
             .await
             .unwrap();
 

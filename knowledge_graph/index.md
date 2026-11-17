@@ -11,13 +11,13 @@ Every fact carries `[valid_from, recorded, source]`. Contradicted facts move to 
 
 | File | Entity | Layer | Status | Summary | Last updated |
 |---|---|---|---|---|---|
-| philosophy-and-principles.md | System Philosophy | Layer 0: Ontological | SHIPPED | Platform-agnostic core, local-first, CRDT sync, single core, pure functional clinical core, adaptive engineering, style guide & WATER pattern management | 2026-11-16 |
+| philosophy-and-principles.md | System Philosophy | Layer 0: Ontological | SHIPPED | Platform-agnostic core, local-first, CRDT sync, single core, pure clinical engine (newloka_clinical), style guide & WATER pattern management | 2026-11-17 |
 | deployment-tiers.md | Deployment Tiers | Layer 0: Ontological | SHIPPED | T0 (solo clinic) to T4 (federation), 22-role declarative presets, differential privacy mesh | 2026-11-14 |
 | fhir-clinical-models.md | FHIR R4 Clinical Models | Layer 1: Structural | SHIPPED | 23+ FHIR R4 resources including Consent, polymorphic FhirResource wrapper, soft delete, provenance | 2026-11-14 |
-| storage-crdt-crypto.md | Storage, CRDT & Crypto | Layer 1: Structural | SHIPPED | SQLite engine via SQLx, AES-256-GCM AEAD at rest, DMK/PRK key hierarchy, vector clocks, delta sync | 2026-11-13 |
+| storage-crdt-crypto.md | Storage, CRDT & Crypto | Layer 1: Structural | SHIPPED | Decoupled newloka_storage SQLite engine via SQLx, AES-256-GCM AEAD at rest, DMK/PRK key hierarchy, vector clocks, delta sync | 2026-11-17 |
 | abac-and-identity.md | ABAC & Identity | Layer 1: Structural | SHIPPED | Core-enforced ABAC, Role::Billing clinical redaction, legal prescriber check, emergency break-glass | 2026-11-14 |
 | audit-and-safety.md | Audit Engine & Safety | Layer 1: Structural | SHIPPED | Tamper-evident append-only ledger, Ed25519 cryptographic signing, human review mandatory, HIPAA/DISHA/GDPR | 2026-11-13 |
-| pharmacopoeia-and-order-sets.md | Indian Pharmacopoeia & Order Sets | Layer 1: Structural | SHIPPED | Indian Pharmacopoeia (IP 2022) / NFI / NLEM embedded index, brand auto-resolution, 10 evidence order sets, allergy/NSAID shield | 2026-11-15 |
+| pharmacopoeia-and-order-sets.md | Indian Pharmacopoeia & Order Sets | Layer 1: Structural | SHIPPED | Decoupled newloka_pharmacopoeia IP 2022 embedded index, brand auto-resolution, 10 evidence order sets, allergy/NSAID shield | 2026-11-17 |
 | cpoe-and-diagnostics.md | CPOE & Diagnostics | Layer 2: Operational | SHIPPED | 5-stage order lifecycle, Routine/Urgent/Stat priorities, Radiology/Biochem/Path/Micro silos, panic labs | 2026-11-13 |
 | erx-pad-pro.md | eRx Pad Pro & Formulary | Layer 2: Operational | SHIPPED | Native A4 prescription pad, 61k+ drug formulary, digital signature setup, offline sync | 2026-11-16 |
 | server-and-api.md | HTTP Server & API | Layer 2: Operational | SHIPPED | Tokio/Axum 0.7 engine, rust-embed SPA, modular domain routers, FHIR REST + Consent, departments/transfers, federation/research APIs | 2026-11-16 |
@@ -25,7 +25,7 @@ Every fact carries `[valid_from, recorded, source]`. Contradicted facts move to 
 | cli-tooling.md | Command-Line Tooling | Layer 2: Operational | SHIPPED | newloka-cli with Clap v4, 12 command groups (departments, consent, research, federation), direct SQLite | 2026-11-14 |
 | self-updater-and-releases.md | Self-Updater & Releases | Layer 2: Operational | SHIPPED | In-app 1-click update, GitHub Releases polling, atomic rename-and-replace, air-gapped offline package upload | 2026-11-13 |
 | newloka-site.md | Public Web Presence | Layer 4: External | ACTIVE | newloka.org on Firebase Hosting (new-loka), Sage/Taupe brand system, live EMR v0.2.0 UI showcase, docs hub | 2026-11-13 |
-| roadmap-and-status.md | Roadmap & Status | Layer 3: Roadmap | ACTIVE | Current v0.2.0, 71 passing tests, 11-phase roadmap: Phases 1-3, 6, 9 Shipped, living requirements gap doc | 2026-11-16 |
+| roadmap-and-status.md | Roadmap & Status | Layer 3: Roadmap | ACTIVE | Current v0.2.0, 71 passing tests across 7 decoupled workspace crates, 11-phase roadmap: Phases 1-3, 6, 9 Shipped | 2026-11-17 |
 | amethyst-agent.md | Amethyst Sovereign Agent | Layer 5: Sovereign Agentics | ACTIVE | Senior architect & systems engineer, Clinical Invariant Doctrine, WATER pattern management, memory/skill self-evolution loop | 2026-11-16 |
 
 ---

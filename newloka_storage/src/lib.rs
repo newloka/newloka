@@ -1,21 +1,52 @@
-//! CRDT-based encrypted storage
+//! CRDT-based encrypted storage engine for New Loka
 //!
 //! Local-first SQLite storage with CRDT merge support.
-//! All records encrypted at rest with per-record keys wrapped by DMK.
+//! All records are encrypted at rest with per-record keys wrapped by the Device Master Key (DMK).
 
 use chrono::Utc;
-use serde_json;
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
     Pool, Sqlite,
 };
 use std::str::FromStr;
+use thiserror::Error;
+
+use newloka_core::{
+    audit::AuditEntry,
+    crypto::{self, DeviceMasterKey, PatientRecordKey},
+    fhir::FhirResource,
+    identity::{Role, User},
+    sync::{DeltaSyncResponse, SyncRecord},
+    NewLokaError,
+};
+
+#[derive(Error, Debug)]
+pub enum StorageError {
+    #[error("database error: {0}")]
+    Database(#[from] sqlx::Error),
+    #[error("core error: {0}")]
+    Core(#[from] NewLokaError),
+    #[error("serialization error: {0}")]
+    Serialization(#[from] serde_json::Error),
+    #[error("io error: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("storage error: {0}")]
+    Storage(String),
+}
+
+impl From<StorageError> for NewLokaError {
+    fn from(err: StorageError) -> Self {
+        NewLokaError::Storage(err.to_string())
+    }
+}
+
+pub type Result<T> = std::result::Result<T, StorageError>;
 
 /// Storage backend using SQLite with CRDT metadata.
 pub struct StorageEngine {
     pool: Pool<Sqlite>,
     node_id: String,
-    dmk: crate::crypto::DeviceMasterKey,
+    dmk: DeviceMasterKey,
 }
 
 /// Encrypted record row as stored in SQLite.
@@ -53,13 +84,31 @@ pub struct AuditEventRow {
     pub signature: Vec<u8>,
 }
 
+/// User row as stored in SQLite.
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct UserRow {
+    pub id: String,
+    pub username: String,
+    pub display_name: String,
+    pub roles: String,
+    pub department_id: Option<String>,
+    pub team_ids: String,
+    pub lab_affiliations: String,
+    pub active: i64,
+    pub created_at: i64,
+    pub password_hash: String,
+    pub salt: Vec<u8>,
+    pub totp_secret: Option<String>,
+    pub last_login: Option<i64>,
+}
+
 impl StorageEngine {
     /// Open (or create) the SQLite backing store.
     pub async fn open(
         db_path: &str,
         node_id: String,
-        dmk: crate::crypto::DeviceMasterKey,
-    ) -> crate::Result<Self> {
+        dmk: DeviceMasterKey,
+    ) -> Result<Self> {
         let connect_opts = if db_path.contains(":memory:") {
             SqliteConnectOptions::from_str(db_path)?
         } else {
@@ -167,7 +216,7 @@ impl StorageEngine {
     }
 
     /// Check if this is a fresh database.
-    pub async fn is_empty(&self) -> crate::Result<bool> {
+    pub async fn is_empty(&self) -> Result<bool> {
         let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM fhir_resources")
             .fetch_one(&self.pool)
             .await?;
@@ -185,7 +234,7 @@ impl StorageEngine {
     }
 
     /// Compute the next vector clock for `id`, incrementing this node's counter.
-    async fn next_vector_clock(&self, id: &str) -> crate::Result<String> {
+    async fn next_vector_clock(&self, id: &str) -> Result<String> {
         let existing: Option<String> =
             sqlx::query_scalar("SELECT vector_clock FROM fhir_resources WHERE id = ?1")
                 .bind(id)
@@ -215,9 +264,6 @@ impl StorageEngine {
     }
 
     /// Store raw JSON resource (from HTTP layer).
-    ///
-    /// Uses `INSERT OR REPLACE`. On update, preserves the original `created_at`
-    /// and increments the per-node vector clock.
     pub async fn store_json(
         &self,
         resource_type: &str,
@@ -225,13 +271,13 @@ impl StorageEngine {
         json: &serde_json::Value,
         patient_id: Option<String>,
         department_id: Option<String>,
-    ) -> crate::Result<String> {
+    ) -> Result<String> {
         let json_bytes = serde_json::to_vec(json)?;
-        let hash = crate::crypto::hash_resource(&json_bytes);
+        let hash = crypto::hash_resource(&json_bytes);
 
-        let prk = crate::crypto::PatientRecordKey::generate();
+        let prk = PatientRecordKey::generate();
         let (ciphertext, nonce) = prk.encrypt(&json_bytes)?;
-        let (wrapped_prk, wrap_nonce) = crate::crypto::wrap_prk(&self.dmk, &prk)?;
+        let (wrapped_prk, wrap_nonce) = crypto::wrap_prk(&self.dmk, &prk)?;
 
         let mut content = Vec::with_capacity(
             wrapped_prk.len() + wrap_nonce.len() + nonce.len() + ciphertext.len() + 4,
@@ -272,10 +318,10 @@ impl StorageEngine {
     /// Convenience: store a FHIR resource directly.
     pub async fn store(
         &self,
-        resource: &crate::fhir::FhirResource,
+        resource: &FhirResource,
         patient_id: Option<String>,
         department_id: Option<String>,
-    ) -> crate::Result<String> {
+    ) -> Result<String> {
         let json = serde_json::to_value(resource)?;
         self.store_json(
             resource.resource_type(),
@@ -289,19 +335,19 @@ impl StorageEngine {
 
     /// Create an EncryptedRecord from a JSON payload and DMK without storing it.
     pub fn encrypt_record(
-        dmk: &crate::crypto::DeviceMasterKey,
+        dmk: &DeviceMasterKey,
         resource_type: &str,
         id: &str,
         json: &serde_json::Value,
         patient_id: Option<String>,
         department_id: Option<String>,
-    ) -> crate::Result<EncryptedRecord> {
+    ) -> Result<EncryptedRecord> {
         let json_bytes = serde_json::to_vec(json)?;
-        let hash = crate::crypto::hash_resource(&json_bytes);
+        let hash = crypto::hash_resource(&json_bytes);
 
-        let prk = crate::crypto::PatientRecordKey::generate();
+        let prk = PatientRecordKey::generate();
         let (ciphertext, nonce) = prk.encrypt(&json_bytes)?;
-        let (wrapped_prk, wrap_nonce) = crate::crypto::wrap_prk(dmk, &prk)?;
+        let (wrapped_prk, wrap_nonce) = crypto::wrap_prk(dmk, &prk)?;
 
         let mut content = Vec::with_capacity(
             wrapped_prk.len() + wrap_nonce.len() + nonce.len() + ciphertext.len() + 4,
@@ -329,7 +375,7 @@ impl StorageEngine {
     }
 
     /// Store an already-encrypted record directly (e.g. during sync replication or encrypted fixture import).
-    pub async fn store_encrypted_record(&self, record: &EncryptedRecord) -> crate::Result<()> {
+    pub async fn store_encrypted_record(&self, record: &EncryptedRecord) -> Result<()> {
         sqlx::query(
             r#"
             INSERT OR REPLACE INTO fhir_resources
@@ -354,12 +400,12 @@ impl StorageEngine {
     }
 
     /// Expose decryption check for an encrypted record using this engine's DMK.
-    pub async fn decrypt_record(&self, record: &EncryptedRecord) -> crate::Result<serde_json::Value> {
+    pub async fn decrypt_record(&self, record: &EncryptedRecord) -> Result<serde_json::Value> {
         self.decrypt_json(record).await
     }
 
     /// Retrieve decrypted JSON resource.
-    pub async fn get_json(&self, id: &str) -> crate::Result<Option<serde_json::Value>> {
+    pub async fn get_json(&self, id: &str) -> Result<Option<serde_json::Value>> {
         let row: Option<EncryptedRecord> =
             sqlx::query_as("SELECT * FROM fhir_resources WHERE id = ?1 AND deleted = 0")
                 .bind(id)
@@ -374,17 +420,17 @@ impl StorageEngine {
     }
 
     /// Convenience: retrieve and deserialize a FHIR resource.
-    pub async fn get(&self, id: &str) -> crate::Result<Option<crate::fhir::FhirResource>> {
+    pub async fn get(&self, id: &str) -> Result<Option<FhirResource>> {
         match self.get_json(id).await? {
             Some(json) => {
-                let resource: crate::fhir::FhirResource = serde_json::from_value(json)?;
+                let resource: FhirResource = serde_json::from_value(json)?;
                 Ok(Some(resource))
             }
             None => Ok(None),
         }
     }
 
-    async fn decrypt_json(&self, row: &EncryptedRecord) -> crate::Result<serde_json::Value> {
+    async fn decrypt_json(&self, row: &EncryptedRecord) -> Result<serde_json::Value> {
         let content = &row.content;
         let wrapped_len =
             u32::from_be_bytes([content[0], content[1], content[2], content[3]]) as usize;
@@ -396,12 +442,12 @@ impl StorageEngine {
 
         let wrap_nonce_arr: [u8; 12] = wrap_nonce
             .try_into()
-            .map_err(|_| crate::NewLokaError::Crypto("bad wrap nonce".into()))?;
-        let prk = crate::crypto::unwrap_prk(&self.dmk, wrapped_prk, &wrap_nonce_arr)?;
+            .map_err(|_| NewLokaError::Crypto("bad wrap nonce".into()))?;
+        let prk = crypto::unwrap_prk(&self.dmk, wrapped_prk, &wrap_nonce_arr)?;
 
         let nonce_arr: [u8; 12] = nonce
             .try_into()
-            .map_err(|_| crate::NewLokaError::Crypto("bad nonce".into()))?;
+            .map_err(|_| NewLokaError::Crypto("bad nonce".into()))?;
         let plaintext = prk.decrypt(ciphertext, &nonce_arr)?;
         let json: serde_json::Value = serde_json::from_slice(&plaintext)?;
         Ok(json)
@@ -412,7 +458,7 @@ impl StorageEngine {
         &self,
         resource_type: &str,
         patient_id: Option<&str>,
-    ) -> crate::Result<Vec<serde_json::Value>> {
+    ) -> Result<Vec<serde_json::Value>> {
         let rows: Vec<EncryptedRecord> = if let Some(pid) = patient_id {
             sqlx::query_as(
                 "SELECT * FROM fhir_resources WHERE resource_type = ?1 AND patient_id = ?2 AND deleted = 0 ORDER BY modified_at DESC LIMIT 500"
@@ -442,7 +488,7 @@ impl StorageEngine {
         &self,
         resource_type: &str,
         patient_id: Option<&str>,
-    ) -> crate::Result<Vec<crate::fhir::FhirResource>> {
+    ) -> Result<Vec<FhirResource>> {
         let json_results = self.search_json(resource_type, patient_id).await?;
         let mut resources = Vec::with_capacity(json_results.len());
         for json in json_results {
@@ -452,7 +498,7 @@ impl StorageEngine {
     }
 
     /// Soft delete a resource.
-    pub async fn soft_delete(&self, id: &str) -> crate::Result<bool> {
+    pub async fn soft_delete(&self, id: &str) -> Result<bool> {
         let now = Utc::now().timestamp_millis();
         let result =
             sqlx::query("UPDATE fhir_resources SET deleted = 1, modified_at = ?1 WHERE id = ?2")
@@ -464,7 +510,7 @@ impl StorageEngine {
     }
 
     /// Get all modified records since a timestamp (for sync).
-    pub async fn changed_since(&self, since: i64) -> crate::Result<Vec<EncryptedRecord>> {
+    pub async fn changed_since(&self, since: i64) -> Result<Vec<EncryptedRecord>> {
         let rows: Vec<EncryptedRecord> =
             sqlx::query_as("SELECT * FROM fhir_resources WHERE modified_at > ?1")
                 .bind(since)
@@ -474,7 +520,7 @@ impl StorageEngine {
     }
 
     /// Store an audit event persistently.
-    pub async fn store_audit(&self, entry: &crate::audit::AuditEntry) -> crate::Result<()> {
+    pub async fn store_audit(&self, entry: &AuditEntry) -> Result<()> {
         sqlx::query(
             r#"
             INSERT INTO audit_events
@@ -502,7 +548,7 @@ impl StorageEngine {
     }
 
     /// Retrieve audit events.
-    pub async fn search_audit(&self, limit: i64) -> crate::Result<Vec<AuditEventRow>> {
+    pub async fn search_audit(&self, limit: i64) -> Result<Vec<AuditEventRow>> {
         let rows: Vec<AuditEventRow> =
             sqlx::query_as("SELECT * FROM audit_events ORDER BY timestamp DESC LIMIT ?1")
                 .bind(limit)
@@ -512,7 +558,7 @@ impl StorageEngine {
     }
 
     /// Count resources by type.
-    pub async fn count_by_type(&self, resource_type: &str) -> crate::Result<i64> {
+    pub async fn count_by_type(&self, resource_type: &str) -> Result<i64> {
         let count: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM fhir_resources WHERE resource_type = ?1 AND deleted = 0",
         )
@@ -521,29 +567,9 @@ impl StorageEngine {
         .await?;
         Ok(count)
     }
-}
 
-/// User row as stored in SQLite.
-#[derive(Debug, Clone, sqlx::FromRow)]
-pub struct UserRow {
-    pub id: String,
-    pub username: String,
-    pub display_name: String,
-    pub roles: String,
-    pub department_id: Option<String>,
-    pub team_ids: String,
-    pub lab_affiliations: String,
-    pub active: i64,
-    pub created_at: i64,
-    pub password_hash: String,
-    pub salt: Vec<u8>,
-    pub totp_secret: Option<String>,
-    pub last_login: Option<i64>,
-}
-
-impl StorageEngine {
     /// Upsert a user.
-    pub async fn store_user(&self, user: &crate::identity::User) -> crate::Result<()> {
+    pub async fn store_user(&self, user: &User) -> Result<()> {
         let roles_json = serde_json::to_string(&user.roles)?;
         let team_json = serde_json::to_string(&user.team_ids)?;
         let lab_json = serde_json::to_string(&user.lab_affiliations)?;
@@ -584,10 +610,7 @@ impl StorageEngine {
     }
 
     /// Get a user by username.
-    pub async fn get_user_by_username(
-        &self,
-        username: &str,
-    ) -> crate::Result<Option<crate::identity::User>> {
+    pub async fn get_user_by_username(&self, username: &str) -> Result<Option<User>> {
         let row: Option<UserRow> = sqlx::query_as("SELECT * FROM users WHERE username = ?1")
             .bind(username)
             .fetch_optional(&self.pool)
@@ -599,7 +622,7 @@ impl StorageEngine {
     }
 
     /// Get a user by id.
-    pub async fn get_user_by_id(&self, id: &str) -> crate::Result<Option<crate::identity::User>> {
+    pub async fn get_user_by_id(&self, id: &str) -> Result<Option<User>> {
         let row: Option<UserRow> = sqlx::query_as("SELECT * FROM users WHERE id = ?1")
             .bind(id)
             .fetch_optional(&self.pool)
@@ -611,7 +634,7 @@ impl StorageEngine {
     }
 
     /// List all users.
-    pub async fn list_users(&self) -> crate::Result<Vec<crate::identity::User>> {
+    pub async fn list_users(&self) -> Result<Vec<User>> {
         let rows: Vec<UserRow> = sqlx::query_as("SELECT * FROM users ORDER BY display_name")
             .fetch_all(&self.pool)
             .await?;
@@ -623,7 +646,7 @@ impl StorageEngine {
     }
 
     /// Delete a user by id.
-    pub async fn delete_user(&self, id: &str) -> crate::Result<bool> {
+    pub async fn delete_user(&self, id: &str) -> Result<bool> {
         let result = sqlx::query("DELETE FROM users WHERE id = ?1")
             .bind(id)
             .execute(&self.pool)
@@ -631,12 +654,12 @@ impl StorageEngine {
         Ok(result.rows_affected() > 0)
     }
 
-    fn row_to_user(&self, row: UserRow) -> crate::Result<crate::identity::User> {
-        let roles: Vec<crate::identity::Role> = serde_json::from_str(&row.roles)?;
+    fn row_to_user(&self, row: UserRow) -> Result<User> {
+        let roles: Vec<Role> = serde_json::from_str(&row.roles)?;
         let team_ids: Vec<String> = serde_json::from_str(&row.team_ids)?;
-        let lab_affiliations: Vec<crate::cpoe::LabDepartment> =
+        let lab_affiliations: Vec<newloka_core::cpoe::LabDepartment> =
             serde_json::from_str(&row.lab_affiliations)?;
-        Ok(crate::identity::User {
+        Ok(User {
             id: row.id,
             username: row.username,
             display_name: row.display_name,
@@ -653,6 +676,38 @@ impl StorageEngine {
             last_login: row
                 .last_login
                 .and_then(chrono::DateTime::from_timestamp_millis),
+        })
+    }
+
+    /// Build a sync manifest from local storage changes.
+    pub async fn build_manifest(
+        &self,
+        node_id: &str,
+        since: i64,
+    ) -> Result<DeltaSyncResponse> {
+        let records = self.changed_since(since).await?;
+        let mut sync_records = Vec::with_capacity(records.len());
+        let conflicts = vec![];
+
+        for row in records {
+            sync_records.push(SyncRecord {
+                id: row.id.clone(),
+                resource_type: row.resource_type.clone(),
+                encrypted_payload: row.content,
+                vector_clock: serde_json::from_str(&row.vector_clock)?,
+                modified_at: row.modified_at,
+                hash: row.hash,
+                deleted: row.deleted,
+                patient_id: row.patient_id,
+                department_id: row.department_id,
+            });
+        }
+
+        Ok(DeltaSyncResponse {
+            from_node: node_id.to_string(),
+            records: sync_records,
+            conflicts,
+            timestamp: Utc::now().timestamp_millis(),
         })
     }
 }

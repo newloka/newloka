@@ -1,4 +1,4 @@
-use newloka_core::storage::{EncryptedRecord, StorageEngine};
+use newloka_storage::{EncryptedRecord, StorageEngine};
 use rust_embed::RustEmbed;
 
 #[derive(RustEmbed)]

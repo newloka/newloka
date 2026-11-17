@@ -6,6 +6,8 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
+newloka_clinical = { path = "../newloka_clinical" }
+newloka_pharmacopoeia = { path = "../newloka_pharmacopoeia" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 chrono = { workspace = true }
@@ -18,7 +20,6 @@ rand = { workspace = true }
 rand_core = "0.6"
 ed25519-dalek = { workspace = true }
 argon2 = { workspace = true }
-sqlx = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]

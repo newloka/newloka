@@ -3,7 +3,6 @@
 //! Peer discovery, delta sync, vector clock handling,
 //! deterministic conflict detection, and secure record transfer.
 
-use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
 /// Node manifest broadcast during peer discovery.
@@ -139,53 +138,19 @@ impl SyncEngine {
         !Self::dominates(a, b) && !Self::dominates(b, a) && a != b
     }
 
-    /// Build a sync manifest from local storage changes.
-    pub async fn build_manifest(
-        &self,
-        storage: &crate::storage::StorageEngine,
-        since: i64,
-    ) -> crate::Result<DeltaSyncResponse> {
-        let records = storage.changed_since(since).await?;
-        let mut sync_records = Vec::with_capacity(records.len());
-        let conflicts = vec![];
-
-        for row in records {
-            sync_records.push(SyncRecord {
-                id: row.id.clone(),
-                resource_type: row.resource_type.clone(),
-                encrypted_payload: row.content,
-                vector_clock: serde_json::from_str(&row.vector_clock)?,
-                modified_at: row.modified_at,
-                hash: row.hash,
-                deleted: row.deleted,
-                patient_id: row.patient_id,
-                department_id: row.department_id,
-            });
-        }
-
-        Ok(DeltaSyncResponse {
-            from_node: self.node_id.clone(),
-            records: sync_records,
-            conflicts,
-            timestamp: Utc::now().timestamp_millis(),
-        })
-    }
-
-    /// Evaluate conflicts for a received sync batch.
+    /// Evaluate conflicts for a received sync batch against local sync records.
     pub fn evaluate_conflicts(
         &self,
         incoming: &[SyncRecord],
-        local_records: &[crate::storage::EncryptedRecord],
+        local_records: &[SyncRecord],
     ) -> Vec<SyncConflict> {
         let mut conflicts = vec![];
-        let local_map: std::collections::HashMap<String, &crate::storage::EncryptedRecord> =
+        let local_map: std::collections::HashMap<String, &SyncRecord> =
             local_records.iter().map(|r| (r.id.clone(), r)).collect();
 
         for rec in incoming {
             if let Some(local) = local_map.get(&rec.id) {
-                let local_vc: Vec<(u32, u64)> =
-                    serde_json::from_str(&local.vector_clock).unwrap_or_default();
-                if Self::is_concurrent(&rec.vector_clock, &local_vc) {
+                if Self::is_concurrent(&rec.vector_clock, &local.vector_clock) {
                     let conflict_type = if rec.resource_type == "MedicationRequest" {
                         ConflictType::MedicationChange
                     } else if rec.deleted != local.deleted {
@@ -196,7 +161,7 @@ impl SyncEngine {
                     conflicts.push(SyncConflict {
                         resource_id: rec.id.clone(),
                         resource_type: rec.resource_type.clone(),
-                        local_clock: local_vc,
+                        local_clock: local.vector_clock.clone(),
                         remote_clock: rec.vector_clock.clone(),
                         conflict_type,
                         details: format!(

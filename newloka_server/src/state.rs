@@ -8,7 +8,7 @@ use tokio::sync::RwLock;
 #[derive(Clone)]
 pub struct AppState {
     pub node_id: String,
-    pub storage: Arc<newloka_core::storage::StorageEngine>,
+    pub storage: Arc<newloka_storage::StorageEngine>,
     pub config: NodeConfig,
     pub sessions: Arc<RwLock<HashMap<String, newloka_core::identity::Session>>>,
     pub rxpad_tx: tokio::sync::broadcast::Sender<String>,
@@ -18,7 +18,7 @@ pub struct AppState {
 impl AppState {
     pub fn new(
         node_id: String,
-        storage: Arc<newloka_core::storage::StorageEngine>,
+        storage: Arc<newloka_storage::StorageEngine>,
         config: NodeConfig,
     ) -> Self {
         let (rxpad_tx, _) = tokio::sync::broadcast::channel(256);

@@ -18,6 +18,7 @@ newloka_demo = { path = "../newloka_demo", optional = true }
 clap = { workspace = true }
 rand = { workspace = true }
 newloka_core = { path = "../newloka_core" }
+newloka_storage = { path = "../newloka_storage" }
 axum = { workspace = true }
 tokio = { workspace = true }
 tower = { workspace = true, features = ["util"] }

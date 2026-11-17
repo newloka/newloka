@@ -74,7 +74,7 @@ pub async fn run(bind: &str) -> anyhow::Result<()> {
 
     let dmk = resolve_master_key()?;
     let storage =
-        newloka_core::storage::StorageEngine::open(&db_path, node_id.clone(), dmk).await?;
+        newloka_storage::StorageEngine::open(&db_path, node_id.clone(), dmk).await?;
     #[cfg(feature = "demo")]
     {
         if storage.is_empty().await.unwrap_or(false) {

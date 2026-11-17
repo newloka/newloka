@@ -5,15 +5,16 @@
 #[cfg(test)]
 mod integration {
     use newloka_core::*;
+    use newloka_storage::*;
 
-    async fn setup_storage() -> (storage::StorageEngine, String) {
+    async fn setup_storage() -> (StorageEngine, String) {
         let node_id = "test-node".to_string();
         let dmk = crypto::DeviceMasterKey::generate();
         let db_path = format!(
             "file:test_{}?mode=memory&cache=shared",
             uuid::Uuid::new_v4()
         );
-        let storage = storage::StorageEngine::open(&db_path, node_id.clone(), dmk)
+        let storage = StorageEngine::open(&db_path, node_id.clone(), dmk)
             .await
             .unwrap();
         (storage, node_id)
@@ -231,9 +232,8 @@ mod integration {
             .await
             .unwrap();
 
-        let engine = sync::SyncEngine::new(node_id.clone());
         let since = 0i64;
-        let delta = engine.build_manifest(&storage, since).await.unwrap();
+        let delta = storage.build_manifest(&node_id, since).await.unwrap();
         assert_eq!(delta.from_node, node_id);
         assert_eq!(delta.records.len(), 1);
         assert_eq!(delta.records[0].resource_type, "Patient");
@@ -461,7 +461,7 @@ mod integration {
         assert!(!nested_db.parent().unwrap().exists());
 
         let dmk = crypto::DeviceMasterKey::generate();
-        let storage = storage::StorageEngine::open(&db_path_str, "test-solo-node".to_string(), dmk)
+        let storage = StorageEngine::open(&db_path_str, "test-solo-node".to_string(), dmk)
             .await
             .unwrap();
 

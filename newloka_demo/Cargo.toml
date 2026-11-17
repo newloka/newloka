@@ -11,6 +11,7 @@ path = "src/bin/generate_fixtures.rs"
 
 [dependencies]
 newloka_core = { path = "../newloka_core" }
+newloka_storage = { path = "../newloka_storage" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }

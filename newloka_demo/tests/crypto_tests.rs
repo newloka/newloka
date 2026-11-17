@@ -1,5 +1,5 @@
 use newloka_core::crypto::DeviceMasterKey;
-use newloka_core::storage::StorageEngine;
+use newloka_storage::StorageEngine;
 use newloka_demo::{seed_demo_data, DEMO_MASTER_KEY_BYTES};
 
 #[tokio::test]

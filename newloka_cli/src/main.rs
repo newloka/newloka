@@ -14,9 +14,9 @@ use newloka_core::{
         Meta, Observation, Patient, Period, Reference,
     },
     identity::NodeIdentity,
-    storage::StorageEngine,
     DeploymentTier,
 };
+use newloka_storage::StorageEngine;
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
 

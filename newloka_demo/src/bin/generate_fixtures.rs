@@ -1,6 +1,6 @@
 use chrono::Utc;
 use newloka_core::crypto::DeviceMasterKey;
-use newloka_core::storage::{EncryptedRecord, StorageEngine};
+use newloka_storage::{EncryptedRecord, StorageEngine};
 use std::fs;
 use std::path::Path;
 

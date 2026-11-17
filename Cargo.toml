@@ -20,7 +20,15 @@ tracing = { workspace = true }
 clap = { workspace = true }
 
 [workspace]
-members = ["newloka_core", "newloka_cli", "newloka_server", "newloka_demo"]
+members = [
+    "newloka_core",
+    "newloka_clinical",
+    "newloka_pharmacopoeia",
+    "newloka_storage",
+    "newloka_cli",
+    "newloka_server",
+    "newloka_demo",
+]
 resolver = "2"
 
 [workspace.package]
