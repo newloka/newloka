@@ -77,7 +77,12 @@ impl DifferentialPrivacyEngine {
     /// Adds Laplace noise to guarantee epsilon-differential privacy:
     /// Noise ~ Laplace(0, scale) where scale = sensitivity / epsilon.
     /// Uses inverse CDF sampling: X = -scale * sgn(u) * ln(1 - 2|u|).
-    pub fn add_laplace_noise(value: f64, sensitivity: f64, epsilon: f64, seed_val: Option<f64>) -> f64 {
+    pub fn add_laplace_noise(
+        value: f64,
+        sensitivity: f64,
+        epsilon: f64,
+        seed_val: Option<f64>,
+    ) -> f64 {
         if epsilon <= 0.0 {
             return value;
         }
@@ -110,20 +115,21 @@ impl DifferentialPrivacyEngine {
         salt: &str,
     ) -> DeIdentifiedPatientRecord {
         // Calculate age bracket
-        let age_bracket = if let Ok(dob) = chrono::NaiveDate::parse_from_str(&patient.birth_date, "%Y-%m-%d") {
-            let current_year = chrono::Utc::now().date_naive().year();
-            let age = current_year - dob.year();
-            match age {
-                a if a < 18 => "0-17".to_string(),
-                a if a < 30 => "18-29".to_string(),
-                a if a < 45 => "30-44".to_string(),
-                a if a < 60 => "45-59".to_string(),
-                a if a < 75 => "60-74".to_string(),
-                _ => "75+".to_string(),
-            }
-        } else {
-            "Unknown".to_string()
-        };
+        let age_bracket =
+            if let Ok(dob) = chrono::NaiveDate::parse_from_str(&patient.birth_date, "%Y-%m-%d") {
+                let current_year = chrono::Utc::now().date_naive().year();
+                let age = current_year - dob.year();
+                match age {
+                    a if a < 18 => "0-17".to_string(),
+                    a if a < 30 => "18-29".to_string(),
+                    a if a < 45 => "30-44".to_string(),
+                    a if a < 60 => "45-59".to_string(),
+                    a if a < 75 => "60-74".to_string(),
+                    _ => "75+".to_string(),
+                }
+            } else {
+                "Unknown".to_string()
+            };
 
         // Pseudo-ID using SHA-256 hash of patient ID with salt
         use sha2::{Digest, Sha256};

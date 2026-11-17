@@ -28,6 +28,8 @@ backups/
 !.firebaserc
 !knowledge_graph/graph.json
 !newloka_demo/fixtures/manifest.json
+!newloka_pharmacopoeia/src/data/*.json
+!newloka_web/assets/*.json
 
 # Build & Dev Targets
 /target_dev

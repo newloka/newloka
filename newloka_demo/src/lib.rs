@@ -7,10 +7,7 @@ pub struct DemoFixtures;
 
 pub const DEMO_MASTER_KEY_BYTES: [u8; 32] = *b"DEMOMASTERKEY1234567890123456789";
 
-pub async fn seed_demo_data(
-    storage: &StorageEngine,
-    node_id: &str,
-) -> anyhow::Result<()> {
+pub async fn seed_demo_data(storage: &StorageEngine, node_id: &str) -> anyhow::Result<()> {
     tracing::info!("Importing pre-encrypted demo dataset fixtures...");
 
     // 1. Load manifest
@@ -52,7 +49,11 @@ pub async fn seed_demo_data(
             None,
             None,
             Some("Patient".to_string()),
-            if i % 3 == 0 { "read".to_string() } else { "create".to_string() },
+            if i % 3 == 0 {
+                "read".to_string()
+            } else {
+                "create".to_string()
+            },
             newloka_core::audit::AuditOutcome::Success,
             Some(format!("Seeded audit entry {}", i)),
         )?;
@@ -62,7 +63,10 @@ pub async fn seed_demo_data(
     // 3. Seed demo users
     seed_demo_users(storage).await?;
 
-    tracing::info!("Successfully ingested {} pre-encrypted demo records into StorageEngine", manifest.len());
+    tracing::info!(
+        "Successfully ingested {} pre-encrypted demo records into StorageEngine",
+        manifest.len()
+    );
     Ok(())
 }
 

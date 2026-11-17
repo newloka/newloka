@@ -6,13 +6,12 @@
 use std::collections::HashMap;
 
 use super::models::{
-    CategorySummary, ClinicalOrderSet, DrugSafetyReport, DrugSafetyWarning,
-    PharmacopoeiaDatabase, PharmacopoeiaEntry, PharmacopoeiaSearchResult, SafetyWarningLevel,
+    CategorySummary, ClinicalOrderSet, DrugSafetyReport, DrugSafetyWarning, PharmacopoeiaDatabase,
+    PharmacopoeiaEntry, PharmacopoeiaSearchResult, SafetyWarningLevel,
 };
 
 /// The embedded Indian Pharmacopoeia reference JSON payload.
-pub const EMBEDDED_PHARMACOPOEIA_JSON: &str =
-    include_str!("data/indian_pharmacopoeia.json");
+pub const EMBEDDED_PHARMACOPOEIA_JSON: &str = include_str!("data/indian_pharmacopoeia.json");
 
 /// In-memory search index and clinical engine.
 #[derive(Debug, Clone)]
@@ -31,8 +30,7 @@ impl Default for PharmacopoeiaIndex {
 impl PharmacopoeiaIndex {
     /// Load the pharmacopoeia index from the embedded JSON dataset.
     pub fn load_embedded() -> Result<Self, serde_json::Error> {
-        let database: PharmacopoeiaDatabase =
-            serde_json::from_str(EMBEDDED_PHARMACOPOEIA_JSON)?;
+        let database: PharmacopoeiaDatabase = serde_json::from_str(EMBEDDED_PHARMACOPOEIA_JSON)?;
         let mut by_id = HashMap::with_capacity(database.entries.len());
         for entry in &database.entries {
             by_id.insert(entry.id.clone(), entry.clone());
@@ -109,9 +107,7 @@ impl PharmacopoeiaIndex {
         for entry in &self.database.entries {
             // Apply category filter if specified
             if let Some(ref cat) = cat_filter {
-                if !cat.is_empty()
-                    && !entry.therapeutic_category.to_lowercase().contains(cat)
-                {
+                if !cat.is_empty() && !entry.therapeutic_category.to_lowercase().contains(cat) {
                     continue;
                 }
             }
@@ -236,11 +232,7 @@ impl PharmacopoeiaIndex {
     }
 
     /// Perform clinical safety checks across a list of proposed drug names and known allergies.
-    pub fn check_safety(
-        &self,
-        drugs: &[String],
-        known_allergies: &[String],
-    ) -> DrugSafetyReport {
+    pub fn check_safety(&self, drugs: &[String], known_allergies: &[String]) -> DrugSafetyReport {
         let mut report = DrugSafetyReport::default();
 
         let clean_allergies: Vec<String> = known_allergies
@@ -332,7 +324,7 @@ impl PharmacopoeiaIndex {
             }
 
             // 2. Regulatory Schedule Warnings
-            if let Some(ref e) = entry {
+            if let Some(e) = entry {
                 if e.schedule == "Schedule H1" {
                     report.warnings.push(DrugSafetyWarning {
                         level: SafetyWarningLevel::Info,

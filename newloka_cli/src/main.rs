@@ -187,7 +187,11 @@ enum ConsentAction {
         #[arg(short = 'u', long, default_value = "RESEARCH")]
         purpose: String,
         /// Permitted data categories (comma separated)
-        #[arg(short = 'c', long, default_value = "Observation,Condition,DiagnosticReport")]
+        #[arg(
+            short = 'c',
+            long,
+            default_value = "Observation,Condition,DiagnosticReport"
+        )]
         categories: String,
         /// Validity duration in days
         #[arg(long, default_value = "365")]
@@ -391,7 +395,10 @@ async fn main() -> Result<()> {
             storage.store_audit(&entry).await?;
 
             println!("  Node ID:     {}", identity.node_id);
-            println!("  Public Key:  {}", newloka_core::crypto::hex_encode(&identity.public_key));
+            println!(
+                "  Public Key:  {}",
+                newloka_core::crypto::hex_encode(&identity.public_key)
+            );
             println!("  Tier:        {:?}", identity.tier);
             println!("  Database:    {}", db.display());
             println!("  Config:      {}", config_path.display());
@@ -478,29 +485,27 @@ async fn main() -> Result<()> {
                     }
                 }
 
-                PatientAction::Get { id } => {
-                    match storage.get_json(&id).await? {
-                        Some(json) => {
-                            let audit = audit_engine.log(
-                                AuditEventType::Access,
-                                "cli-user".into(),
-                                Some(id.clone()),
-                                Some(id.clone()),
-                                Some("Patient".into()),
-                                "patient/read".into(),
-                                AuditOutcome::Success,
-                                None,
-                            )?;
-                            storage.store_audit(&audit).await?;
+                PatientAction::Get { id } => match storage.get_json(&id).await? {
+                    Some(json) => {
+                        let audit = audit_engine.log(
+                            AuditEventType::Access,
+                            "cli-user".into(),
+                            Some(id.clone()),
+                            Some(id.clone()),
+                            Some("Patient".into()),
+                            "patient/read".into(),
+                            AuditOutcome::Success,
+                            None,
+                        )?;
+                        storage.store_audit(&audit).await?;
 
-                            println!("{}", serde_json::to_string_pretty(&json)?);
-                        }
-                        None => {
-                            eprintln!("Error: Patient with ID '{}' was not found.", id);
-                            std::process::exit(1);
-                        }
+                        println!("{}", serde_json::to_string_pretty(&json)?);
                     }
-                }
+                    None => {
+                        eprintln!("Error: Patient with ID '{}' was not found.", id);
+                        std::process::exit(1);
+                    }
+                },
 
                 PatientAction::List => {
                     let patients = storage.search_json("Patient", None).await?;
@@ -522,7 +527,8 @@ async fn main() -> Result<()> {
                                 .and_then(|v| v.as_array())
                                 .and_then(|arr| arr.first())
                                 .map(|n| {
-                                    let fam = n.get("family").and_then(|v| v.as_str()).unwrap_or("");
+                                    let fam =
+                                        n.get("family").and_then(|v| v.as_str()).unwrap_or("");
                                     let giv = n
                                         .get("given")
                                         .and_then(|v| v.as_array())
@@ -533,7 +539,11 @@ async fn main() -> Result<()> {
                                 })
                                 .unwrap_or_else(|| "Unknown".into());
                             let gender = p.get("gender").and_then(|v| v.as_str()).unwrap_or("—");
-                            let dob = p.get("birth_date").or_else(|| p.get("birthDate")).and_then(|v| v.as_str()).unwrap_or("—");
+                            let dob = p
+                                .get("birth_date")
+                                .or_else(|| p.get("birthDate"))
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("—");
                             let mrn = p
                                 .get("identifier")
                                 .and_then(|v| v.as_array())
@@ -597,7 +607,9 @@ async fn main() -> Result<()> {
             };
 
             let resource = FhirResource::Encounter(encounter);
-            storage.store(&resource, Some(patient_id.clone()), None).await?;
+            storage
+                .store(&resource, Some(patient_id.clone()), None)
+                .await?;
 
             let signer = AuditSigner::generate();
             let mut audit_engine = AuditEngine::new(node.clone(), signer);
@@ -674,7 +686,9 @@ async fn main() -> Result<()> {
             };
 
             let resource = FhirResource::Observation(observation);
-            storage.store(&resource, Some(patient_id.clone()), None).await?;
+            storage
+                .store(&resource, Some(patient_id.clone()), None)
+                .await?;
 
             let signer = AuditSigner::generate();
             let mut audit_engine = AuditEngine::new(node.clone(), signer);
@@ -795,14 +809,19 @@ async fn main() -> Result<()> {
                         None => {
                             let def = newloka_core::department::default_departments();
                             let v = serde_json::to_value(&def)?;
-                            let _ = storage.store_json("Department", "hospital-departments", &v, None, None).await;
+                            let _ = storage
+                                .store_json("Department", "hospital-departments", &v, None, None)
+                                .await;
                             v
                         }
                     };
 
                     println!("Hospital Departments & Inpatient Wards (Tier T3):");
                     println!("{:-<90}", "");
-                    println!("{:<8} | {:<28} | {:<8} | {:<10} | {:<25}", "Code", "Department Name", "Beds", "Census", "Department Head");
+                    println!(
+                        "{:<8} | {:<28} | {:<8} | {:<10} | {:<25}",
+                        "Code", "Department Name", "Beds", "Census", "Department Head"
+                    );
                     println!("{:-<90}", "");
 
                     if let Some(arr) = depts_val.as_array() {
@@ -810,9 +829,18 @@ async fn main() -> Result<()> {
                             let code = d.get("code").and_then(|v| v.as_str()).unwrap_or("—");
                             let name = d.get("name").and_then(|v| v.as_str()).unwrap_or("—");
                             let beds = d.get("bed_count").and_then(|v| v.as_u64()).unwrap_or(0);
-                            let census = d.get("active_patients_count").and_then(|v| v.as_u64()).unwrap_or(0);
-                            let head = d.get("head_user_name").and_then(|v| v.as_str()).unwrap_or("Unassigned");
-                            println!("{:<8} | {:<28} | {:<8} | {:<10} | {:<25}", code, name, beds, census, head);
+                            let census = d
+                                .get("active_patients_count")
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(0);
+                            let head = d
+                                .get("head_user_name")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("Unassigned");
+                            println!(
+                                "{:<8} | {:<28} | {:<8} | {:<10} | {:<25}",
+                                code, name, beds, census, head
+                            );
                         }
                     }
                     println!("{:-<90}", "");
@@ -843,7 +871,9 @@ async fn main() -> Result<()> {
                         urgency: urgency.clone(),
                         reason: reason.clone(),
                         clinical_handover_notes: notes.clone(),
-                        active_medications_summary: vec!["Active medication continuity maintained".into()],
+                        active_medications_summary: vec![
+                            "Active medication continuity maintained".into()
+                        ],
                         pending_orders_summary: vec!["Urgent consult requested".into()],
                         allergies_summary: vec!["Standard allergy precautions".into()],
                         status: newloka_core::department::TransferStatus::Requested,
@@ -852,12 +882,21 @@ async fn main() -> Result<()> {
                         handover_signed_by: Some("CLI Clinician".into()),
                     };
 
-                    let mut current_transfers = match storage.get_json("department-transfers").await? {
-                        Some(serde_json::Value::Array(arr)) => arr,
-                        _ => vec![],
-                    };
+                    let mut current_transfers =
+                        match storage.get_json("department-transfers").await? {
+                            Some(serde_json::Value::Array(arr)) => arr,
+                            _ => vec![],
+                        };
                     current_transfers.insert(0, serde_json::to_value(&transfer)?);
-                    storage.store_json("Transfer", "department-transfers", &serde_json::Value::Array(current_transfers), None, None).await?;
+                    storage
+                        .store_json(
+                            "Transfer",
+                            "department-transfers",
+                            &serde_json::Value::Array(current_transfers),
+                            None,
+                            None,
+                        )
+                        .await?;
 
                     let audit = audit_engine.log(
                         AuditEventType::Update,
@@ -867,7 +906,10 @@ async fn main() -> Result<()> {
                         Some("DepartmentTransfer".into()),
                         "department/transfer-request".into(),
                         AuditOutcome::Success,
-                        Some(format!("Inter-department transfer requested: {} -> {} ({})", from, to, urgency)),
+                        Some(format!(
+                            "Inter-department transfer requested: {} -> {} ({})",
+                            from, to, urgency
+                        )),
                     )?;
                     storage.store_audit(&audit).await?;
 
@@ -891,28 +933,41 @@ async fn main() -> Result<()> {
 
             match action {
                 ConsentAction::List { patient_id } => {
-                    let directives: Vec<newloka_core::consent::ConsentDirective> = match storage.get_json("consent-directives").await? {
-                        Some(val) => serde_json::from_value(val).unwrap_or_default(),
-                        None => vec![],
-                    };
+                    let directives: Vec<newloka_core::consent::ConsentDirective> =
+                        match storage.get_json("consent-directives").await? {
+                            Some(val) => serde_json::from_value(val).unwrap_or_default(),
+                            None => vec![],
+                        };
 
                     println!("Patient Consent Directives (Tier T4 Governance):");
                     println!("{:-<95}", "");
-                    println!("{:<18} | {:<14} | {:<8} | {:<18} | {:<20} | {:<8}", "Directive ID", "Patient ID", "Status", "Purpose", "Recipient Node", "Revoked");
+                    println!(
+                        "{:<18} | {:<14} | {:<8} | {:<18} | {:<20} | {:<8}",
+                        "Directive ID",
+                        "Patient ID",
+                        "Status",
+                        "Purpose",
+                        "Recipient Node",
+                        "Revoked"
+                    );
                     println!("{:-<95}", "");
 
-                    let filtered: Vec<&newloka_core::consent::ConsentDirective> = if let Some(ref pid) = patient_id {
-                        directives.iter().filter(|d| &d.patient_id == pid).collect()
-                    } else {
-                        directives.iter().collect()
-                    };
+                    let filtered: Vec<&newloka_core::consent::ConsentDirective> =
+                        if let Some(ref pid) = patient_id {
+                            directives.iter().filter(|d| &d.patient_id == pid).collect()
+                        } else {
+                            directives.iter().collect()
+                        };
 
                     if filtered.is_empty() {
                         println!("No consent directives found.");
                     } else {
                         for d in filtered {
                             let rec = d.recipient_node_id.as_deref().unwrap_or("* (Federation)");
-                            println!("{:<18} | {:<14} | {:<8} | {:<18} | {:<20} | {:<8}", d.id, d.patient_id, d.status, d.purpose, rec, d.revoked);
+                            println!(
+                                "{:<18} | {:<14} | {:<8} | {:<18} | {:<20} | {:<8}",
+                                d.id, d.patient_id, d.status, d.purpose, rec, d.revoked
+                            );
                         }
                     }
                     println!("{:-<95}", "");
@@ -928,15 +983,26 @@ async fn main() -> Result<()> {
                 } => {
                     let dir_id = format!("consent-dir-{}", &Uuid::new_v4().to_string()[..8]);
                     let now = Utc::now();
-                    let cats: Vec<String> = categories.split(',').map(|s| s.trim().to_string()).collect();
+                    let cats: Vec<String> = categories
+                        .split(',')
+                        .map(|s| s.trim().to_string())
+                        .collect();
 
                     let directive = newloka_core::consent::ConsentDirective {
                         id: dir_id.clone(),
                         patient_id: patient_id.clone(),
                         status: "active".into(),
-                        scope: if purpose == "RESEARCH" { "research".into() } else { "treatment-transfer".into() },
+                        scope: if purpose == "RESEARCH" {
+                            "research".into()
+                        } else {
+                            "treatment-transfer".into()
+                        },
                         purpose: purpose.clone(),
-                        recipient_node_id: if recipient == "*" { None } else { Some(recipient.clone()) },
+                        recipient_node_id: if recipient == "*" {
+                            None
+                        } else {
+                            Some(recipient.clone())
+                        },
                         recipient_name: Some(format!("Designated Recipient: {}", recipient)),
                         data_categories: cats,
                         valid_from: now,
@@ -944,16 +1010,27 @@ async fn main() -> Result<()> {
                         revoked: false,
                         revocation_reason: None,
                         revoked_at: None,
-                        digital_signature: Some(newloka_core::crypto::hex_encode(&[9, 9, 8, 1, 4, 2])),
+                        digital_signature: Some(newloka_core::crypto::hex_encode(&[
+                            9, 9, 8, 1, 4, 2,
+                        ])),
                         consent_notes: Some(notes.clone()),
                     };
 
-                    let mut current: Vec<newloka_core::consent::ConsentDirective> = match storage.get_json("consent-directives").await? {
-                        Some(val) => serde_json::from_value(val).unwrap_or_default(),
-                        None => vec![],
-                    };
+                    let mut current: Vec<newloka_core::consent::ConsentDirective> =
+                        match storage.get_json("consent-directives").await? {
+                            Some(val) => serde_json::from_value(val).unwrap_or_default(),
+                            None => vec![],
+                        };
                     current.insert(0, directive);
-                    storage.store_json("ConsentDirective", "consent-directives", &serde_json::to_value(&current)?, None, None).await?;
+                    storage
+                        .store_json(
+                            "ConsentDirective",
+                            "consent-directives",
+                            &serde_json::to_value(&current)?,
+                            None,
+                            None,
+                        )
+                        .await?;
 
                     let audit = audit_engine.log(
                         AuditEventType::Create,
@@ -963,7 +1040,10 @@ async fn main() -> Result<()> {
                         Some("ConsentDirective".into()),
                         "consent/grant".into(),
                         AuditOutcome::Success,
-                        Some(format!("Consent granted for purpose {} to {}", purpose, recipient)),
+                        Some(format!(
+                            "Consent granted for purpose {} to {}",
+                            purpose, recipient
+                        )),
                     )?;
                     storage.store_audit(&audit).await?;
 
@@ -977,10 +1057,11 @@ async fn main() -> Result<()> {
                 }
 
                 ConsentAction::Revoke { id, reason } => {
-                    let mut current: Vec<newloka_core::consent::ConsentDirective> = match storage.get_json("consent-directives").await? {
-                        Some(val) => serde_json::from_value(val).unwrap_or_default(),
-                        None => vec![],
-                    };
+                    let mut current: Vec<newloka_core::consent::ConsentDirective> =
+                        match storage.get_json("consent-directives").await? {
+                            Some(val) => serde_json::from_value(val).unwrap_or_default(),
+                            None => vec![],
+                        };
 
                     let mut found = false;
                     for d in &mut current {
@@ -995,7 +1076,15 @@ async fn main() -> Result<()> {
                     }
 
                     if found {
-                        storage.store_json("ConsentDirective", "consent-directives", &serde_json::to_value(&current)?, None, None).await?;
+                        storage
+                            .store_json(
+                                "ConsentDirective",
+                                "consent-directives",
+                                &serde_json::to_value(&current)?,
+                                None,
+                                None,
+                            )
+                            .await?;
                         let audit = audit_engine.log(
                             AuditEventType::Delete,
                             "cli-user".into(),
@@ -1019,10 +1108,11 @@ async fn main() -> Result<()> {
                     purpose,
                     category,
                 } => {
-                    let current: Vec<newloka_core::consent::ConsentDirective> = match storage.get_json("consent-directives").await? {
-                        Some(val) => serde_json::from_value(val).unwrap_or_default(),
-                        None => vec![],
-                    };
+                    let current: Vec<newloka_core::consent::ConsentDirective> =
+                        match storage.get_json("consent-directives").await? {
+                            Some(val) => serde_json::from_value(val).unwrap_or_default(),
+                            None => vec![],
+                        };
 
                     let decision = newloka_core::consent::ConsentEngine::check_consent(
                         &current,
@@ -1034,7 +1124,10 @@ async fn main() -> Result<()> {
                     );
 
                     match decision {
-                        newloka_core::consent::ConsentDecision::Permit { directive_id, reason } => {
+                        newloka_core::consent::ConsentDecision::Permit {
+                            directive_id,
+                            reason,
+                        } => {
                             println!("✅ CONSENT PERMITTED");
                             println!("  Directive: {}", directive_id);
                             println!("  Rationale: {}", reason);
@@ -1052,24 +1145,35 @@ async fn main() -> Result<()> {
             let storage = open_storage(&db, &node, password_opt.as_deref()).await?;
 
             match action {
-                ResearchAction::Query { condition, epsilon, k } => {
+                ResearchAction::Query {
+                    condition,
+                    epsilon,
+                    k,
+                } => {
                     let all_patients = storage.search_json("Patient", None).await?;
                     let raw_count = all_patients.len();
 
-                    println!("Differential Privacy Federated Query (ε={}, k={}):", epsilon, k);
+                    println!(
+                        "Differential Privacy Federated Query (ε={}, k={}):",
+                        epsilon, k
+                    );
                     println!("  Inclusion Condition: {}", condition);
                     println!("  Raw Cohort Count:    {} patients", raw_count);
 
                     if raw_count < k {
                         println!("  Result:              < {} (SUPPRESSED: k-anonymity privacy protection)", k);
                     } else {
-                        let perturbed = newloka_core::federation::DifferentialPrivacyEngine::add_laplace_noise(
-                            raw_count as f64,
-                            1.0,
-                            epsilon,
-                            None,
+                        let perturbed =
+                            newloka_core::federation::DifferentialPrivacyEngine::add_laplace_noise(
+                                raw_count as f64,
+                                1.0,
+                                epsilon,
+                                None,
+                            );
+                        println!(
+                            "  Reported Size:       {} patients (Laplace noise perturbed)",
+                            perturbed
                         );
-                        println!("  Reported Size:       {} patients (Laplace noise perturbed)", perturbed);
                         println!("  k-Anonymity Guard:   Passed (count >= {})", k);
                     }
                 }
@@ -1094,10 +1198,16 @@ async fn main() -> Result<()> {
                         }
                     }
 
-                    println!("De-Identified Research Cohort Export ({} records):", exported.len());
+                    println!(
+                        "De-Identified Research Cohort Export ({} records):",
+                        exported.len()
+                    );
                     println!("{:-<80}", "");
                     for rec in exported {
-                        println!("- Pseudo-ID: {} | Age: {} | Gender: {} | Conditions: {:?}", rec.pseudo_id, rec.age_bracket, rec.gender, rec.conditions);
+                        println!(
+                            "- Pseudo-ID: {} | Age: {} | Gender: {} | Conditions: {:?}",
+                            rec.pseudo_id, rec.age_bracket, rec.gender, rec.conditions
+                        );
                     }
                     println!("{:-<80}", "");
                     println!("All direct identifiers (Name, MRN, Phone, Address, DOB) stripped.");
@@ -1105,40 +1215,58 @@ async fn main() -> Result<()> {
             }
         }
 
-        Commands::Federation { action } => {
-            match action {
-                FederationAction::Nodes => {
-                    println!("Registered Research Federation Nodes (Tier T4 Mesh):");
-                    println!("{:-<85}", "");
-                    println!("{:<22} | {:<36} | {:<15} | {:<8}", "Node ID", "Institution", "Trust Tier", "Status");
-                    println!("{:-<85}", "");
-                    println!("{:<22} | {:<36} | {:<15} | {:<8}", "node-aiims-delhi", "AIIMS Delhi Research Grid", "T4_Hub", "ACTIVE");
-                    println!("{:<22} | {:<36} | {:<15} | {:<8}", "node-tmh-mumbai", "Tata Memorial Centre ACTREC", "Academic_MC", "ACTIVE");
-                    println!("{:<22} | {:<36} | {:<15} | {:<8}", "node-pgimer-chd", "PGIMER Clinical Pharmacology", "T3_Partner", "ACTIVE");
-                    println!("{:-<85}", "");
-                }
+        Commands::Federation { action } => match action {
+            FederationAction::Nodes => {
+                println!("Registered Research Federation Nodes (Tier T4 Mesh):");
+                println!("{:-<85}", "");
+                println!(
+                    "{:<22} | {:<36} | {:<15} | {:<8}",
+                    "Node ID", "Institution", "Trust Tier", "Status"
+                );
+                println!("{:-<85}", "");
+                println!(
+                    "{:<22} | {:<36} | {:<15} | {:<8}",
+                    "node-aiims-delhi", "AIIMS Delhi Research Grid", "T4_Hub", "ACTIVE"
+                );
+                println!(
+                    "{:<22} | {:<36} | {:<15} | {:<8}",
+                    "node-tmh-mumbai", "Tata Memorial Centre ACTREC", "Academic_MC", "ACTIVE"
+                );
+                println!(
+                    "{:<22} | {:<36} | {:<15} | {:<8}",
+                    "node-pgimer-chd", "PGIMER Clinical Pharmacology", "T3_Partner", "ACTIVE"
+                );
+                println!("{:-<85}", "");
+            }
 
-                FederationAction::Ping { peer } => {
-                    println!("Pinging Federation Peer: {}", peer);
-                    let client = reqwest::Client::builder()
-                        .timeout(std::time::Duration::from_secs(5))
-                        .build()?;
-                    let url = format!("{}/health", peer.trim_end_matches('/'));
-                    let start = std::time::Instant::now();
-                    match client.get(&url).send().await {
-                        Ok(resp) => {
-                            let duration = start.elapsed().as_millis();
-                            println!("  Peer Status:     {} ({})", resp.status(), if resp.status().is_success() { "ONLINE" } else { "ERROR" });
-                            println!("  Round-Trip Time: {} ms", duration);
-                            println!("  Federation Mesh: Mutual Trust Confirmed.");
-                        }
-                        Err(e) => {
-                            println!("  Peer Ping Failed: {}", e);
-                        }
+            FederationAction::Ping { peer } => {
+                println!("Pinging Federation Peer: {}", peer);
+                let client = reqwest::Client::builder()
+                    .timeout(std::time::Duration::from_secs(5))
+                    .build()?;
+                let url = format!("{}/health", peer.trim_end_matches('/'));
+                let start = std::time::Instant::now();
+                match client.get(&url).send().await {
+                    Ok(resp) => {
+                        let duration = start.elapsed().as_millis();
+                        println!(
+                            "  Peer Status:     {} ({})",
+                            resp.status(),
+                            if resp.status().is_success() {
+                                "ONLINE"
+                            } else {
+                                "ERROR"
+                            }
+                        );
+                        println!("  Round-Trip Time: {} ms", duration);
+                        println!("  Federation Mesh: Mutual Trust Confirmed.");
+                    }
+                    Err(e) => {
+                        println!("  Peer Ping Failed: {}", e);
                     }
                 }
             }
-        }
+        },
     }
 
     Ok(())

@@ -518,13 +518,31 @@ fn main() -> anyhow::Result<()> {
         "Ramesh", "Suresh", "Rajesh", "Amit", "Vikram", "Arjun", "Ravi", "Kiran", "Anil", "Sunil",
     ];
     let female_names = [
-        "Priya", "Sunita", "Anjali", "Pooja", "Neha", "Meera", "Lakshmi", "Saraswati", "Kavita", "Rekha",
+        "Priya",
+        "Sunita",
+        "Anjali",
+        "Pooja",
+        "Neha",
+        "Meera",
+        "Lakshmi",
+        "Saraswati",
+        "Kavita",
+        "Rekha",
     ];
     let families = [
         "Patel", "Sharma", "Gupta", "Singh", "Kumar", "Rao", "Nair", "Shah", "Mehta", "Iyer",
     ];
     let cities = [
-        "Mumbai", "Delhi", "Bangalore", "Chennai", "Kolkata", "Hyderabad", "Pune", "Ahmedabad", "Jaipur", "Lucknow",
+        "Mumbai",
+        "Delhi",
+        "Bangalore",
+        "Chennai",
+        "Kolkata",
+        "Hyderabad",
+        "Pune",
+        "Ahmedabad",
+        "Jaipur",
+        "Lucknow",
     ];
     let conditions_list = [
         ("Type 2 Diabetes Mellitus", "E11.9"),
@@ -770,7 +788,13 @@ fn main() -> anyhow::Result<()> {
 
         // ServiceRequest
         let sr_id = format!("sr-demo-{:03}", i);
-        let order_names = ["Basic Metabolic Panel (BMP)", "Complete Blood Count (CBC)", "Chest X-Ray PA/Lateral", "12-Lead ECG", "Lipid Profile"];
+        let order_names = [
+            "Basic Metabolic Panel (BMP)",
+            "Complete Blood Count (CBC)",
+            "Chest X-Ray PA/Lateral",
+            "12-Lead ECG",
+            "Lipid Profile",
+        ];
         let order_name = order_names[i % order_names.len()];
         let service_request = serde_json::json!({
             "resourceType": "ServiceRequest",
@@ -796,7 +820,12 @@ fn main() -> anyhow::Result<()> {
         // FamilyMemberHistory
         let fmh_id = format!("fmh-demo-{:03}", i);
         let relationships = ["Father", "Mother", "Sibling", "Maternal Grandfather"];
-        let conditions_fh = ["Coronary Artery Disease", "Essential Hypertension", "Type 2 Diabetes", "Asthma"];
+        let conditions_fh = [
+            "Coronary Artery Disease",
+            "Essential Hypertension",
+            "Type 2 Diabetes",
+            "Asthma",
+        ];
         let fmh = serde_json::json!({
             "resourceType": "FamilyMemberHistory",
             "id": &fmh_id,
@@ -890,7 +919,10 @@ fn main() -> anyhow::Result<()> {
     }
 
     let manifest_path = Path::new("newloka_demo/fixtures/manifest.json");
-    fs::write(manifest_path, serde_json::to_string_pretty(&manifest_items)?)?;
+    fs::write(
+        manifest_path,
+        serde_json::to_string_pretty(&manifest_items)?,
+    )?;
 
     println!(
         "SUCCESS: Wrote {} encrypted records to newloka_demo/fixtures/records and manifest.json",

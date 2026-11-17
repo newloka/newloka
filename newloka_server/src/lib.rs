@@ -20,7 +20,9 @@ pub mod rxpad;
 pub mod state;
 pub mod updater;
 
-pub use crate::routes::auth::{CreateUserRequest, EvaluateAbacRequest, LoginResponse, UserResponse};
+pub use crate::routes::auth::{
+    CreateUserRequest, EvaluateAbacRequest, LoginResponse, UserResponse,
+};
 pub use crate::routes::pharmacopoeia::{
     pharmacopoeia_categories_handler, pharmacopoeia_check_safety_handler,
     pharmacopoeia_get_entry_handler, pharmacopoeia_get_order_set_handler,
@@ -73,8 +75,7 @@ pub async fn run(bind: &str) -> anyhow::Result<()> {
     tracing::info!("Using database: {}", db_path);
 
     let dmk = resolve_master_key()?;
-    let storage =
-        newloka_storage::StorageEngine::open(&db_path, node_id.clone(), dmk).await?;
+    let storage = newloka_storage::StorageEngine::open(&db_path, node_id.clone(), dmk).await?;
     #[cfg(feature = "demo")]
     {
         if storage.is_empty().await.unwrap_or(false) {

@@ -40,13 +40,19 @@ pub fn router() -> Router<Arc<RwLock<AppState>>> {
             get(list_federation_nodes_handler).post(register_federation_node_handler),
         )
         .route("/api/federation/ping", post(federation_ping_handler))
-        .route("/api/federation/exchange", post(federation_exchange_handler))
+        .route(
+            "/api/federation/exchange",
+            post(federation_exchange_handler),
+        )
         .route("/api/research/query", post(execute_research_query_handler))
         .route(
             "/api/research/cohorts",
             get(list_research_cohorts_handler).post(create_research_cohort_handler),
         )
-        .route("/api/research/export", post(export_deidentified_research_bundle_handler))
+        .route(
+            "/api/research/export",
+            post(export_deidentified_research_bundle_handler),
+        )
         .route("/Consent", get(search_consents).post(create_consent))
         .route(
             "/Consent/:id",
@@ -78,14 +84,11 @@ pub async fn register_federation_node_handler(
     Json(payload): Json<newloka_core::federation::FederationNode>,
 ) -> (StatusCode, Json<serde_json::Value>) {
     let state = state.read().await;
-    let mut nodes: Vec<newloka_core::federation::FederationNode> = match state
-        .storage
-        .get_json(FEDERATION_NODES_DOC_ID)
-        .await
-    {
-        Ok(Some(val)) => serde_json::from_value(val).unwrap_or_default(),
-        _ => vec![],
-    };
+    let mut nodes: Vec<newloka_core::federation::FederationNode> =
+        match state.storage.get_json(FEDERATION_NODES_DOC_ID).await {
+            Ok(Some(val)) => serde_json::from_value(val).unwrap_or_default(),
+            _ => vec![],
+        };
     nodes.retain(|n| n.node_id != payload.node_id);
     nodes.push(payload.clone());
     let val = serde_json::to_value(&nodes).unwrap_or(serde_json::json!([]));
@@ -158,13 +161,12 @@ pub async fn execute_research_query_handler(
             0.0,
         )
     } else {
-        let perturbed =
-            newloka_core::federation::DifferentialPrivacyEngine::add_laplace_noise(
-                raw_count as f64,
-                1.0,
-                query.epsilon,
-                None,
-            );
+        let perturbed = newloka_core::federation::DifferentialPrivacyEngine::add_laplace_noise(
+            raw_count as f64,
+            1.0,
+            query.epsilon,
+            None,
+        );
         (format!("{} (ε={})", perturbed, query.epsilon), perturbed)
     };
 
@@ -243,20 +245,14 @@ pub async fn export_deidentified_research_bundle_handler(
 
     let mut deidentified_records = vec![];
     for (i, p_val) in patients.iter().enumerate() {
-        if let Ok(patient) =
-            serde_json::from_value::<newloka_core::fhir::Patient>(p_val.clone())
-        {
-            let record =
-                newloka_core::federation::DifferentialPrivacyEngine::deidentify_patient(
-                    &patient,
-                    vec!["E11 - Type 2 Diabetes".into()],
-                    vec!["Metformin 500mg PO BID".into()],
-                    vec![
-                        "HbA1c 7.6%".into(),
-                        "Blood Pressure 130/84 mmHg".into(),
-                    ],
-                    "research-salt-2026",
-                );
+        if let Ok(patient) = serde_json::from_value::<newloka_core::fhir::Patient>(p_val.clone()) {
+            let record = newloka_core::federation::DifferentialPrivacyEngine::deidentify_patient(
+                &patient,
+                vec!["E11 - Type 2 Diabetes".into()],
+                vec!["Metformin 500mg PO BID".into()],
+                vec!["HbA1c 7.6%".into(), "Blood Pressure 130/84 mmHg".into()],
+                "research-salt-2026",
+            );
             deidentified_records.push(record);
         }
         if i >= 10 {
@@ -361,7 +357,13 @@ pub async fn create_consent_directive_handler(
     let val = serde_json::to_value(&current_directives).unwrap_or(serde_json::json!([]));
     let _ = state
         .storage
-        .store_json("ConsentDirective", CONSENT_DIRECTIVES_DOC_ID, &val, None, None)
+        .store_json(
+            "ConsentDirective",
+            CONSENT_DIRECTIVES_DOC_ID,
+            &val,
+            None,
+            None,
+        )
         .await;
 
     (
@@ -402,7 +404,13 @@ pub async fn revoke_consent_directive_handler(
         let val = serde_json::to_value(&current_directives).unwrap_or(serde_json::json!([]));
         let _ = state
             .storage
-            .store_json("ConsentDirective", CONSENT_DIRECTIVES_DOC_ID, &val, None, None)
+            .store_json(
+                "ConsentDirective",
+                CONSENT_DIRECTIVES_DOC_ID,
+                &val,
+                None,
+                None,
+            )
             .await;
         (
             StatusCode::OK,

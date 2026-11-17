@@ -211,14 +211,21 @@ pub async fn check_for_updates() -> UpdateCheckResponse {
         }
     };
 
-    let latest_ver = release.tag_name.trim_start_matches('v').trim_start_matches('V');
+    let latest_ver = release
+        .tag_name
+        .trim_start_matches('v')
+        .trim_start_matches('V');
     let is_newer = is_newer_version(latest_ver, current_ver);
 
     // Find best asset for this platform
     let matched_asset = find_matching_asset(&release.assets, current_os, current_arch);
 
     let (asset_name, asset_url, asset_size) = match matched_asset {
-        Some(a) => (Some(a.name.clone()), Some(a.browser_download_url.clone()), Some(a.size)),
+        Some(a) => (
+            Some(a.name.clone()),
+            Some(a.browser_download_url.clone()),
+            Some(a.size),
+        ),
         None => (None, None, None),
     };
 
@@ -277,9 +284,16 @@ pub async fn apply_update(asset_url: Option<String>) -> Result<UpdateApplyRespon
         .timeout(std::time::Duration::from_secs(180))
         .build()?;
 
-    let resp = client.get(&url).send().await.context("Failed to download update file")?;
+    let resp = client
+        .get(&url)
+        .send()
+        .await
+        .context("Failed to download update file")?;
     if !resp.status().is_success() {
-        return Err(anyhow!("Download failed with status HTTP {}", resp.status()));
+        return Err(anyhow!(
+            "Download failed with status HTTP {}",
+            resp.status()
+        ));
     }
 
     let bytes = resp.bytes().await.context("Failed to read update stream")?;
@@ -296,7 +310,11 @@ pub fn apply_binary_or_archive(bytes: &[u8]) -> Result<UpdateApplyResponse> {
     let mut updated_files = Vec::new();
 
     // Check if zip archive (starts with 'PK\x03\x04')
-    let is_zip = bytes.len() >= 4 && bytes[0] == 0x50 && bytes[1] == 0x4B && bytes[2] == 0x03 && bytes[3] == 0x04;
+    let is_zip = bytes.len() >= 4
+        && bytes[0] == 0x50
+        && bytes[1] == 0x4B
+        && bytes[2] == 0x03
+        && bytes[3] == 0x04;
 
     if is_zip {
         tracing::info!("Extracting ZIP update archive...");
@@ -316,8 +334,8 @@ pub fn apply_binary_or_archive(bytes: &[u8]) -> Result<UpdateApplyResponse> {
             };
 
             // Only update executable binaries
-            let is_target_bin = name.starts_with("newloka")
-                && (name.ends_with(".exe") || !name.contains('.'));
+            let is_target_bin =
+                name.starts_with("newloka") && (name.ends_with(".exe") || !name.contains('.'));
 
             if is_target_bin {
                 let mut content = Vec::new();
@@ -330,7 +348,9 @@ pub fn apply_binary_or_archive(bytes: &[u8]) -> Result<UpdateApplyResponse> {
         }
 
         if updated_files.is_empty() {
-            return Err(anyhow!("Archive contained no recognizable New Loka binaries"));
+            return Err(anyhow!(
+                "Archive contained no recognizable New Loka binaries"
+            ));
         }
     } else {
         // Direct executable update
@@ -389,7 +409,11 @@ pub fn restart_server() -> Result<RestartResponse> {
     let current_exe = std::env::current_exe().context("Failed to get current executable path")?;
 
     let args: Vec<String> = std::env::args().skip(1).collect();
-    tracing::info!("Spawning replacement process: {:?} with args {:?}", current_exe, args);
+    tracing::info!(
+        "Spawning replacement process: {:?} with args {:?}",
+        current_exe,
+        args
+    );
 
     let mut cmd = std::process::Command::new(&current_exe);
     cmd.args(&args);
@@ -399,7 +423,8 @@ pub fn restart_server() -> Result<RestartResponse> {
         cmd.env(k, v);
     }
 
-    cmd.spawn().context("Failed to spawn updated server process")?;
+    cmd.spawn()
+        .context("Failed to spawn updated server process")?;
 
     // Schedule graceful exit after short delay to allow HTTP response to flush
     tokio::spawn(async {
@@ -418,7 +443,11 @@ pub fn restart_server() -> Result<RestartResponse> {
 fn is_newer_version(latest: &str, current: &str) -> bool {
     let parse_parts = |v: &str| -> Vec<u32> {
         v.split('.')
-            .map(|p| p.chars().take_while(|c| c.is_ascii_digit()).collect::<String>())
+            .map(|p| {
+                p.chars()
+                    .take_while(|c| c.is_ascii_digit())
+                    .collect::<String>()
+            })
             .filter_map(|p| p.parse::<u32>().ok())
             .collect()
     };
@@ -449,7 +478,9 @@ fn find_matching_asset<'a>(
     // First try: both OS and arch in filename
     for a in assets {
         let name_lower = a.name.to_lowercase();
-        if name_lower.contains(os_kw) && (name_lower.contains(arch_kw) || (arch_kw == "x86_64" && name_lower.contains("x64"))) {
+        if name_lower.contains(os_kw)
+            && (name_lower.contains(arch_kw) || (arch_kw == "x86_64" && name_lower.contains("x64")))
+        {
             return Some(a);
         }
     }

@@ -12,7 +12,10 @@ use crate::state::AppState;
 pub fn router() -> Router<Arc<RwLock<AppState>>> {
     Router::new()
         .route("/api/rxpad/sync", post(crate::rxpad::sync_prescription))
-        .route("/api/rxpad/prescriptions", get(crate::rxpad::list_prescriptions))
+        .route(
+            "/api/rxpad/prescriptions",
+            get(crate::rxpad::list_prescriptions),
+        )
         .route(
             "/api/rxpad/prescriptions/:id",
             get(crate::rxpad::get_prescription).delete(crate::rxpad::delete_prescription),

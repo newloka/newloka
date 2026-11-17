@@ -248,34 +248,185 @@ macro_rules! resource_handlers {
             update_resource(s, p, b, $res_type).await
         }
 
-        pub async fn $delete_fn(
-            s: State<Arc<RwLock<AppState>>>,
-            p: Path<String>,
-        ) -> StatusCode {
+        pub async fn $delete_fn(s: State<Arc<RwLock<AppState>>>, p: Path<String>) -> StatusCode {
             delete_resource(s, p, $res_type).await
         }
     };
 }
 
-resource_handlers!(search_patients, create_patient, get_patient, update_patient, delete_patient, "Patient");
-resource_handlers!(search_encounters, create_encounter, get_encounter, update_encounter, delete_encounter, "Encounter");
-resource_handlers!(search_observations, create_observation, get_observation, update_observation, delete_observation, "Observation");
-resource_handlers!(search_conditions, create_condition, get_condition, update_condition, delete_condition, "Condition");
-resource_handlers!(search_medication_requests, create_medication_request, get_medication_request, update_medication_request, delete_medication_request, "MedicationRequest");
-resource_handlers!(search_medication_dispenses, create_medication_dispense, get_medication_dispense, update_medication_dispense, delete_medication_dispense, "MedicationDispense");
-resource_handlers!(search_procedures, create_procedure, get_procedure, update_procedure, delete_procedure, "Procedure");
-resource_handlers!(search_allergy_intolerances, create_allergy_intolerance, get_allergy_intolerance, update_allergy_intolerance, delete_allergy_intolerance, "AllergyIntolerance");
-resource_handlers!(search_flags, create_flag, get_flag, update_flag, delete_flag, "Flag");
-resource_handlers!(search_detected_issues, create_detected_issue, get_detected_issue, update_detected_issue, delete_detected_issue, "DetectedIssue");
-resource_handlers!(search_compositions, create_composition, get_composition, update_composition, delete_composition, "Composition");
-resource_handlers!(search_care_plans, create_care_plan, get_care_plan, update_care_plan, delete_care_plan, "CarePlan");
-resource_handlers!(search_family_member_histories, create_family_member_history, get_family_member_history, update_family_member_history, delete_family_member_history, "FamilyMemberHistory");
-resource_handlers!(search_immunizations, create_immunization, get_immunization, update_immunization, delete_immunization, "Immunization");
-resource_handlers!(search_document_references, create_document_reference, get_document_reference, update_document_reference, delete_document_reference, "DocumentReference");
-resource_handlers!(search_service_requests, create_service_request, get_service_request, update_service_request, delete_service_request, "ServiceRequest");
-resource_handlers!(search_imaging_studies, create_imaging_study, get_imaging_study, update_imaging_study, delete_imaging_study, "ImagingStudy");
-resource_handlers!(search_specimens, create_specimen, get_specimen, update_specimen, delete_specimen, "Specimen");
-resource_handlers!(search_medication_administrations, create_medication_administration, get_medication_administration, update_medication_administration, delete_medication_administration, "MedicationAdministration");
-resource_handlers!(search_medication_statements, create_medication_statement, get_medication_statement, update_medication_statement, delete_medication_statement, "MedicationStatement");
-resource_handlers!(search_whiteboards, create_whiteboard, get_whiteboard, update_whiteboard, delete_whiteboard, "Whiteboard");
-resource_handlers!(search_provenances, create_provenance, get_provenance, update_provenance, delete_provenance, "Provenance");
+resource_handlers!(
+    search_patients,
+    create_patient,
+    get_patient,
+    update_patient,
+    delete_patient,
+    "Patient"
+);
+resource_handlers!(
+    search_encounters,
+    create_encounter,
+    get_encounter,
+    update_encounter,
+    delete_encounter,
+    "Encounter"
+);
+resource_handlers!(
+    search_observations,
+    create_observation,
+    get_observation,
+    update_observation,
+    delete_observation,
+    "Observation"
+);
+resource_handlers!(
+    search_conditions,
+    create_condition,
+    get_condition,
+    update_condition,
+    delete_condition,
+    "Condition"
+);
+resource_handlers!(
+    search_medication_requests,
+    create_medication_request,
+    get_medication_request,
+    update_medication_request,
+    delete_medication_request,
+    "MedicationRequest"
+);
+resource_handlers!(
+    search_medication_dispenses,
+    create_medication_dispense,
+    get_medication_dispense,
+    update_medication_dispense,
+    delete_medication_dispense,
+    "MedicationDispense"
+);
+resource_handlers!(
+    search_procedures,
+    create_procedure,
+    get_procedure,
+    update_procedure,
+    delete_procedure,
+    "Procedure"
+);
+resource_handlers!(
+    search_allergy_intolerances,
+    create_allergy_intolerance,
+    get_allergy_intolerance,
+    update_allergy_intolerance,
+    delete_allergy_intolerance,
+    "AllergyIntolerance"
+);
+resource_handlers!(
+    search_flags,
+    create_flag,
+    get_flag,
+    update_flag,
+    delete_flag,
+    "Flag"
+);
+resource_handlers!(
+    search_detected_issues,
+    create_detected_issue,
+    get_detected_issue,
+    update_detected_issue,
+    delete_detected_issue,
+    "DetectedIssue"
+);
+resource_handlers!(
+    search_compositions,
+    create_composition,
+    get_composition,
+    update_composition,
+    delete_composition,
+    "Composition"
+);
+resource_handlers!(
+    search_care_plans,
+    create_care_plan,
+    get_care_plan,
+    update_care_plan,
+    delete_care_plan,
+    "CarePlan"
+);
+resource_handlers!(
+    search_family_member_histories,
+    create_family_member_history,
+    get_family_member_history,
+    update_family_member_history,
+    delete_family_member_history,
+    "FamilyMemberHistory"
+);
+resource_handlers!(
+    search_immunizations,
+    create_immunization,
+    get_immunization,
+    update_immunization,
+    delete_immunization,
+    "Immunization"
+);
+resource_handlers!(
+    search_document_references,
+    create_document_reference,
+    get_document_reference,
+    update_document_reference,
+    delete_document_reference,
+    "DocumentReference"
+);
+resource_handlers!(
+    search_service_requests,
+    create_service_request,
+    get_service_request,
+    update_service_request,
+    delete_service_request,
+    "ServiceRequest"
+);
+resource_handlers!(
+    search_imaging_studies,
+    create_imaging_study,
+    get_imaging_study,
+    update_imaging_study,
+    delete_imaging_study,
+    "ImagingStudy"
+);
+resource_handlers!(
+    search_specimens,
+    create_specimen,
+    get_specimen,
+    update_specimen,
+    delete_specimen,
+    "Specimen"
+);
+resource_handlers!(
+    search_medication_administrations,
+    create_medication_administration,
+    get_medication_administration,
+    update_medication_administration,
+    delete_medication_administration,
+    "MedicationAdministration"
+);
+resource_handlers!(
+    search_medication_statements,
+    create_medication_statement,
+    get_medication_statement,
+    update_medication_statement,
+    delete_medication_statement,
+    "MedicationStatement"
+);
+resource_handlers!(
+    search_whiteboards,
+    create_whiteboard,
+    get_whiteboard,
+    update_whiteboard,
+    delete_whiteboard,
+    "Whiteboard"
+);
+resource_handlers!(
+    search_provenances,
+    create_provenance,
+    get_provenance,
+    update_provenance,
+    delete_provenance,
+    "Provenance"
+);

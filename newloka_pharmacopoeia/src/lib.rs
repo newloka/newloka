@@ -23,8 +23,16 @@ mod tests {
         assert_eq!(version, "2026.11");
         assert!(!date.is_empty());
         assert!(standard.contains("Indian Pharmacopoeia"));
-        assert!(monographs_count >= 50, "Expected at least 50 monographs, found {}", monographs_count);
-        assert!(ordersets_count >= 10, "Expected at least 10 order sets, found {}", ordersets_count);
+        assert!(
+            monographs_count >= 50,
+            "Expected at least 50 monographs, found {}",
+            monographs_count
+        );
+        assert!(
+            ordersets_count >= 10,
+            "Expected at least 10 order sets, found {}",
+            ordersets_count
+        );
     }
 
     #[test]
@@ -51,7 +59,10 @@ mod tests {
         // 2. Search "Augmentin" -> resolves to Amoxicillin and Potassium Clavulanate
         let aug_res = index.search("Augmentin", None, 5);
         assert!(!aug_res.is_empty());
-        assert_eq!(aug_res[0].entry.inn_name, "Amoxicillin and Potassium Clavulanate");
+        assert_eq!(
+            aug_res[0].entry.inn_name,
+            "Amoxicillin and Potassium Clavulanate"
+        );
         assert_eq!(aug_res[0].matched_via, "brand");
 
         // 3. Search "Monocef" -> resolves to Ceftriaxone
@@ -88,32 +99,65 @@ mod tests {
         assert!(order_sets.len() >= 10);
 
         // Verify Acute Coronary Syndrome protocol
-        let acs = index.get_order_set("orderset-acs-chestpain").expect("ACS order set must exist");
+        let acs = index
+            .get_order_set("orderset-acs-chestpain")
+            .expect("ACS order set must exist");
         assert!(acs.name.contains("Acute Coronary Syndrome"));
-        assert!(acs.items.iter().any(|it| it.title.contains("Aspirin 325 mg")));
-        assert!(acs.items.iter().any(|it| it.title.contains("Clopidogrel 300 mg")));
-        assert!(acs.items.iter().any(|it| it.title.contains("Atorvastatin 80 mg")));
+        assert!(acs
+            .items
+            .iter()
+            .any(|it| it.title.contains("Aspirin 325 mg")));
+        assert!(acs
+            .items
+            .iter()
+            .any(|it| it.title.contains("Clopidogrel 300 mg")));
+        assert!(acs
+            .items
+            .iter()
+            .any(|it| it.title.contains("Atorvastatin 80 mg")));
 
         // Verify Sepsis Hour-1 bundle
-        let sepsis = index.get_order_set("orderset-sepsis-hour1").expect("Sepsis order set must exist");
-        assert!(sepsis.items.iter().any(|it| it.title.contains("Piperacillin / Tazobactam")));
-        assert!(sepsis.items.iter().any(|it| it.title.contains("Blood Cultures")));
-        assert!(sepsis.items.iter().any(|it| it.title.contains("0.9% Normal Saline 30 mL/kg")));
+        let sepsis = index
+            .get_order_set("orderset-sepsis-hour1")
+            .expect("Sepsis order set must exist");
+        assert!(sepsis
+            .items
+            .iter()
+            .any(|it| it.title.contains("Piperacillin / Tazobactam")));
+        assert!(sepsis
+            .items
+            .iter()
+            .any(|it| it.title.contains("Blood Cultures")));
+        assert!(sepsis
+            .items
+            .iter()
+            .any(|it| it.title.contains("0.9% Normal Saline 30 mL/kg")));
 
         // Verify Diabetic Ketoacidosis protocol
-        let dka = index.get_order_set("orderset-dka-glycemic").expect("DKA order set must exist");
-        assert!(dka.items.iter().any(|it| it.title.contains("Human Regular Insulin")));
+        let dka = index
+            .get_order_set("orderset-dka-glycemic")
+            .expect("DKA order set must exist");
+        assert!(dka
+            .items
+            .iter()
+            .any(|it| it.title.contains("Human Regular Insulin")));
     }
 
     #[test]
     fn test_clinical_safety_penicillin_allergy_shield() {
         let index = PharmacopoeiaIndex::default();
-        let drugs = vec!["Augmentin 625 Duo".to_string(), "Paracetamol 650mg".to_string()];
+        let drugs = vec![
+            "Augmentin 625 Duo".to_string(),
+            "Paracetamol 650mg".to_string(),
+        ];
         let allergies = vec!["Penicillin".to_string()];
 
         let report = index.check_safety(&drugs, &allergies);
         assert!(report.has_critical);
-        let pen_warning = report.warnings.iter().find(|w| w.warning_type == "AllergyCrossReactivity");
+        let pen_warning = report
+            .warnings
+            .iter()
+            .find(|w| w.warning_type == "AllergyCrossReactivity");
         assert!(pen_warning.is_some());
         assert_eq!(pen_warning.unwrap().level, SafetyWarningLevel::Critical);
     }
@@ -126,9 +170,15 @@ mod tests {
 
         let report = index.check_safety(&drugs, &allergies);
         assert!(report.has_critical);
-        let dup_warning = report.warnings.iter().find(|w| w.warning_type == "DuplicateTherapy");
+        let dup_warning = report
+            .warnings
+            .iter()
+            .find(|w| w.warning_type == "DuplicateTherapy");
         assert!(dup_warning.is_some());
-        assert!(dup_warning.unwrap().message.contains("Duplicate Systemic NSAID"));
+        assert!(dup_warning
+            .unwrap()
+            .message
+            .contains("Duplicate Systemic NSAID"));
     }
 
     #[test]
@@ -138,7 +188,10 @@ mod tests {
         let allergies = vec![];
 
         let report = index.check_safety(&drugs, &allergies);
-        let h1_warning = report.warnings.iter().find(|w| w.warning_type == "ScheduleRestriction");
+        let h1_warning = report
+            .warnings
+            .iter()
+            .find(|w| w.warning_type == "ScheduleRestriction");
         assert!(h1_warning.is_some());
         assert_eq!(h1_warning.unwrap().level, SafetyWarningLevel::Info);
         assert!(h1_warning.unwrap().message.contains("Schedule H1"));

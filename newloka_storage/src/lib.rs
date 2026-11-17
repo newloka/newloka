@@ -104,11 +104,7 @@ pub struct UserRow {
 
 impl StorageEngine {
     /// Open (or create) the SQLite backing store.
-    pub async fn open(
-        db_path: &str,
-        node_id: String,
-        dmk: DeviceMasterKey,
-    ) -> Result<Self> {
+    pub async fn open(db_path: &str, node_id: String, dmk: DeviceMasterKey) -> Result<Self> {
         let connect_opts = if db_path.contains(":memory:") {
             SqliteConnectOptions::from_str(db_path)?
         } else {
@@ -124,7 +120,10 @@ impl StorageEngine {
             #[cfg(windows)]
             let file_path = if file_path.len() >= 3
                 && (file_path.starts_with('/') || file_path.starts_with('\\'))
-                && file_path.chars().nth(1).is_some_and(|c| c.is_ascii_alphabetic())
+                && file_path
+                    .chars()
+                    .nth(1)
+                    .is_some_and(|c| c.is_ascii_alphabetic())
                 && file_path.chars().nth(2) == Some(':')
             {
                 &file_path[1..]
@@ -680,11 +679,7 @@ impl StorageEngine {
     }
 
     /// Build a sync manifest from local storage changes.
-    pub async fn build_manifest(
-        &self,
-        node_id: &str,
-        since: i64,
-    ) -> Result<DeltaSyncResponse> {
+    pub async fn build_manifest(&self, node_id: &str, since: i64) -> Result<DeltaSyncResponse> {
         let records = self.changed_since(since).await?;
         let mut sync_records = Vec::with_capacity(records.len());
         let conflicts = vec![];

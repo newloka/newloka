@@ -154,7 +154,8 @@ impl PolicyEngine {
                     || req.resource.resource_type == "Condition")
             {
                 return PolicyDecision::Deny {
-                    reason: "Billing staff do not hold clinical prescribing or charting privileges".into(),
+                    reason: "Billing staff do not hold clinical prescribing or charting privileges"
+                        .into(),
                 };
             }
 

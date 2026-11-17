@@ -110,13 +110,19 @@ pub fn user_to_response(u: &newloka_core::identity::User) -> UserResponse {
 pub fn router() -> Router<Arc<RwLock<AppState>>> {
     Router::new()
         .route("/users", get(list_users).post(create_user))
-        .route("/users/:id", get(get_user).put(update_user).delete(delete_user))
+        .route(
+            "/users/:id",
+            get(get_user).put(update_user).delete(delete_user),
+        )
         .route("/abac/evaluate", post(evaluate_abac))
         .route("/abac/policies", get(list_abac_policies))
         .route("/auth/login", post(login_handler))
         .route("/auth/session", get(session_handler))
         .route("/auth/logout", post(logout_handler))
-        .route("/api/auth/enterprise/login", post(enterprise_ldap_login_handler))
+        .route(
+            "/api/auth/enterprise/login",
+            post(enterprise_ldap_login_handler),
+        )
         .route(
             "/api/auth/directory/config",
             get(get_directory_config_handler).post(save_directory_config_handler),
@@ -556,7 +562,13 @@ pub async fn save_directory_config_handler(
     let state = state.read().await;
     match state
         .storage
-        .store_json("EnterpriseDirectory", DIRECTORY_CONFIG_DOC_ID, &payload, None, None)
+        .store_json(
+            "EnterpriseDirectory",
+            DIRECTORY_CONFIG_DOC_ID,
+            &payload,
+            None,
+            None,
+        )
         .await
     {
         Ok(_) => (StatusCode::OK, Json(payload)),
@@ -573,18 +585,14 @@ pub async fn enterprise_ldap_login_handler(
 ) -> (StatusCode, Json<serde_json::Value>) {
     let (config, node_id, default_tier) = {
         let read = state.read().await;
-        let cfg: newloka_core::identity::EnterpriseDirectoryConfig = match read
-            .storage
-            .get_json(DIRECTORY_CONFIG_DOC_ID)
-            .await
-        {
-            Ok(Some(val)) => serde_json::from_value(val).unwrap_or_default(),
-            _ => {
-                let mut c = newloka_core::identity::EnterpriseDirectoryConfig::default();
-                c.enabled = true;
-                c
-            }
-        };
+        let cfg: newloka_core::identity::EnterpriseDirectoryConfig =
+            match read.storage.get_json(DIRECTORY_CONFIG_DOC_ID).await {
+                Ok(Some(val)) => serde_json::from_value(val).unwrap_or_default(),
+                _ => newloka_core::identity::EnterpriseDirectoryConfig {
+                    enabled: true,
+                    ..Default::default()
+                },
+            };
         (cfg, read.node_id.clone(), read.config.tier.clone())
     };
 
@@ -623,7 +631,9 @@ pub async fn enterprise_ldap_login_handler(
     } else {
         (
             StatusCode::UNAUTHORIZED,
-            Json(serde_json::json!({ "error": "Invalid enterprise credentials or directory authentication rejected" })),
+            Json(
+                serde_json::json!({ "error": "Invalid enterprise credentials or directory authentication rejected" }),
+            ),
         )
     }
 }

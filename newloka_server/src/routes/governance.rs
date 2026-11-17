@@ -28,7 +28,10 @@ pub fn router() -> Router<Arc<RwLock<AppState>>> {
             "/api/billing/invoices",
             get(get_billing_invoices_handler).post(create_billing_invoice_handler),
         )
-        .route("/api/billing/invoices/:id/pay", post(pay_billing_invoice_handler))
+        .route(
+            "/api/billing/invoices/:id/pay",
+            post(pay_billing_invoice_handler),
+        )
         .route("/api/pharmacy/summary", get(get_pharmacy_summary_handler))
         .route(
             "/api/departments",
@@ -46,8 +49,14 @@ pub fn router() -> Router<Arc<RwLock<AppState>>> {
             "/api/departments/transfers/:id/reject",
             post(reject_transfer_handler),
         )
-        .route("/api/reports/overview", get(hospital_reports_overview_handler))
-        .route("/api/reports/department/:id", get(hospital_reports_department_handler))
+        .route(
+            "/api/reports/overview",
+            get(hospital_reports_overview_handler),
+        )
+        .route(
+            "/api/reports/department/:id",
+            get(hospital_reports_department_handler),
+        )
 }
 
 pub async fn search_audit(
@@ -415,11 +424,17 @@ pub async fn accept_transfer_handler(
         if t.get("id").and_then(|v| v.as_str()) == Some(&id) {
             t["status"] = serde_json::json!("accepted");
             t["updated_at"] = serde_json::json!(chrono::Utc::now().to_rfc3339());
-            if let Some(clinician) = payload.get("accepting_clinician_name").and_then(|v| v.as_str()) {
+            if let Some(clinician) = payload
+                .get("accepting_clinician_name")
+                .and_then(|v| v.as_str())
+            {
                 t["accepting_clinician_name"] = serde_json::json!(clinician);
                 t["handover_signed_by"] = serde_json::json!(clinician);
             }
-            if let Some(clinician_id) = payload.get("accepting_clinician_id").and_then(|v| v.as_str()) {
+            if let Some(clinician_id) = payload
+                .get("accepting_clinician_id")
+                .and_then(|v| v.as_str())
+            {
                 t["accepting_clinician_id"] = serde_json::json!(clinician_id);
             }
             if let Some(bed) = payload.get("assigned_bed").and_then(|v| v.as_str()) {
@@ -535,7 +550,12 @@ pub async fn hospital_reports_overview_handler(
         .map(|a| a.len())
         .unwrap_or(9);
 
-    let transfers_val = state.storage.get_json(TRANSFERS_DOC_ID).await.ok().flatten();
+    let transfers_val = state
+        .storage
+        .get_json(TRANSFERS_DOC_ID)
+        .await
+        .ok()
+        .flatten();
     let transfers_count = transfers_val
         .as_ref()
         .and_then(|v| v.as_array())

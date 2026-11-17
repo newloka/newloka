@@ -1,6 +1,6 @@
 use newloka_core::crypto::DeviceMasterKey;
-use newloka_storage::StorageEngine;
 use newloka_demo::{seed_demo_data, DEMO_MASTER_KEY_BYTES};
+use newloka_storage::StorageEngine;
 
 #[tokio::test]
 async fn test_demo_seeding_succeeds_with_demo_master_key() {
@@ -16,28 +16,51 @@ async fn test_demo_seeding_succeeds_with_demo_master_key() {
     .expect("Failed to open in-memory storage");
 
     let result = seed_demo_data(&storage, "test-demo-node").await;
-    assert!(result.is_ok(), "Demo seeding should succeed with correct Demo Master Key: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Demo seeding should succeed with correct Demo Master Key: {:?}",
+        result.err()
+    );
 
     // Verify records can be retrieved and decrypted
-    let config = storage.get_json("instance-config").await.expect("Failed to get config");
-    assert!(config.is_some(), "instance-config must exist after demo seeding");
+    let config = storage
+        .get_json("instance-config")
+        .await
+        .expect("Failed to get config");
+    assert!(
+        config.is_some(),
+        "instance-config must exist after demo seeding"
+    );
 
-    let prescriber = storage.get_json("prescriber-profile").await.expect("Failed to get prescriber");
-    assert!(prescriber.is_some(), "prescriber-profile must exist after demo seeding");
+    let prescriber = storage
+        .get_json("prescriber-profile")
+        .await
+        .expect("Failed to get prescriber");
+    assert!(
+        prescriber.is_some(),
+        "prescriber-profile must exist after demo seeding"
+    );
 
-    let census = storage.get_json("inpatient-census").await.expect("Failed to get census");
-    assert!(census.is_some(), "inpatient-census must exist after demo seeding");
+    let census = storage
+        .get_json("inpatient-census")
+        .await
+        .expect("Failed to get census");
+    assert!(
+        census.is_some(),
+        "inpatient-census must exist after demo seeding"
+    );
 
-    let patients = storage.search_json("Patient", None).await.expect("Failed to search patients");
+    let patients = storage
+        .search_json("Patient", None)
+        .await
+        .expect("Failed to search patients");
     assert_eq!(patients.len(), 10, "Should have 10 demo patients seeded");
 }
 
 #[tokio::test]
 async fn test_demo_seeding_rejected_with_non_demo_master_key() {
     // A customer's genuine or random key
-    let customer_dmk = DeviceMasterKey {
-        key: [0x42u8; 32],
-    };
+    let customer_dmk = DeviceMasterKey { key: [0x42u8; 32] };
     let storage = StorageEngine::open(
         "sqlite::memory:?cache=shared",
         "customer-hospital-node".to_string(),
@@ -47,7 +70,10 @@ async fn test_demo_seeding_rejected_with_non_demo_master_key() {
     .expect("Failed to open in-memory storage");
 
     let result = seed_demo_data(&storage, "customer-hospital-node").await;
-    assert!(result.is_err(), "Seeding demo fixtures with customer key MUST fail cryptographically");
+    assert!(
+        result.is_err(),
+        "Seeding demo fixtures with customer key MUST fail cryptographically"
+    );
 
     let err_str = result.unwrap_err().to_string();
     assert!(

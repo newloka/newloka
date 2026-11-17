@@ -83,10 +83,7 @@ impl Role {
     pub fn can_access_billing(&self) -> bool {
         matches!(
             self,
-            Role::Billing
-                | Role::Administrator
-                | Role::DepartmentHead
-                | Role::Clinician
+            Role::Billing | Role::Administrator | Role::DepartmentHead | Role::Clinician
         )
     }
 
@@ -338,9 +335,15 @@ impl EnterpriseDirectoryConfig {
         } else if clean_user.contains("nurse") {
             (vec![Role::Nurse], Some("dept-genmed".into()))
         } else if clean_user.contains("cardio") {
-            (vec![Role::Clinician, Role::DepartmentHead], Some("dept-cardio".into()))
+            (
+                vec![Role::Clinician, Role::DepartmentHead],
+                Some("dept-cardio".into()),
+            )
         } else if clean_user.contains("emerg") {
-            (vec![Role::Clinician, Role::EmergencyOverride], Some("dept-emerg".into()))
+            (
+                vec![Role::Clinician, Role::EmergencyOverride],
+                Some("dept-emerg".into()),
+            )
         } else if clean_user.contains("pharm") {
             (vec![Role::Pharmacist], Some("dept-pharm".into()))
         } else if clean_user.contains("resident") {

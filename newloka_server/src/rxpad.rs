@@ -184,7 +184,13 @@ pub async fn sync_prescription(
     });
     let _ = state
         .storage
-        .store_json("Encounter", &encounter_id, &encounter_json, Some(patient_id.clone()), None)
+        .store_json(
+            "Encounter",
+            &encounter_id,
+            &encounter_json,
+            Some(patient_id.clone()),
+            None,
+        )
         .await;
 
     // 3. Observations: Blood Pressure & Body Weight
@@ -193,7 +199,10 @@ pub async fn sync_prescription(
         if !bp_clean.is_empty() {
             let parts: Vec<&str> = bp_clean.split('/').collect();
             if parts.len() == 2 {
-                if let (Ok(sys), Ok(dia)) = (parts[0].trim().parse::<f64>(), parts[1].trim().parse::<f64>()) {
+                if let (Ok(sys), Ok(dia)) = (
+                    parts[0].trim().parse::<f64>(),
+                    parts[1].trim().parse::<f64>(),
+                ) {
                     let bp_id = uuid::Uuid::new_v4().to_string();
                     let bp_json = serde_json::json!({
                         "resourceType": "Observation",
@@ -230,7 +239,13 @@ pub async fn sync_prescription(
                     });
                     let _ = state
                         .storage
-                        .store_json("Observation", &bp_id, &bp_json, Some(patient_id.clone()), None)
+                        .store_json(
+                            "Observation",
+                            &bp_id,
+                            &bp_json,
+                            Some(patient_id.clone()),
+                            None,
+                        )
                         .await;
                 }
             }
@@ -238,7 +253,11 @@ pub async fn sync_prescription(
     }
 
     if let Some(ref weight_str) = payload.weight {
-        let w_clean = weight_str.trim().trim_end_matches("kg").trim_end_matches("KG").trim();
+        let w_clean = weight_str
+            .trim()
+            .trim_end_matches("kg")
+            .trim_end_matches("KG")
+            .trim();
         if let Ok(w_val) = w_clean.parse::<f64>() {
             let w_id = uuid::Uuid::new_v4().to_string();
             let w_json = serde_json::json!({
@@ -262,7 +281,13 @@ pub async fn sync_prescription(
             });
             let _ = state
                 .storage
-                .store_json("Observation", &w_id, &w_json, Some(patient_id.clone()), None)
+                .store_json(
+                    "Observation",
+                    &w_id,
+                    &w_json,
+                    Some(patient_id.clone()),
+                    None,
+                )
                 .await;
         }
     }
@@ -294,7 +319,13 @@ pub async fn sync_prescription(
             });
             let _ = state
                 .storage
-                .store_json("Condition", &cond_id, &cond_json, Some(patient_id.clone()), None)
+                .store_json(
+                    "Condition",
+                    &cond_id,
+                    &cond_json,
+                    Some(patient_id.clone()),
+                    None,
+                )
                 .await;
         }
     }
@@ -349,7 +380,13 @@ pub async fn sync_prescription(
         });
         let _ = state
             .storage
-            .store_json("MedicationRequest", &med_id, &med_json, Some(patient_id.clone()), None)
+            .store_json(
+                "MedicationRequest",
+                &med_id,
+                &med_json,
+                Some(patient_id.clone()),
+                None,
+            )
             .await;
         med_ids.push(med_id);
     }
@@ -380,7 +417,13 @@ pub async fn sync_prescription(
         });
         let _ = state
             .storage
-            .store_json("ServiceRequest", &srv_id, &srv_json, Some(patient_id.clone()), None)
+            .store_json(
+                "ServiceRequest",
+                &srv_id,
+                &srv_json,
+                Some(patient_id.clone()),
+                None,
+            )
             .await;
         srv_ids.push(srv_id);
     }
@@ -431,7 +474,13 @@ pub async fn sync_prescription(
 
     let _ = state
         .storage
-        .store_json("DocumentReference", &prescription_id, &doc_json, Some(patient_id.clone()), None)
+        .store_json(
+            "DocumentReference",
+            &prescription_id,
+            &doc_json,
+            Some(patient_id.clone()),
+            None,
+        )
         .await;
 
     tracing::info!(
@@ -454,7 +503,8 @@ pub async fn sync_prescription(
                 p.parent().map(|d| d.to_path_buf())
             } else {
                 None
-            }.unwrap_or_else(|| {
+            }
+            .unwrap_or_else(|| {
                 let default_clinic = std::path::PathBuf::from(r"D:\Medical\Clinic");
                 if default_clinic.exists() {
                     default_clinic
@@ -465,7 +515,11 @@ pub async fn sync_prescription(
 
             let out_pdf = target_dir.join(&filename);
             if let Err(e) = std::fs::write(&out_pdf, &pdf_bytes) {
-                tracing::warn!("Failed to save prescription PDF to {}: {}", out_pdf.display(), e);
+                tracing::warn!(
+                    "Failed to save prescription PDF to {}: {}",
+                    out_pdf.display(),
+                    e
+                );
             } else {
                 tracing::info!("Saved prescription PDF directly to {}", out_pdf.display());
             }
@@ -589,7 +643,13 @@ pub async fn get_prescription_summaries(state: &AppState) -> Vec<RxPadPrescripti
             let meds_count = meds_vec.len();
             let meds_summary = meds_vec
                 .iter()
-                .filter_map(|m| if m.drug.trim().is_empty() { None } else { Some(m.drug.as_str()) })
+                .filter_map(|m| {
+                    if m.drug.trim().is_empty() {
+                        None
+                    } else {
+                        Some(m.drug.as_str())
+                    }
+                })
                 .take(3)
                 .collect::<Vec<_>>()
                 .join(", ");
@@ -680,14 +740,16 @@ pub async fn dispense_prescription(
 
     let now_millis = Utc::now().timestamp_millis();
     let now_iso = Utc::now().to_rfc3339();
-    let practitioner = payload
-        .practitioner
-        .unwrap_or_default();
+    let practitioner = payload.practitioner.unwrap_or_default();
     let quantity = payload
         .quantity
         .unwrap_or_else(|| "Full prescribed quantity".to_string());
-    let lot_number = payload.lot_number.unwrap_or_else(|| "LOT-2026-09".to_string());
-    let notes = payload.notes.unwrap_or_else(|| "Dispensed at clinic pharmacy".to_string());
+    let lot_number = payload
+        .lot_number
+        .unwrap_or_else(|| "LOT-2026-09".to_string());
+    let notes = payload
+        .notes
+        .unwrap_or_else(|| "Dispensed at clinic pharmacy".to_string());
 
     let patient_id = doc
         .get("subject")
@@ -832,7 +894,11 @@ pub async fn search_patients(
     let mut results = Vec::new();
 
     for p in patients {
-        let id = p.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let id = p
+            .get("id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
         let name = p
             .get("name")
             .and_then(|n| n.as_array())
@@ -904,13 +970,14 @@ pub async fn update_formulary(
     Json(payload): Json<serde_json::Value>,
 ) -> (StatusCode, Json<serde_json::Value>) {
     let state = state.read().await;
-    let incoming_items: Vec<RxPadMedItem> = if let Ok(items) = serde_json::from_value(payload.clone()) {
-        items
-    } else if let Some(items) = payload.get("items") {
-        serde_json::from_value(items.clone()).unwrap_or_default()
-    } else {
-        vec![]
-    };
+    let incoming_items: Vec<RxPadMedItem> =
+        if let Ok(items) = serde_json::from_value(payload.clone()) {
+            items
+        } else if let Some(items) = payload.get("items") {
+            serde_json::from_value(items.clone()).unwrap_or_default()
+        } else {
+            vec![]
+        };
 
     let updated = merge_formulary_items(&state, &incoming_items).await;
     (
@@ -1007,7 +1074,6 @@ pub async fn rxpad_events_handler(
 
     Sse::new(stream).keep_alive(KeepAlive::default())
 }
-
 
 // ---------------------------------------------------------------------------
 // Helper Functions
@@ -1334,9 +1400,7 @@ async fn merge_formulary_items(state: &AppState, new_items: &[RxPadMedItem]) -> 
 
 pub const TEMPLATE_DOC_ID: &str = "rxpad-template-default";
 
-pub async fn get_template(
-    State(state): State<Arc<RwLock<AppState>>>,
-) -> Json<serde_json::Value> {
+pub async fn get_template(State(state): State<Arc<RwLock<AppState>>>) -> Json<serde_json::Value> {
     let state = state.read().await;
     if let Ok(Some(doc)) = state.storage.get_json(TEMPLATE_DOC_ID).await {
         return Json(doc);
@@ -1437,4 +1501,3 @@ pub async fn save_template(
         ),
     }
 }
-

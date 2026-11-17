@@ -177,12 +177,12 @@ pub enum BiologicalSex {
 /// Chronic Kidney Disease (CKD) staging based on KDIGO guidelines.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CkdStage {
-    G1Normal,         // eGFR >= 90
-    G2MildlyDecreased, // eGFR 60-89
-    G3aMildToModerate, // eGFR 45-59
+    G1Normal,            // eGFR >= 90
+    G2MildlyDecreased,   // eGFR 60-89
+    G3aMildToModerate,   // eGFR 45-59
     G3bModerateToSevere, // eGFR 30-44
     G4SeverelyDecreased, // eGFR 15-29
-    G5KidneyFailure,   // eGFR < 15
+    G5KidneyFailure,     // eGFR < 15
 }
 
 /// Result of eGFR CKD-EPI (2021 race-free equation) evaluation.
@@ -266,9 +266,13 @@ pub fn evaluate_dka_risk(
 
     if arterial_ph < 7.00 || serum_bicarbonate_meq_l < 10.0 {
         DkaSeverity::Severe
-    } else if (7.00..=7.24).contains(&arterial_ph) || (10.0..=14.9).contains(&serum_bicarbonate_meq_l) {
+    } else if (7.00..=7.24).contains(&arterial_ph)
+        || (10.0..=14.9).contains(&serum_bicarbonate_meq_l)
+    {
         DkaSeverity::Moderate
-    } else if (7.25..=7.30).contains(&arterial_ph) || (15.0..=18.0).contains(&serum_bicarbonate_meq_l) {
+    } else if (7.25..=7.30).contains(&arterial_ph)
+        || (15.0..=18.0).contains(&serum_bicarbonate_meq_l)
+    {
         DkaSeverity::Mild
     } else {
         DkaSeverity::None
@@ -334,16 +338,31 @@ mod tests {
         // Female, 75 years, creatinine 2.5 mg/dL (severe impairment)
         let female_res = calculate_egfr_ckd_epi(2.5, 75, BiologicalSex::Female).unwrap();
         assert!(female_res.egfr_value < 25.0);
-        assert!(matches!(female_res.stage, CkdStage::G4SeverelyDecreased | CkdStage::G5KidneyFailure));
+        assert!(matches!(
+            female_res.stage,
+            CkdStage::G4SeverelyDecreased | CkdStage::G5KidneyFailure
+        ));
         assert!(female_res.requires_dose_adjustment);
     }
 
     #[test]
     fn test_dka_severity_grading() {
-        assert_eq!(evaluate_dka_risk(350.0, 6.95, 8.0, true), DkaSeverity::Severe);
-        assert_eq!(evaluate_dka_risk(300.0, 7.15, 12.0, true), DkaSeverity::Moderate);
-        assert_eq!(evaluate_dka_risk(280.0, 7.28, 16.0, true), DkaSeverity::Mild);
-        assert_eq!(evaluate_dka_risk(200.0, 7.10, 10.0, false), DkaSeverity::None);
+        assert_eq!(
+            evaluate_dka_risk(350.0, 6.95, 8.0, true),
+            DkaSeverity::Severe
+        );
+        assert_eq!(
+            evaluate_dka_risk(300.0, 7.15, 12.0, true),
+            DkaSeverity::Moderate
+        );
+        assert_eq!(
+            evaluate_dka_risk(280.0, 7.28, 16.0, true),
+            DkaSeverity::Mild
+        );
+        assert_eq!(
+            evaluate_dka_risk(200.0, 7.10, 10.0, false),
+            DkaSeverity::None
+        );
     }
 
     #[test]

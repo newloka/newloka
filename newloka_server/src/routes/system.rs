@@ -239,9 +239,7 @@ pub async fn sync_delta(Json(body): Json<serde_json::Value>) -> Json<serde_json:
     }))
 }
 
-pub async fn sync_manifest(
-    State(state): State<Arc<RwLock<AppState>>>,
-) -> Json<serde_json::Value> {
+pub async fn sync_manifest(State(state): State<Arc<RwLock<AppState>>>) -> Json<serde_json::Value> {
     let state = state.read().await;
     Json(serde_json::json!({
         "node_id": state.node_id,
@@ -469,7 +467,9 @@ pub async fn save_prescriber_profile_handler(
         Ok(_) => (StatusCode::OK, Json(payload)),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({ "error": format!("Failed to save prescriber profile: {}", e) })),
+            Json(
+                serde_json::json!({ "error": format!("Failed to save prescriber profile: {}", e) }),
+            ),
         ),
     }
 }

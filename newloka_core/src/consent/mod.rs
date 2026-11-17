@@ -10,8 +10,8 @@ use serde::{Deserialize, Serialize};
 pub struct ConsentDirective {
     pub id: String,
     pub patient_id: String,
-    pub status: String, // "active", "revoked", "expired", "draft"
-    pub scope: String,  // "research", "treatment-transfer", "emergency", "general"
+    pub status: String,  // "active", "revoked", "expired", "draft"
+    pub scope: String,   // "research", "treatment-transfer", "emergency", "general"
     pub purpose: String, // "RESEARCH", "TREATMENT_TRANSFER", "EMERGENCY_OVERRIDE", "CARE_COORDINATION"
     pub recipient_node_id: Option<String>, // Specific node or None for all federation nodes
     pub recipient_name: Option<String>,
@@ -62,7 +62,10 @@ impl ConsentEngine {
 
         if matching.is_empty() {
             return ConsentDecision::Deny {
-                reason: format!("No active consent directive found for patient {}", patient_id),
+                reason: format!(
+                    "No active consent directive found for patient {}",
+                    patient_id
+                ),
             };
         }
 
@@ -88,9 +91,10 @@ impl ConsentEngine {
             }
 
             // Check data category
-            let category_matches = d.data_categories.iter().any(|c| {
-                c == "*" || c == "ALL" || c.eq_ignore_ascii_case(resource_type)
-            });
+            let category_matches = d
+                .data_categories
+                .iter()
+                .any(|c| c == "*" || c == "ALL" || c.eq_ignore_ascii_case(resource_type));
 
             if !category_matches {
                 continue;

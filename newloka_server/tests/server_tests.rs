@@ -19,10 +19,9 @@ async fn test_app() -> (axum::Router, Arc<RwLock<newloka_server::AppState>>) {
     let dmk = newloka_core::crypto::DeviceMasterKey {
         key: newloka_demo::DEMO_MASTER_KEY_BYTES,
     };
-    let storage =
-        newloka_storage::StorageEngine::open(&db_path(), "test-node".to_string(), dmk)
-            .await
-            .unwrap();
+    let storage = newloka_storage::StorageEngine::open(&db_path(), "test-node".to_string(), dmk)
+        .await
+        .unwrap();
     newloka_server::demo::seed_demo_data(&storage, "test-node")
         .await
         .unwrap();
@@ -37,10 +36,9 @@ async fn test_app() -> (axum::Router, Arc<RwLock<newloka_server::AppState>>) {
 
 async fn test_app_unseeded() -> (axum::Router, Arc<RwLock<newloka_server::AppState>>) {
     let dmk = newloka_core::crypto::DeviceMasterKey::generate();
-    let storage =
-        newloka_storage::StorageEngine::open(&db_path(), "test-node".to_string(), dmk)
-            .await
-            .unwrap();
+    let storage = newloka_storage::StorageEngine::open(&db_path(), "test-node".to_string(), dmk)
+        .await
+        .unwrap();
     let storage = Arc::new(storage);
     let state = Arc::new(RwLock::new(newloka_server::AppState::new(
         "test-node".to_string(),
@@ -171,10 +169,9 @@ async fn test_demo_seed_data() {
     let dmk = newloka_core::crypto::DeviceMasterKey {
         key: newloka_demo::DEMO_MASTER_KEY_BYTES,
     };
-    let storage =
-        newloka_storage::StorageEngine::open(&db_path(), "test-node".to_string(), dmk)
-            .await
-            .unwrap();
+    let storage = newloka_storage::StorageEngine::open(&db_path(), "test-node".to_string(), dmk)
+        .await
+        .unwrap();
 
     newloka_server::demo::seed_demo_data(&storage, "test-node")
         .await
@@ -271,11 +268,17 @@ async fn test_rxpad_sync_and_dispense() {
     assert_eq!(patient["gender"], "male");
 
     // 3. Verify MedicationRequests created
-    let meds = storage.search_json("MedicationRequest", Some(&patient_id)).await.unwrap();
+    let meds = storage
+        .search_json("MedicationRequest", Some(&patient_id))
+        .await
+        .unwrap();
     assert_eq!(meds.len(), 2, "Expected 2 medication requests");
 
     // 4. Verify Blood Pressure Observation created
-    let obs = storage.search_json("Observation", Some(&patient_id)).await.unwrap();
+    let obs = storage
+        .search_json("Observation", Some(&patient_id))
+        .await
+        .unwrap();
     assert!(!obs.is_empty(), "Expected vitals observations");
 
     // 5. Query Prescriptions list
@@ -305,7 +308,10 @@ async fn test_rxpad_sync_and_dispense() {
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri(format!("/api/rxpad/prescriptions/{}/dispense", prescription_id))
+                .uri(format!(
+                    "/api/rxpad/prescriptions/{}/dispense",
+                    prescription_id
+                ))
                 .header("content-type", "application/json")
                 .body(Body::from(serde_json::to_vec(&dispense_payload).unwrap()))
                 .unwrap(),
@@ -321,7 +327,10 @@ async fn test_rxpad_sync_and_dispense() {
     assert_eq!(disp_res["status"], "dispensed");
 
     // 7. Verify MedicationDispense in storage
-    let dispenses = storage.search_json("MedicationDispense", Some(&patient_id)).await.unwrap();
+    let dispenses = storage
+        .search_json("MedicationDispense", Some(&patient_id))
+        .await
+        .unwrap();
     assert_eq!(dispenses.len(), 2, "Expected 2 MedicationDispense records");
 
     // 8. Verify next serial
@@ -359,11 +368,22 @@ async fn test_static_files() {
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
-    let ct = resp.headers().get("content-type").unwrap().to_str().unwrap().to_string();
+    let ct = resp
+        .headers()
+        .get("content-type")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
     println!("Content-Type for /static/index.html: {}", ct);
-    let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+    let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let text = String::from_utf8_lossy(&body);
-    println!("Body preview for /static/index.html: {}", &text[..text.len().min(100)]);
+    println!(
+        "Body preview for /static/index.html: {}",
+        &text[..text.len().min(100)]
+    );
 
     let resp_js = app
         .clone()
@@ -377,13 +397,31 @@ async fn test_static_files() {
         .await
         .unwrap();
     assert_eq!(resp_js.status(), StatusCode::OK);
-    let ct_js = resp_js.headers().get("content-type").unwrap().to_str().unwrap().to_string();
+    let ct_js = resp_js
+        .headers()
+        .get("content-type")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
     println!("Content-Type for /static/js/app.js: {}", ct_js);
-    let body_js = axum::body::to_bytes(resp_js.into_body(), usize::MAX).await.unwrap();
+    let body_js = axum::body::to_bytes(resp_js.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let text_js = String::from_utf8_lossy(&body_js);
-    println!("Body preview for /static/js/app.js: {}", &text_js[..text_js.len().min(100)]);
-    assert!(ct_js.contains("javascript"), "Expected javascript, got: {}", ct_js);
-    assert!(!text_js.starts_with("<!DOCTYPE"), "js/app.js returned HTML!");
+    println!(
+        "Body preview for /static/js/app.js: {}",
+        &text_js[..text_js.len().min(100)]
+    );
+    assert!(
+        ct_js.contains("javascript"),
+        "Expected javascript, got: {}",
+        ct_js
+    );
+    assert!(
+        !text_js.starts_with("<!DOCTYPE"),
+        "js/app.js returned HTML!"
+    );
 }
 
 #[tokio::test]
@@ -437,13 +475,17 @@ async fn test_rxpad_pdf_and_events() {
                 .method("POST")
                 .uri("/api/rxpad/prescriptions/rxpad-0005/dispense")
                 .header("content-type", "application/json")
-                .body(Body::from(serde_json::to_vec(&serde_json::json!({})).unwrap()))
+                .body(Body::from(
+                    serde_json::to_vec(&serde_json::json!({})).unwrap(),
+                ))
                 .unwrap(),
         )
         .await
         .unwrap();
     assert_eq!(disp_resp.status(), StatusCode::OK);
-    let disp_event = rx.try_recv().expect("Expected prescription_dispensed event");
+    let disp_event = rx
+        .try_recv()
+        .expect("Expected prescription_dispensed event");
     assert_eq!(disp_event, "prescription_dispensed");
 
     // 5. Delete and check event
@@ -470,11 +512,18 @@ async fn test_config_and_prescriber_endpoints() {
     // Test GET /api/config
     let res = app
         .clone()
-        .oneshot(Request::builder().uri("/api/config").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/api/config")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let cfg: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(cfg["tier"], "T0");
     assert_eq!(cfg["defaultLandingView"], "rxpad");
@@ -482,14 +531,24 @@ async fn test_config_and_prescriber_endpoints() {
     // Test GET /api/prescriber/profile
     let res = app
         .clone()
-        .oneshot(Request::builder().uri("/api/prescriber/profile").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/api/prescriber/profile")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let prescriber: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(prescriber["isLegalPrescriber"], true);
-    assert!(prescriber["clinicianName"].as_str().unwrap().contains("Dr."));
+    assert!(prescriber["clinicianName"]
+        .as_str()
+        .unwrap()
+        .contains("Dr."));
     assert_eq!(prescriber["qualifications"], "MBBS, MD");
     assert_eq!(prescriber["department"], "");
     assert_eq!(prescriber["clinicHeader"]["clinicName"], "New Loka Clinic");
@@ -497,11 +556,18 @@ async fn test_config_and_prescriber_endpoints() {
     // Test GET /api/rxpad/template (RxPad Configurable Template & Box Behavior Engine)
     let res_tpl = app
         .clone()
-        .oneshot(Request::builder().uri("/api/rxpad/template").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/api/rxpad/template")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(res_tpl.status(), StatusCode::OK);
-    let body_tpl = axum::body::to_bytes(res_tpl.into_body(), usize::MAX).await.unwrap();
+    let body_tpl = axum::body::to_bytes(res_tpl.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let tpl: serde_json::Value = serde_json::from_slice(&body_tpl).unwrap();
     assert_eq!(tpl["header"]["entityName"], "New Loka Clinic");
     assert_eq!(tpl["header"]["qualifications"], "MBBS, MD");
@@ -537,34 +603,58 @@ async fn test_unconfigured_empty_database_graceful_nulls() {
     // 1. GET /api/config -> clinic is null
     let res = app
         .clone()
-        .oneshot(Request::builder().uri("/api/config").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/api/config")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let cfg: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert!(cfg["clinic"].is_null(), "Unconfigured clinic must be null");
 
     // 2. GET /api/prescriber/profile -> clinicianName is empty, clinicHeader is null
     let res = app
         .clone()
-        .oneshot(Request::builder().uri("/api/prescriber/profile").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/api/prescriber/profile")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let prof: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(prof["clinicianName"], "");
-    assert!(prof["clinicHeader"].is_null(), "Unconfigured clinicHeader must be null");
+    assert!(
+        prof["clinicHeader"].is_null(),
+        "Unconfigured clinicHeader must be null"
+    );
 
     // 3. GET /api/rxpad/template -> standard unconfigured template with empty fields & false visibility
     let res = app
         .clone()
-        .oneshot(Request::builder().uri("/api/rxpad/template").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/api/rxpad/template")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let tpl: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(tpl["header"]["entityName"], "");
     assert_eq!(tpl["header"]["doctorName"], "");
@@ -573,22 +663,36 @@ async fn test_unconfigured_empty_database_graceful_nulls() {
     // 4. GET /api/inpatient/census -> empty array []
     let res = app
         .clone()
-        .oneshot(Request::builder().uri("/api/inpatient/census").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/api/inpatient/census")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let census: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(census, serde_json::json!([]));
 
     // 5. GET /api/billing/invoices -> empty array []
     let res = app
         .clone()
-        .oneshot(Request::builder().uri("/api/billing/invoices").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/api/billing/invoices")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let inv: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(inv, serde_json::json!([]));
 }
@@ -600,11 +704,18 @@ async fn test_pharmacopoeia_endpoints_and_order_sets() {
     // 1. GET /api/pharmacopoeia/info
     let res = app
         .clone()
-        .oneshot(Request::builder().uri("/api/pharmacopoeia/info").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/api/pharmacopoeia/info")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let info: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(info["version"], "2026.11");
     assert!(info["monographsCount"].as_u64().unwrap() >= 50);
@@ -613,11 +724,18 @@ async fn test_pharmacopoeia_endpoints_and_order_sets() {
     // 2. GET /api/pharmacopoeia/search?q=paracetamol
     let res = app
         .clone()
-        .oneshot(Request::builder().uri("/api/pharmacopoeia/search?q=paracetamol").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/api/pharmacopoeia/search?q=paracetamol")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let results: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
     assert!(!results.is_empty());
     assert_eq!(results[0]["entry"]["inn_name"], "Paracetamol");
@@ -625,11 +743,18 @@ async fn test_pharmacopoeia_endpoints_and_order_sets() {
     // 3. GET /api/pharmacopoeia/search?q=Dolo (Indian brand search)
     let res = app
         .clone()
-        .oneshot(Request::builder().uri("/api/pharmacopoeia/search?q=Dolo").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/api/pharmacopoeia/search?q=Dolo")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let results: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
     assert!(!results.is_empty());
     assert_eq!(results[0]["entry"]["inn_name"], "Paracetamol");
@@ -638,11 +763,18 @@ async fn test_pharmacopoeia_endpoints_and_order_sets() {
     // 4. GET /api/pharmacopoeia/entry/ip-paracetamol
     let res = app
         .clone()
-        .oneshot(Request::builder().uri("/api/pharmacopoeia/entry/ip-paracetamol").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/api/pharmacopoeia/entry/ip-paracetamol")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let entry: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(entry["id"], "ip-paracetamol");
     assert_eq!(entry["schedule"], "OTC");
@@ -650,34 +782,57 @@ async fn test_pharmacopoeia_endpoints_and_order_sets() {
     // 5. GET /api/pharmacopoeia/categories
     let res = app
         .clone()
-        .oneshot(Request::builder().uri("/api/pharmacopoeia/categories").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/api/pharmacopoeia/categories")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let categories: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
     assert!(!categories.is_empty());
-    assert!(categories.iter().any(|c| c["name"].as_str().unwrap().contains("Cardiovascular")));
+    assert!(categories
+        .iter()
+        .any(|c| c["name"].as_str().unwrap().contains("Cardiovascular")));
 
     // 6. GET /api/pharmacopoeia/order-sets
     let res = app
         .clone()
-        .oneshot(Request::builder().uri("/api/pharmacopoeia/order-sets").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/api/pharmacopoeia/order-sets")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let sets: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
     assert!(sets.len() >= 10);
 
     // 7. GET /api/pharmacopoeia/order-sets/orderset-acs-chestpain
     let res = app
         .clone()
-        .oneshot(Request::builder().uri("/api/pharmacopoeia/order-sets/orderset-acs-chestpain").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/api/pharmacopoeia/order-sets/orderset-acs-chestpain")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let set: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(set["id"], "orderset-acs-chestpain");
     assert!(set["items"].as_array().unwrap().len() >= 4);
@@ -700,26 +855,43 @@ async fn test_pharmacopoeia_endpoints_and_order_sets() {
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let report: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(report["has_critical"], true);
     let warnings = report["warnings"].as_array().unwrap();
-    assert!(warnings.iter().any(|w| w["warning_type"] == "AllergyCrossReactivity"));
-    assert!(warnings.iter().any(|w| w["warning_type"] == "DuplicateTherapy"));
+    assert!(warnings
+        .iter()
+        .any(|w| w["warning_type"] == "AllergyCrossReactivity"));
+    assert!(warnings
+        .iter()
+        .any(|w| w["warning_type"] == "DuplicateTherapy"));
 
     // 9. GET /api/rxpad/formulary - verify pharmacopoeia enrichment
     let res = app
         .clone()
-        .oneshot(Request::builder().uri("/api/rxpad/formulary").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/api/rxpad/formulary")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let formulary: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
-    assert!(formulary.len() > 15, "Expected pharmacopoeia to enrich formulary items");
-    assert!(formulary.iter().any(|f| f["drug"].as_str().unwrap().contains("PARACETAMOL")));
+    assert!(
+        formulary.len() > 15,
+        "Expected pharmacopoeia to enrich formulary items"
+    );
+    assert!(formulary
+        .iter()
+        .any(|f| f["drug"].as_str().unwrap().contains("PARACETAMOL")));
 }
-
 
 #[tokio::test]
 async fn test_inpatient_and_billing_with_abac() {
@@ -728,11 +900,18 @@ async fn test_inpatient_and_billing_with_abac() {
     // Test GET /api/inpatient/census
     let res = app
         .clone()
-        .oneshot(Request::builder().uri("/api/inpatient/census").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/api/inpatient/census")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let census: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert!(census.as_array().unwrap().len() >= 3);
 
@@ -749,7 +928,9 @@ async fn test_inpatient_and_billing_with_abac() {
         .await
         .unwrap();
     assert_eq!(res_doc.status(), StatusCode::OK);
-    let body_doc = axum::body::to_bytes(res_doc.into_body(), usize::MAX).await.unwrap();
+    let body_doc = axum::body::to_bytes(res_doc.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let inv_doc: serde_json::Value = serde_json::from_slice(&body_doc).unwrap();
     let diag_doc = inv_doc[0]["diagnosis"].as_str().unwrap();
     assert!(!diag_doc.contains("REDACTED"));
@@ -767,7 +948,9 @@ async fn test_inpatient_and_billing_with_abac() {
         .await
         .unwrap();
     assert_eq!(res_bill.status(), StatusCode::OK);
-    let body_bill = axum::body::to_bytes(res_bill.into_body(), usize::MAX).await.unwrap();
+    let body_bill = axum::body::to_bytes(res_bill.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let inv_bill: serde_json::Value = serde_json::from_slice(&body_bill).unwrap();
     let diag_bill = inv_bill[0]["diagnosis"].as_str().unwrap();
     assert!(diag_bill.contains("REDACTED"));
@@ -775,11 +958,18 @@ async fn test_inpatient_and_billing_with_abac() {
     // Test GET /api/pharmacy/summary
     let res_pharm = app
         .clone()
-        .oneshot(Request::builder().uri("/api/pharmacy/summary").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/api/pharmacy/summary")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(res_pharm.status(), StatusCode::OK);
-    let body_pharm = axum::body::to_bytes(res_pharm.into_body(), usize::MAX).await.unwrap();
+    let body_pharm = axum::body::to_bytes(res_pharm.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let pharm: serde_json::Value = serde_json::from_slice(&body_pharm).unwrap();
     assert!(pharm["criticalStockAlerts"].as_array().unwrap().len() >= 2);
     assert!(pharm["safetyAlerts"].as_array().unwrap().len() >= 2);
@@ -792,18 +982,30 @@ async fn test_departments_and_transfers_endpoints() {
     // 1. GET /api/departments
     let res_depts = app
         .clone()
-        .oneshot(Request::builder().uri("/api/departments").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/api/departments")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(res_depts.status(), StatusCode::OK);
-    let body_depts = axum::body::to_bytes(res_depts.into_body(), usize::MAX).await.unwrap();
+    let body_depts = axum::body::to_bytes(res_depts.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let depts: serde_json::Value = serde_json::from_slice(&body_depts).unwrap();
     assert!(depts.as_array().unwrap().len() >= 6);
 
     // 2. GET /api/departments/transfers
     let res_tr_list = app
         .clone()
-        .oneshot(Request::builder().uri("/api/departments/transfers").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/api/departments/transfers")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(res_tr_list.status(), StatusCode::OK);
@@ -869,7 +1071,12 @@ async fn test_enterprise_ldap_login_and_config() {
     // GET /api/auth/directory/config
     let res_cfg = app
         .clone()
-        .oneshot(Request::builder().uri("/api/auth/directory/config").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/api/auth/directory/config")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(res_cfg.status(), StatusCode::OK);
@@ -893,7 +1100,9 @@ async fn test_enterprise_ldap_login_and_config() {
         .await
         .unwrap();
     assert_eq!(res_login.status(), StatusCode::OK);
-    let body_login = axum::body::to_bytes(res_login.into_body(), usize::MAX).await.unwrap();
+    let body_login = axum::body::to_bytes(res_login.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let login_res: serde_json::Value = serde_json::from_slice(&body_login).unwrap();
     assert!(!login_res["token"].as_str().unwrap().is_empty());
     assert_eq!(login_res["tier"].as_str().unwrap(), "T3");
@@ -924,18 +1133,30 @@ async fn test_hospital_reports_endpoints() {
 
     let res_rep = app
         .clone()
-        .oneshot(Request::builder().uri("/api/reports/overview").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/api/reports/overview")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(res_rep.status(), StatusCode::OK);
-    let body_rep = axum::body::to_bytes(res_rep.into_body(), usize::MAX).await.unwrap();
+    let body_rep = axum::body::to_bytes(res_rep.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let rep: serde_json::Value = serde_json::from_slice(&body_rep).unwrap();
     assert!(rep["metrics"]["totalHospitalBeds"].as_u64().unwrap() > 0);
     assert!(rep["departmentCensusBreakdown"].as_array().unwrap().len() >= 5);
 
     let res_dept = app
         .clone()
-        .oneshot(Request::builder().uri("/api/reports/department/dept-cardio").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/api/reports/department/dept-cardio")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(res_dept.status(), StatusCode::OK);
@@ -948,7 +1169,12 @@ async fn test_research_federation_and_differential_privacy() {
     // GET /api/federation/nodes
     let res_nodes = app
         .clone()
-        .oneshot(Request::builder().uri("/api/federation/nodes").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/api/federation/nodes")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(res_nodes.status(), StatusCode::OK);
@@ -961,7 +1187,10 @@ async fn test_research_federation_and_differential_privacy() {
                 .method("POST")
                 .uri("/api/federation/ping")
                 .header("Content-Type", "application/json")
-                .body(Body::from(serde_json::json!({ "peer_url": "https://federation.aiims.edu/newloka" }).to_string()))
+                .body(Body::from(
+                    serde_json::json!({ "peer_url": "https://federation.aiims.edu/newloka" })
+                        .to_string(),
+                ))
                 .unwrap(),
         )
         .await
@@ -992,7 +1221,9 @@ async fn test_research_federation_and_differential_privacy() {
         .await
         .unwrap();
     assert_eq!(res_query.status(), StatusCode::OK);
-    let body_query = axum::body::to_bytes(res_query.into_body(), usize::MAX).await.unwrap();
+    let body_query = axum::body::to_bytes(res_query.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let query_res: serde_json::Value = serde_json::from_slice(&body_query).unwrap();
     assert_eq!(query_res["k_anonymity_guarantee"], 5);
 
@@ -1004,15 +1235,21 @@ async fn test_research_federation_and_differential_privacy() {
                 .method("POST")
                 .uri("/api/research/export")
                 .header("Content-Type", "application/json")
-                .body(Body::from(serde_json::json!({ "cohort_id": "cohort-001" }).to_string()))
+                .body(Body::from(
+                    serde_json::json!({ "cohort_id": "cohort-001" }).to_string(),
+                ))
                 .unwrap(),
         )
         .await
         .unwrap();
     assert_eq!(res_exp.status(), StatusCode::OK);
-    let body_exp = axum::body::to_bytes(res_exp.into_body(), usize::MAX).await.unwrap();
+    let body_exp = axum::body::to_bytes(res_exp.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let exp_res: serde_json::Value = serde_json::from_slice(&body_exp).unwrap();
-    assert!(exp_res["privacyGuarantees"]["piiStripped"].as_bool().unwrap());
+    assert!(exp_res["privacyGuarantees"]["piiStripped"]
+        .as_bool()
+        .unwrap());
 }
 
 #[tokio::test]
@@ -1049,7 +1286,12 @@ async fn test_fhir_consent_and_directive_verification() {
     // 2. GET /Consent/consent-fhir-001
     let res_get_c = app
         .clone()
-        .oneshot(Request::builder().uri("/Consent/consent-fhir-001").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/Consent/consent-fhir-001")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(res_get_c.status(), StatusCode::OK);
@@ -1104,7 +1346,9 @@ async fn test_fhir_consent_and_directive_verification() {
         .await
         .unwrap();
     assert_eq!(res_ver.status(), StatusCode::OK);
-    let body_ver = axum::body::to_bytes(res_ver.into_body(), usize::MAX).await.unwrap();
+    let body_ver = axum::body::to_bytes(res_ver.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let ver_res: serde_json::Value = serde_json::from_slice(&body_ver).unwrap();
     assert!(ver_res["permitted"].as_bool().unwrap());
 
@@ -1116,7 +1360,9 @@ async fn test_fhir_consent_and_directive_verification() {
                 .method("POST")
                 .uri("/api/consent/directives/dir-test-01/revoke")
                 .header("Content-Type", "application/json")
-                .body(Body::from(serde_json::json!({ "reason": "Patient requested opt-out" }).to_string()))
+                .body(Body::from(
+                    serde_json::json!({ "reason": "Patient requested opt-out" }).to_string(),
+                ))
                 .unwrap(),
         )
         .await
@@ -1137,11 +1383,9 @@ async fn test_fhir_consent_and_directive_verification() {
         .await
         .unwrap();
     assert_eq!(res_ver_after.status(), StatusCode::OK);
-    let body_after = axum::body::to_bytes(res_ver_after.into_body(), usize::MAX).await.unwrap();
+    let body_after = axum::body::to_bytes(res_ver_after.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let ver_after_res: serde_json::Value = serde_json::from_slice(&body_after).unwrap();
     assert!(!ver_after_res["permitted"].as_bool().unwrap());
 }
-
-
-
-

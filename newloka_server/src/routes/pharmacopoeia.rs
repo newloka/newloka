@@ -32,12 +32,30 @@ pub struct SafetyCheckRequest {
 pub fn router() -> Router<Arc<RwLock<AppState>>> {
     Router::new()
         .route("/api/pharmacopoeia/info", get(pharmacopoeia_info_handler))
-        .route("/api/pharmacopoeia/search", get(pharmacopoeia_search_handler))
-        .route("/api/pharmacopoeia/entry/:id", get(pharmacopoeia_get_entry_handler))
-        .route("/api/pharmacopoeia/categories", get(pharmacopoeia_categories_handler))
-        .route("/api/pharmacopoeia/order-sets", get(pharmacopoeia_list_order_sets_handler))
-        .route("/api/pharmacopoeia/order-sets/:id", get(pharmacopoeia_get_order_set_handler))
-        .route("/api/pharmacopoeia/check-safety", post(pharmacopoeia_check_safety_handler))
+        .route(
+            "/api/pharmacopoeia/search",
+            get(pharmacopoeia_search_handler),
+        )
+        .route(
+            "/api/pharmacopoeia/entry/:id",
+            get(pharmacopoeia_get_entry_handler),
+        )
+        .route(
+            "/api/pharmacopoeia/categories",
+            get(pharmacopoeia_categories_handler),
+        )
+        .route(
+            "/api/pharmacopoeia/order-sets",
+            get(pharmacopoeia_list_order_sets_handler),
+        )
+        .route(
+            "/api/pharmacopoeia/order-sets/:id",
+            get(pharmacopoeia_get_order_set_handler),
+        )
+        .route(
+            "/api/pharmacopoeia/check-safety",
+            post(pharmacopoeia_check_safety_handler),
+        )
 }
 
 pub async fn pharmacopoeia_info_handler(

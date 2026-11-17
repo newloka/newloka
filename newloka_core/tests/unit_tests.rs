@@ -472,7 +472,7 @@ mod tests {
 
     #[test]
     fn test_consent_engine_permit_and_deny() {
-        use newloka_core::consent::{ConsentDirective, ConsentEngine, ConsentDecision};
+        use newloka_core::consent::{ConsentDecision, ConsentDirective, ConsentEngine};
         let now = chrono::Utc::now();
         let directive = ConsentDirective {
             id: "consent-001".into(),
@@ -546,7 +546,10 @@ mod tests {
         // k-anonymity: < 5 suppressed
         assert_eq!(DifferentialPrivacyEngine::apply_k_anonymity(3, 5), None);
         assert_eq!(DifferentialPrivacyEngine::apply_k_anonymity(5, 5), Some(5));
-        assert_eq!(DifferentialPrivacyEngine::apply_k_anonymity(120, 5), Some(120));
+        assert_eq!(
+            DifferentialPrivacyEngine::apply_k_anonymity(120, 5),
+            Some(120)
+        );
 
         // Laplace perturbation
         let raw_val = 50.0;
@@ -596,7 +599,9 @@ mod tests {
 
     #[test]
     fn test_department_defaults_and_transfers() {
-        use newloka_core::department::{default_departments, DepartmentTransferRequest, TransferStatus};
+        use newloka_core::department::{
+            default_departments, DepartmentTransferRequest, TransferStatus,
+        };
 
         let depts = default_departments();
         assert!(depts.len() >= 8);
@@ -618,8 +623,12 @@ mod tests {
             assigned_bed: None,
             urgency: "urgent".into(),
             reason: "Non-ST Elevation Myocardial Infarction".into(),
-            clinical_handover_notes: "SBAR: 54F presenting with crushing substernal chest pain. Trop I positive.".into(),
-            active_medications_summary: vec!["Aspirin 325mg stat".into(), "Clopidogrel 300mg stat".into()],
+            clinical_handover_notes:
+                "SBAR: 54F presenting with crushing substernal chest pain. Trop I positive.".into(),
+            active_medications_summary: vec![
+                "Aspirin 325mg stat".into(),
+                "Clopidogrel 300mg stat".into(),
+            ],
             pending_orders_summary: vec!["Urgent Echo".into()],
             allergies_summary: vec!["Penicillin (Severe)".into()],
             status: TransferStatus::Requested,
@@ -640,20 +649,32 @@ mod tests {
         config.enabled = true;
 
         // Valid doctor authentication
-        let auth_doc = config.authenticate("dr.sharma@hospital.local", "securepassword123").unwrap();
+        let auth_doc = config
+            .authenticate("dr.sharma@hospital.local", "securepassword123")
+            .unwrap();
         assert!(auth_doc.authenticated);
-        assert!(auth_doc.roles.contains(&newloka_core::identity::Role::Clinician));
+        assert!(auth_doc
+            .roles
+            .contains(&newloka_core::identity::Role::Clinician));
 
         // Valid admin authentication
-        let auth_admin = config.authenticate("admin-sys@hospital.local", "adminpass").unwrap();
-        assert!(auth_admin.roles.contains(&newloka_core::identity::Role::Administrator));
+        let auth_admin = config
+            .authenticate("admin-sys@hospital.local", "adminpass")
+            .unwrap();
+        assert!(auth_admin
+            .roles
+            .contains(&newloka_core::identity::Role::Administrator));
 
         // Valid cardio specialist authentication
-        let auth_cardio = config.authenticate("cardio.lead@hospital.local", "docpass").unwrap();
+        let auth_cardio = config
+            .authenticate("cardio.lead@hospital.local", "docpass")
+            .unwrap();
         assert_eq!(auth_cardio.department_id, Some("dept-cardio".into()));
 
         // Empty password should fail
-        assert!(config.authenticate("dr.sharma@hospital.local", "").is_none());
+        assert!(config
+            .authenticate("dr.sharma@hospital.local", "")
+            .is_none());
     }
 
     #[test]
@@ -689,7 +710,13 @@ mod tests {
         assert_eq!(calculate_pediatric_dose(40.0, 15.0, 500.0), 500.0); // capped at 500
 
         // DKA triage
-        assert_eq!(evaluate_dka_risk(400.0, 6.90, 6.0, true), DkaSeverity::Severe);
-        assert_eq!(evaluate_dka_risk(120.0, 7.40, 24.0, false), DkaSeverity::None);
+        assert_eq!(
+            evaluate_dka_risk(400.0, 6.90, 6.0, true),
+            DkaSeverity::Severe
+        );
+        assert_eq!(
+            evaluate_dka_risk(120.0, 7.40, 24.0, false),
+            DkaSeverity::None
+        );
     }
 }

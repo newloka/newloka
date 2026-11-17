@@ -38,4 +38,3 @@ async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
     newloka_server::run(&args.bind).await
 }
-
