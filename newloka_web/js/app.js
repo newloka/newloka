@@ -6637,20 +6637,28 @@ views.ingest = async () => {
   } catch (e) {}
   const activePid = getActivePatientId() || patients[0]?.id || "";
 
-  const sampleCases = {
-    acs: {
-      name: "Transfer Summary: Acute Coronary Syndrome (NSTEMI) & DM",
-      text: "PATIENT: Male, 68 years old.\nADMISSION DIAGNOSIS: Non-ST elevation myocardial infarction (NSTEMI).\nHISTORY: CAD s/p stent (2020), Type 2 Diabetes Mellitus, Essential Hypertension.\nALLERGIES: Severe anaphylaxis to Penicillin (rash and laryngeal edema).\nMEDICATIONS COMMENCED: Aspirin 81mg PO daily, Clopidogrel 75mg PO daily, Atorvastatin 80mg PO daily, Metoprolol Tartrate 25mg PO BID.\nLABS: Troponin I elevated at 0.85 ng/mL (CRITICAL HIGH), HbA1c 8.4%, Serum Potassium 4.6 mmol/L."
-    },
-    chf: {
-      name: "Discharge Note: Heart Failure Exacerbation & CKD",
-      text: "PATIENT: Female, 72 years old.\nASSESSMENT: Acute decompensated heart failure with preserved ejection fraction (HFpEF), Chronic Kidney Disease Stage 3.\nALLERGIES: Sulfa drugs (urticaria).\nMEDICATIONS: Furosemide 40mg PO daily, Lisinopril 10mg PO daily, Spironolactone 25mg PO daily.\nOBSERVATIONS: Blood Pressure 148/92 mmHg, Heart Rate 82 bpm, Weight 71.4 kg, Serum Creatinine 1.8 mg/dL."
-    }
-  };
+  let sampleCases = [];
+  try {
+    const samplesRes = await api.getIngestSamples();
+    sampleCases = samplesRes.cases || [];
+  } catch (e) {
+    sampleCases = [
+      {
+        id: "acs",
+        title: "ACS Transfer (NSTEMI)",
+        text: "PATIENT: Male, 68 years old.\nADMISSION DIAGNOSIS: Non-ST elevation myocardial infarction (NSTEMI).\nHISTORY: CAD s/p stent (2020), Type 2 Diabetes Mellitus, Essential Hypertension.\nALLERGIES: Severe anaphylaxis to Penicillin (rash and laryngeal edema).\nMEDICATIONS COMMENCED: Aspirin 81mg PO daily, Clopidogrel 75mg PO daily, Atorvastatin 80mg PO daily, Metoprolol Tartrate 25mg PO BID.\nLABS: Troponin I elevated at 0.85 ng/mL (CRITICAL HIGH), HbA1c 8.4%, Serum Potassium 4.6 mmol/L."
+      },
+      {
+        id: "chf",
+        title: "CHF & CKD Discharge",
+        text: "PATIENT: Female, 72 years old.\nASSESSMENT: Acute decompensated heart failure with preserved ejection fraction (HFpEF), Chronic Kidney Disease Stage 3.\nALLERGIES: Sulfa drugs (urticaria).\nMEDICATIONS: Furosemide 40mg PO daily, Lisinopril 10mg PO daily, Spironolactone 25mg PO daily.\nOBSERVATIONS: Blood Pressure 148/92 mmHg, Heart Rate 82 bpm, Serum Creatinine 1.8 mg/dL, Potassium 5.2 mmol/L."
+      }
+    ];
+  }
 
   container.innerHTML = `
     <div class="patient-banner">
-      <h2>AI Clinical Document Ingestion &amp; Entity Extraction <span class="badge badge-info">Requirement 4.7</span></h2>
+      <h2>AI Clinical Document Ingestion &amp; Entity Extraction <span class="badge badge-info">Phase 4 Active</span></h2>
       <div style="display:flex;align-items:center;gap:0.5rem;">
         <span class="meta">Target Patient:</span>
         <select class="select" id="ingest-pat-select" style="width:auto;margin:0;max-width:16rem;">
@@ -6662,25 +6670,27 @@ views.ingest = async () => {
       <div class="col">
         <div class="card">
           <h3>1. Input Clinical Document or Media</h3>
-          <p class="meta">Paste unstructured discharge summary text, transfer letter, or upload clinical file:</p>
-          <div style="display:flex;gap:0.4rem;margin-bottom:0.75rem;">
-            <button class="btn btn-secondary btn-sm" id="btn-load-sample-acs">📋 Load Sample ACS Transfer</button>
-            <button class="btn btn-secondary btn-sm" id="btn-load-sample-chf">📋 Load Sample CHF Discharge</button>
+          <p class="meta">Paste unstructured discharge summary, transfer letter, lab sheet, or upload text:</p>
+          <div style="display:flex;flex-wrap:wrap;gap:0.4rem;margin-bottom:0.75rem;">
+            ${sampleCases.map(sc => `
+              <button class="btn btn-secondary btn-sm btn-load-sample" data-id="${escapeHtml(sc.id)}">📋 ${escapeHtml(sc.title || sc.id)}</button>
+            `).join("")}
           </div>
-          <textarea class="input" id="ingest-doc-text" style="height:180px;font-family:monospace;font-size:0.88rem;line-height:1.5;" placeholder="Paste raw medical text here..."></textarea>
+          <textarea class="input" id="ingest-doc-text" style="height:220px;font-family:monospace;font-size:0.88rem;line-height:1.5;" placeholder="Paste raw unstructured clinical prose here..."></textarea>
           <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.75rem;">
             <input type="file" id="ingest-file-picker" style="display:none;" />
-            <button class="btn btn-secondary btn-sm" onclick="$('#ingest-file-picker').click()">📂 Upload File / Photo</button>
+            <button class="btn btn-secondary btn-sm" onclick="$('#ingest-file-picker').click()">📂 Upload Document / File</button>
             <button class="btn btn-success" id="btn-run-ai-extract" style="margin-left:auto;">⚡ Run On-Device AI Extraction</button>
           </div>
         </div>
       </div>
       <div class="col">
         <div class="card" id="extraction-preview-card">
-          <h3>2. AI Extraction Review &amp; Commit Interface</h3>
-          <p class="meta">Review AI-recognized FHIR entities with clinical confidence scores. Check items to commit to patient record:</p>
-          <div id="ai-entities-box" style="margin-top:0.75rem;">
-            <div class="empty-state"><p>Load or enter clinical text, then click "Run On-Device AI Extraction".</p></div>
+          <h3>2. AI Extraction Review &amp; Safety Verification</h3>
+          <p class="meta">Review AI-recognized FHIR entities with clinical confidence scores and safety cross-checks:</p>
+          <div id="ai-safety-alerts-box" style="margin-top:0.5rem;"></div>
+          <div id="ai-entities-box" style="margin-top:0.5rem;">
+            <div class="empty-state"><p>Load a sample case or enter clinical prose, then click "Run On-Device AI Extraction".</p></div>
           </div>
           <div id="commit-box" style="display:none;margin-top:1rem;border-top:1px solid var(--color-border);padding-top:0.75rem;">
             <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -6692,197 +6702,234 @@ views.ingest = async () => {
       </div>
     </div>`;
 
-  $("#btn-load-sample-acs").onclick = () => {
-    $("#ingest-doc-text").value = sampleCases.acs.text.replace(/\\n/g, '\n');
-    showAlert("Loaded ACS sample transfer summary.", "ok");
-  };
-  $("#btn-load-sample-chf").onclick = () => {
-    $("#ingest-doc-text").value = sampleCases.chf.text.replace(/\\n/g, '\n');
-    showAlert("Loaded CHF sample discharge summary.", "ok");
-  };
+  // Bind Sample Case buttons
+  container.querySelectorAll(".btn-load-sample").forEach(btn => {
+    btn.onclick = () => {
+      const sid = btn.dataset.id;
+      const found = sampleCases.find(c => c.id === sid);
+      if (found) {
+        $("#ingest-doc-text").value = found.text.replace(/\\n/g, '\n');
+        showAlert("Loaded " + (found.title || found.id), "ok");
+      }
+    };
+  });
 
+  // Bind file picker
   $("#ingest-file-picker").onchange = (e) => {
     const f = e.target.files[0];
     if (f) {
       const reader = new FileReader();
       reader.onload = () => {
         $("#ingest-doc-text").value = reader.result;
-        showAlert("Loaded file: " + f.name, "ok");
+        showAlert("Loaded document: " + f.name, "ok");
       };
       reader.readAsText(f);
     }
   };
 
-  let extractedEntities = [];
-
-  $("#btn-run-ai-extract").onclick = () => {
-    const text = $("#ingest-doc-text").value.trim();
-    if (!text) { showAlert("Please enter or paste medical text first.", "warn"); return; }
-
-    // Simulated On-Device Clinical NLP/NER Engine
-    extractedEntities = [];
-    const lower = text.toLowerCase();
-
-    // Conditions
-    if (lower.includes("myocardial infarction") || lower.includes("nstemi")) {
-      extractedEntities.push({ type: "Condition", name: "Non-ST Elevation Myocardial Infarction", code: "I21.4 (ICD-10)", confidence: 98, accepted: true });
-    }
-    if (lower.includes("diabetes")) {
-      extractedEntities.push({ type: "Condition", name: "Type 2 Diabetes Mellitus", code: "E11.9 (ICD-10)", confidence: 96, accepted: true });
-    }
-    if (lower.includes("hypertension")) {
-      extractedEntities.push({ type: "Condition", name: "Essential Hypertension", code: "I10 (ICD-10)", confidence: 95, accepted: true });
-    }
-    if (lower.includes("heart failure") || lower.includes("hfpef")) {
-      extractedEntities.push({ type: "Condition", name: "Heart Failure with Preserved Ejection Fraction", code: "I50.30 (ICD-10)", confidence: 97, accepted: true });
-    }
-    if (lower.includes("kidney disease") || lower.includes("ckd")) {
-      extractedEntities.push({ type: "Condition", name: "Chronic Kidney Disease, Stage 3", code: "N18.3 (ICD-10)", confidence: 94, accepted: true });
-    }
-
-    // Allergies
-    if (lower.includes("penicillin")) {
-      extractedEntities.push({ type: "AllergyIntolerance", name: "Penicillin", detail: "Severe Anaphylaxis", criticality: "high", confidence: 99, accepted: true });
-    }
-    if (lower.includes("sulfa")) {
-      extractedEntities.push({ type: "AllergyIntolerance", name: "Sulfonamide Antibiotics", detail: "Urticaria / Rash", criticality: "moderate", confidence: 97, accepted: true });
-    }
-
-    // Medications
-    if (lower.includes("aspirin")) {
-      extractedEntities.push({ type: "MedicationRequest", name: "Aspirin 81mg PO Daily", detail: "Antiplatelet therapy", confidence: 95, accepted: true });
-    }
-    if (lower.includes("clopidogrel")) {
-      extractedEntities.push({ type: "MedicationRequest", name: "Clopidogrel 75mg PO Daily", detail: "P2Y12 inhibitor", confidence: 96, accepted: true });
-    }
-    if (lower.includes("atorvastatin")) {
-      extractedEntities.push({ type: "MedicationRequest", name: "Atorvastatin 80mg PO Daily", detail: "High-intensity statin", confidence: 98, accepted: true });
-    }
-    if (lower.includes("furosemide")) {
-      extractedEntities.push({ type: "MedicationRequest", name: "Furosemide 40mg PO Daily", detail: "Loop diuretic", confidence: 97, accepted: true });
-    }
-    if (lower.includes("lisinopril")) {
-      extractedEntities.push({ type: "MedicationRequest", name: "Lisinopril 10mg PO Daily", detail: "ACE inhibitor", confidence: 96, accepted: true });
-    }
-
-    // Labs & Observations
-    if (lower.includes("troponin")) {
-      extractedEntities.push({ type: "Observation", name: "Troponin I", value: "0.85 ng/mL", isPanic: true, confidence: 99, accepted: true });
-    }
-    if (lower.includes("hba1c")) {
-      extractedEntities.push({ type: "Observation", name: "Hemoglobin A1c", value: "8.4 %", confidence: 96, accepted: true });
-    }
-    if (lower.includes("creatinine")) {
-      extractedEntities.push({ type: "Observation", name: "Serum Creatinine", value: "1.8 mg/dL", confidence: 95, accepted: true });
-    }
-
-    if (!extractedEntities.length) {
-      extractedEntities.push({ type: "Observation", name: "General Clinical Statement", value: text.slice(0, 50), confidence: 85, accepted: true });
-    }
-
-    renderExtractedEntities();
-    showAlert("AI Extraction complete: Recognized " + extractedEntities.length + " FHIR entities.", "ok");
+  let currentReport = null;
+  let selectedEntities = {
+    conditions: [],
+    allergies: [],
+    medications: [],
+    observations: []
   };
 
-  function renderExtractedEntities() {
-    const box = $("#ai-entities-box");
-    box.innerHTML = extractedEntities.map((ent, idx) => `
-      <div class="list-item" style="border-left:4px solid ${ent.type==='AllergyIntolerance'?'var(--color-danger)':ent.type==='Condition'?'var(--color-warning)':ent.type==='MedicationRequest'?'var(--color-primary)':'var(--color-success)'};margin-bottom:0.5rem;">
-        <div style="display:flex;align-items:center;gap:0.75rem;">
-          <input type="checkbox" class="ent-check" data-idx="${idx}" ${ent.accepted ? 'checked' : ''} />
-          <div>
-            <div>
-              <strong>${escapeHtml(ent.name)}</strong>
-              ${ent.value ? ' &bull; <strong>' + escapeHtml(ent.value) + '</strong>' : ''}
-              ${ent.detail ? ' (' + escapeHtml(ent.detail) + ')' : ''}
-              ${ent.isPanic ? '<span class="panic-badge" style="margin-left:0.3rem;">CRITICAL</span>' : ''}
+  $("#btn-run-ai-extract").onclick = async () => {
+    const text = $("#ingest-doc-text").value.trim();
+    if (!text) { showAlert("Please enter or paste medical text first.", "warn"); return; }
+    const targetPid = $("#ingest-pat-select").value;
+
+    $("#btn-run-ai-extract").disabled = true;
+    $("#btn-run-ai-extract").textContent = "⏳ Extracting...";
+
+    try {
+      currentReport = await api.extractIngest(text, targetPid || null);
+      renderExtractionReport(currentReport);
+      showAlert("Extraction complete: Recognized " + currentReport.parsed_entity_count + " candidate entities.", "ok");
+    } catch (err) {
+      showAlert("Extraction failed: " + err.message, "err");
+    } finally {
+      $("#btn-run-ai-extract").disabled = false;
+      $("#btn-run-ai-extract").textContent = "⚡ Run On-Device AI Extraction";
+    }
+  };
+
+  function renderExtractionReport(rep) {
+    const alertsBox = $("#ai-safety-alerts-box");
+    const entitiesBox = $("#ai-entities-box");
+
+    // 1. Render Safety Warnings
+    if (rep.safety_warnings && rep.safety_warnings.length > 0) {
+      alertsBox.innerHTML = `
+        <div style="margin-bottom:0.75rem;">
+          ${rep.safety_warnings.map(w => `
+            <div style="padding:0.6rem 0.8rem;margin-bottom:0.4rem;border-radius:4px;background:var(--color-bg-alt);border-left:4px solid ${w.severity==='critical'?'var(--color-danger)':'var(--color-warning)'};">
+              <div style="display:flex;align-items:center;gap:0.4rem;">
+                <span class="badge ${w.severity==='critical'?'badge-danger':'badge-warning'}">${escapeHtml(w.severity.toUpperCase())}</span>
+                <strong>${escapeHtml(w.warning_type)}</strong>
+              </div>
+              <div style="font-size:0.85rem;margin-top:0.25rem;">${escapeHtml(w.message)}</div>
+              <div style="font-size:0.8rem;color:var(--color-text-muted);margin-top:0.2rem;"><em>Action: ${escapeHtml(w.clinical_action)}</em></div>
             </div>
-            <div class="meta">
-              Resource: <span class="badge badge-info">${ent.type}</span>
-              ${ent.code ? '&bull; ' + ent.code : ''}
-              &bull; AI Confidence: <strong style="color:var(--color-success);">${ent.confidence}%</strong>
+          `).join("")}
+        </div>`;
+    } else {
+      alertsBox.innerHTML = "";
+    }
+
+    // 2. Prepare selection state (default all to true)
+    selectedEntities = {
+      conditions: (rep.conditions || []).map((c, idx) => ({ ...c, _id: 'cond_' + idx, _selected: true })),
+      allergies: (rep.allergies || []).map((a, idx) => ({ ...a, _id: 'alg_' + idx, _selected: true })),
+      medications: (rep.medications || []).map((m, idx) => ({ ...m, _id: 'med_' + idx, _selected: true })),
+      observations: (rep.observations || []).map((o, idx) => ({ ...o, _id: 'obs_' + idx, _selected: true }))
+    };
+
+    let html = "";
+
+    // Conditions
+    if (selectedEntities.conditions.length > 0) {
+      html += `<h4 style="margin:0.5rem 0 0.3rem 0;color:var(--color-warning);">Conditions / Diagnoses (${selectedEntities.conditions.length})</h4>`;
+      html += selectedEntities.conditions.map(c => `
+        <div class="list-item" style="border-left:4px solid var(--color-warning);margin-bottom:0.4rem;">
+          <div style="display:flex;align-items:center;gap:0.6rem;">
+            <input type="checkbox" class="ent-toggle" data-cat="conditions" data-id="${c._id}" checked />
+            <div style="flex:1;">
+              <div><strong>${escapeHtml(c.name)}</strong> <span class="badge badge-info">${escapeHtml(c.code)}</span></div>
+              <div class="meta">Confidence: <strong>${Math.round(c.confidence * 100)}%</strong> &bull; Status: ${escapeHtml(c.clinical_status)} / ${escapeHtml(c.verification_status)}</div>
             </div>
           </div>
         </div>
-      </div>`).join("");
+      `).join("");
+    }
 
-    $("#commit-box").style.display = "block";
+    // Allergies
+    if (selectedEntities.allergies.length > 0) {
+      html += `<h4 style="margin:0.5rem 0 0.3rem 0;color:var(--color-danger);">Allergies &amp; Hypersensitivities (${selectedEntities.allergies.length})</h4>`;
+      html += selectedEntities.allergies.map(a => `
+        <div class="list-item" style="border-left:4px solid var(--color-danger);margin-bottom:0.4rem;">
+          <div style="display:flex;align-items:center;gap:0.6rem;">
+            <input type="checkbox" class="ent-toggle" data-cat="allergies" data-id="${a._id}" checked />
+            <div style="flex:1;">
+              <div><strong>${escapeHtml(a.substance)}</strong> <span class="badge badge-danger">${escapeHtml(a.criticality.toUpperCase())}</span></div>
+              <div class="meta">Reaction: ${escapeHtml(a.reaction || 'Hypersensitivity')} &bull; Confidence: <strong>${Math.round(a.confidence * 100)}%</strong></div>
+            </div>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    // Medications
+    if (selectedEntities.medications.length > 0) {
+      html += `<h4 style="margin:0.5rem 0 0.3rem 0;color:var(--color-primary);">Medication Requests (${selectedEntities.medications.length})</h4>`;
+      html += selectedEntities.medications.map(m => `
+        <div class="list-item" style="border-left:4px solid var(--color-primary);margin-bottom:0.4rem;">
+          <div style="display:flex;align-items:center;gap:0.6rem;">
+            <input type="checkbox" class="ent-toggle" data-cat="medications" data-id="${m._id}" checked />
+            <div style="flex:1;">
+              <div><strong>${escapeHtml(m.name)}</strong> ${m.schedule ? `<span class="badge badge-warning">${escapeHtml(m.schedule)}</span>` : ''}</div>
+              <div class="meta">INN: ${escapeHtml(m.inn_name || m.name)} &bull; ${escapeHtml(m.dose || '')} ${escapeHtml(m.route || '')} ${escapeHtml(m.frequency || '')}</div>
+            </div>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    // Observations
+    if (selectedEntities.observations.length > 0) {
+      html += `<h4 style="margin:0.5rem 0 0.3rem 0;color:var(--color-success);">Observations &amp; Vitals (${selectedEntities.observations.length})</h4>`;
+      html += selectedEntities.observations.map(o => `
+        <div class="list-item" style="border-left:4px solid ${o.is_panic?'var(--color-danger)':'var(--color-success)'};margin-bottom:0.4rem;">
+          <div style="display:flex;align-items:center;gap:0.6rem;">
+            <input type="checkbox" class="ent-toggle" data-cat="observations" data-id="${o._id}" checked />
+            <div style="flex:1;">
+              <div>
+                <strong>${escapeHtml(o.name)}</strong>: <span style="font-weight:700;">${o.value} ${escapeHtml(o.unit)}</span>
+                ${o.is_panic ? '<span class="badge badge-danger" style="margin-left:0.3rem;">CRITICAL PANIC</span>' : ''}
+              </div>
+              <div class="meta">LOINC: ${escapeHtml(o.loinc_code || 'N/A')} &bull; Ref: ${escapeHtml(o.reference_range || 'N/A')} &bull; Confidence: <strong>${Math.round(o.confidence * 100)}%</strong></div>
+            </div>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    if (!html) {
+      html = `<div class="empty-state"><p>No structured clinical entities detected in the input prose.</p></div>`;
+      $("#commit-box").style.display = "none";
+    } else {
+      $("#commit-box").style.display = "block";
+    }
+
+    entitiesBox.innerHTML = html;
     updateSelectedCount();
 
-    box.querySelectorAll('.ent-check').forEach(chk => {
+    // Bind checkboxes
+    entitiesBox.querySelectorAll(".ent-toggle").forEach(chk => {
       chk.onchange = () => {
-        extractedEntities[parseInt(chk.dataset.idx)].accepted = chk.checked;
-        updateSelectedCount();
+        const cat = chk.dataset.cat;
+        const id = chk.dataset.id;
+        const target = selectedEntities[cat]?.find(e => e._id === id);
+        if (target) {
+          target._selected = chk.checked;
+          updateSelectedCount();
+        }
       };
     });
   }
 
   function updateSelectedCount() {
-    const count = extractedEntities.filter(e => e.accepted).length;
-    $("#selected-entities-count").textContent = count + " of " + extractedEntities.length + " entities approved for chart commit";
+    const total = (selectedEntities.conditions.filter(e => e._selected).length)
+      + (selectedEntities.allergies.filter(e => e._selected).length)
+      + (selectedEntities.medications.filter(e => e._selected).length)
+      + (selectedEntities.observations.filter(e => e._selected).length);
+    const maxTotal = selectedEntities.conditions.length
+      + selectedEntities.allergies.length
+      + selectedEntities.medications.length
+      + selectedEntities.observations.length;
+    $("#selected-entities-count").textContent = `${total} of ${maxTotal} entities approved for chart commit`;
   }
 
   $("#btn-commit-fhir").onclick = async () => {
     const targetPid = $("#ingest-pat-select").value;
-    const toCommit = extractedEntities.filter(e => e.accepted);
-    if (!toCommit.length) { showAlert("No entities checked for commit.", "warn"); return; }
+    if (!targetPid) { showAlert("No target patient selected.", "warn"); return; }
 
-    let committedCount = 0;
-    for (const ent of toCommit) {
-      try {
-        if (ent.type === "Condition") {
-          await api.createCondition({
-            resourceType: "Condition",
-            clinicalStatus: { coding: [{ code: "active" }] },
-            code: { text: ent.name },
-            subject: { reference: "Patient/" + targetPid },
-            onsetDateTime: new Date().toISOString()
-          });
-          committedCount++;
-        } else if (ent.type === "MedicationRequest") {
-          await api.createMedicationRequest({
-            resourceType: "MedicationRequest",
-            status: "active",
-            intent: "order",
-            medicationCodeableConcept: { text: ent.name },
-            subject: { reference: "Patient/" + targetPid }
-          });
-          committedCount++;
-        } else if (ent.type === "AllergyIntolerance") {
-          await api.createAllergyIntolerance({
-            resourceType: "AllergyIntolerance",
-            id: 'alg-' + Date.now() + '-' + Math.floor(Math.random()*1000),
-            code: { text: ent.name },
-            criticality: ent.criticality || "high",
-            reaction: [{ manifestation: [{ text: ent.detail || "Adverse effect" }] }],
-            patient: { reference: "Patient/" + targetPid }
-          });
-          committedCount++;
-        } else if (ent.type === "Observation") {
-          await api.createObservation({
-            resourceType: "Observation",
-            status: "final",
-            code: { text: ent.name },
-            valueString: ent.value,
-            subject: { reference: "Patient/" + targetPid },
-            effectiveDateTime: new Date().toISOString()
-          });
-          committedCount++;
-        }
-      } catch (err) {
-        console.warn("Entity commit deferred to sync queue:", err);
-        committedCount++;
-      }
+    const conditions = selectedEntities.conditions.filter(e => e._selected);
+    const allergies = selectedEntities.allergies.filter(e => e._selected);
+    const medications = selectedEntities.medications.filter(e => e._selected);
+    const observations = selectedEntities.observations.filter(e => e._selected);
+
+    const totalCount = conditions.length + allergies.length + medications.length + observations.length;
+    if (totalCount === 0) {
+      showAlert("No entities selected for commit.", "warn");
+      return;
     }
 
-    logAudit("Create", "C", {
-      patient: targetPid,
-      details: "AI ingestion review & commit: Approved and created " + committedCount + " FHIR resources"
-    });
+    $("#btn-commit-fhir").disabled = true;
+    $("#btn-commit-fhir").textContent = "⏳ Committing...";
 
-    setActivePatient(targetPid);
-    showAlert("Committed " + committedCount + " FHIR entities to patient record.", "ok");
-    location.hash = "patientChart";
+    try {
+      const text = $("#ingest-doc-text").value.trim();
+      const payload = {
+        patient_id: targetPid,
+        source_text: text,
+        conditions,
+        allergies,
+        medications,
+        observations
+      };
+
+      const res = await api.commitIngest(payload);
+      showAlert(`Successfully committed ${res.created_resource_ids.length} clinical resources to chart.`, "ok");
+
+      setActivePatient(targetPid);
+      location.hash = "patientChart";
+    } catch (err) {
+      showAlert("Commit failed: " + err.message, "err");
+      $("#btn-commit-fhir").disabled = false;
+      $("#btn-commit-fhir").textContent = "✓ Commit Accepted Entities to Patient Chart";
+    }
   };
 };
 

@@ -1389,3 +1389,154 @@ async fn test_fhir_consent_and_directive_verification() {
     let ver_after_res: serde_json::Value = serde_json::from_slice(&body_after).unwrap();
     assert!(!ver_after_res["permitted"].as_bool().unwrap());
 }
+
+#[tokio::test]
+async fn test_ingest_samples_extract_and_commit() {
+    let (app, _) = test_app().await;
+
+    // 1. GET /api/ingest/samples
+    let res_samples = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/api/ingest/samples")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res_samples.status(), StatusCode::OK);
+    let body_s = axum::body::to_bytes(res_samples.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let samples_json: serde_json::Value = serde_json::from_slice(&body_s).unwrap();
+    let cases = samples_json["cases"].as_array().unwrap();
+    assert!(cases.len() >= 4);
+
+    // 2. Create Target Patient
+    let patient_payload = serde_json::json!({
+        "resourceType": "Patient",
+        "id": "pat-ingest-001",
+        "name": [{ "text": "Rajesh Kumar", "family": "Kumar", "given": ["Rajesh"] }],
+        "gender": "male",
+        "birthDate": "1958-04-12"
+    });
+    let res_pat = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/Patient")
+                .header("Content-Type", "application/json")
+                .body(Body::from(patient_payload.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert!(res_pat.status().is_success());
+
+    // 3. POST /api/ingest/extract
+    let acs_case = cases.iter().find(|c| c["id"] == "acs").unwrap();
+    let extract_payload = serde_json::json!({
+        "text": acs_case["text"].as_str().unwrap(),
+        "patient_id": "pat-ingest-001"
+    });
+    let res_extract = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/ingest/extract")
+                .header("Content-Type", "application/json")
+                .body(Body::from(extract_payload.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res_extract.status(), StatusCode::OK);
+    let body_ext = axum::body::to_bytes(res_extract.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let report: serde_json::Value = serde_json::from_slice(&body_ext).unwrap();
+    assert!(report["conditions"].as_array().unwrap().len() >= 3);
+    assert!(report["allergies"].as_array().unwrap().len() >= 1);
+    assert!(report["medications"].as_array().unwrap().len() >= 4);
+    assert!(report["observations"].as_array().unwrap().len() >= 3);
+    assert!(report["has_critical_alerts"].as_bool().unwrap());
+
+    // 4. POST /api/ingest/commit
+    let commit_payload = serde_json::json!({
+        "patient_id": "pat-ingest-001",
+        "source_text": acs_case["text"].as_str().unwrap(),
+        "conditions": report["conditions"],
+        "allergies": report["allergies"],
+        "medications": report["medications"],
+        "observations": report["observations"],
+        "clinician_id": "dr.sharma@hospital.local"
+    });
+    let res_commit = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/ingest/commit")
+                .header("Content-Type", "application/json")
+                .body(Body::from(commit_payload.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res_commit.status(), StatusCode::OK);
+    let body_com = axum::body::to_bytes(res_commit.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let commit_res: serde_json::Value = serde_json::from_slice(&body_com).unwrap();
+    assert_eq!(commit_res["status"], "committed");
+    assert!(commit_res["created_resource_ids"].as_array().unwrap().len() >= 11);
+
+    // 5. Verify Resources Stored for Patient
+    let res_conds = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/Condition?patient=pat-ingest-001")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res_conds.status(), StatusCode::OK);
+    let body_c = axum::body::to_bytes(res_conds.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let conds_bundle: serde_json::Value = serde_json::from_slice(&body_c).unwrap();
+    assert!(conds_bundle["entry"].as_array().unwrap().len() >= 3);
+
+    // 6. Test Historical Allergy Conflict Detection
+    let amox_payload = serde_json::json!({
+        "text": "Rx: Amoxicillin-Clavulanate 625mg PO TDS for severe dental infection.",
+        "patient_id": "pat-ingest-001"
+    });
+    let res_amox = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/ingest/extract")
+                .header("Content-Type", "application/json")
+                .body(Body::from(amox_payload.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res_amox.status(), StatusCode::OK);
+    let body_amox = axum::body::to_bytes(res_amox.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let rep_amox: serde_json::Value = serde_json::from_slice(&body_amox).unwrap();
+    assert!(rep_amox["has_critical_alerts"].as_bool().unwrap());
+    let warnings = rep_amox["safety_warnings"].as_array().unwrap();
+    assert!(warnings
+        .iter()
+        .any(|w| w["warning_type"] == "HistoricalAllergyConflict"));
+}

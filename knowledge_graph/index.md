@@ -25,7 +25,7 @@ Every fact carries `[valid_from, recorded, source]`. Contradicted facts move to 
 | cli-tooling.md | Command-Line Tooling | Layer 2: Operational | SHIPPED | newloka-cli with Clap v4, 12 command groups (departments, consent, research, federation), direct SQLite | 2026-11-14 |
 | self-updater-and-releases.md | Self-Updater & Releases | Layer 2: Operational | SHIPPED | In-app 1-click update, GitHub Releases polling, atomic rename-and-replace, air-gapped offline package upload | 2026-11-13 |
 | newloka-site.md | Public Web Presence | Layer 4: External | ACTIVE | newloka.org on Firebase Hosting (new-loka), Sage/Taupe brand system, live EMR v0.2.0 UI showcase, docs hub | 2026-11-13 |
-| roadmap-and-status.md | Roadmap & Status | Layer 3: Roadmap | ACTIVE | Current v0.2.0, 71 passing tests across 7 decoupled workspace crates, 11-phase roadmap: Phases 1-3, 6, 9 Shipped | 2026-11-17 |
+| roadmap-and-status.md | Roadmap & Status | Layer 3: Roadmap | ACTIVE | Current v0.2.0, 72 passing tests across 7 decoupled workspace crates, 11-phase roadmap: Phases 1-4, 6, 9 Shipped | 2026-11-17 |
 | amethyst-agent.md | Amethyst Sovereign Agent | Layer 5: Sovereign Agentics | ACTIVE | Senior architect & systems engineer, Clinical Invariant Doctrine, WATER pattern management, memory/skill self-evolution loop | 2026-11-16 |
 
 ---

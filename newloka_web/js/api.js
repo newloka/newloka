@@ -1106,4 +1106,33 @@ export async function checkPharmacopoeiaSafety(drugs = [], allergies = []) {
     return res.json();
 }
 
+export async function getIngestSamples() {
+    const res = await fetchWithRetry(url('/api/ingest/samples'), {
+        method: 'GET',
+        headers: headers()
+    }, 2, 8000);
+    if (!res.ok) throw new Error(`Failed to fetch ingestion sample cases (${res.status})`);
+    return res.json();
+}
+
+export async function extractIngest(text, patientId = null) {
+    const res = await fetchWithRetry(url('/api/ingest/extract'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers() },
+        body: JSON.stringify({ text, patient_id: patientId })
+    }, 2, 12000);
+    if (!res.ok) throw new Error(`Failed to extract clinical entities (${res.status})`);
+    return res.json();
+}
+
+export async function commitIngest(payload) {
+    const res = await fetchWithRetry(url('/api/ingest/commit'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers() },
+        body: JSON.stringify(payload)
+    }, 1, 15000);
+    if (!res.ok) throw new Error(`Failed to commit approved entities (${res.status})`);
+    return res.json();
+}
+
 

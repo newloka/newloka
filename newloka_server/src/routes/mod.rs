@@ -5,6 +5,7 @@
 pub mod auth;
 pub mod clinical;
 pub mod governance;
+pub mod ingest;
 pub mod pharmacopoeia;
 pub mod research;
 pub mod resource_helpers;
@@ -27,4 +28,5 @@ pub fn create_router() -> Router<Arc<RwLock<AppState>>> {
         .merge(research::router())
         .merge(pharmacopoeia::router())
         .merge(rxpad::router())
+        .merge(ingest::router())
 }
