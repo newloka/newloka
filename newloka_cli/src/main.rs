@@ -419,7 +419,7 @@ async fn main() -> Result<()> {
                     phone,
                 } => {
                     let pat_id = Uuid::new_v4().to_string();
-                    let mrn = format!("NL-{}", &Uuid::new_v4().to_string()[..8].to_uppercase());
+                    let mrn = format!("NL-{}", Uuid::new_v4().to_string()[..8].to_uppercase());
                     let meta = Meta::new(node.clone(), "cli-user".into());
 
                     let patient = Patient {

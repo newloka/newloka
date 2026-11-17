@@ -931,7 +931,7 @@ pub async fn search_patients(
         };
 
         let age_sex = if !age_str.is_empty() && !gender.is_empty() {
-            format!("{} / {}", age_str, &gender[..1].to_uppercase())
+            format!("{} / {}", age_str, gender[..1].to_uppercase())
         } else if !gender.is_empty() {
             gender.to_string()
         } else {
@@ -1179,7 +1179,7 @@ async fn resolve_or_create_patient(
         "id": &patient_id,
         "identifier": [{
             "system": "urn:newloka:mrn",
-            "value": format!("MRN-{}", &patient_id[..6].to_uppercase())
+            "value": format!("MRN-{}", patient_id[..6].to_uppercase())
         }],
         "active": true,
         "name": [{
