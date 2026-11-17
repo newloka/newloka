@@ -8919,7 +8919,9 @@ window.addEventListener("hashchange", () => {
 
 window.views = views;
 window.route = route;
+window.openModal = openModal;
 window.closeModal = closeModal;
+window.showAlert = showAlert;
 window.openSpotlightSearch = openSpotlightSearch;
 window.openQuickAddModal = openQuickAddModal;
 bootstrap();
